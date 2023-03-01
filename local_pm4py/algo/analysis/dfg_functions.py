@@ -4,6 +4,12 @@ import copy
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import time
+import logging
+from enum import Enum
+
+class Cost_Variant(Enum):
+    ACTIVITY_FREQUENCY_SCORE = 0 # TODO CHANGE NAME (paper Ali Norouzifar)
+    ACTIVITY_RELATION_SCORE = 1
 
 def n_edges(net, S, T, scaling = None):
     net_c = copy.deepcopy(net)
@@ -61,7 +67,17 @@ def toggle(dic):
     return dic_new
 
 
-def cost_seq(net, A, B, start_set, end_set, sup, flow, scores):
+def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, cost_Variant):
+    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores)
+    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_seq_relation(net, A, B, start_set, end_set, sup, flow, scores)
+    else:
+        msg = "Error, could not call a valid cost function for cost_seq."
+        logging.error(msg)
+        raise Exception(msg)
+
+def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
     scores_toggle = toggle(scores)
     c1 = n_edges(net, B, A, scaling=scores_toggle)
 
@@ -78,6 +94,14 @@ def cost_seq(net, A, B, start_set, end_set, sup, flow, scores):
                                                                                                        (n_edges(net, A.union({'start'}), B.union({'end'}), scaling=scores))) - n_edges(net, {x}, {y}, scaling=scores))
 
     return c1 + c2 + c3
+
+def cost_seq_relation(net, A, B, start_set, end_set, sup, flow, scores):
+    # TODO new cost_seq calculation
+    msg = "Not yet implemented."
+    logging.error(msg)
+    raise Exception(msg)
+    return 0;
+
 
 def fit_seq(log_var,A,B):
     count = 0
@@ -118,14 +142,41 @@ def fit_loop(log_var,A,B,A_end,A_start):
     return fit
 
 
-def cost_exc(net, A, B, scores):
+def cost_exc(net, A, B, scores, cost_Variant):
+    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_exc_frequency(net, A, B, scores)
+    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_exc_relation(net, A, B, scores)
+    else:
+        msg = "Error, could not call a valid cost function for cost_exc."
+        logging.error(msg)
+        raise Exception(msg)
+
+def cost_exc_frequency(net, A, B, scores):
     scores_toggle = toggle(scores)
     c1 = n_edges(net, A, B, scaling =scores_toggle)
     c1 += n_edges(net,B ,A, scaling =scores_toggle)
     return c1
 
+def cost_exc_relation(net, A, B, scores):
+    # TODO new cost_seq calculation
+    msg = "Not yet implemented."
+    logging.error(msg)
+    raise Exception(msg)
+    return 0
 
-def cost_par(net, A, B, sup, scores):
+
+def cost_par(net, A, B, sup, scores, cost_Variant):
+    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_par_frequency(net, A, B, sup, scores)
+    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_par_relation(net, A, B, sup, scores)
+    else:
+        msg = "Error, could not call a valid cost function for cost_par."
+        logging.error(msg)
+        raise Exception(msg)
+
+def cost_par_frequency(net, A, B, sup, scores):
     c1 = 0
     c2 = 0
     for a in A:
@@ -137,8 +188,25 @@ def cost_par(net, A, B, sup, scores):
 
     return c1+c2
 
+def cost_par_relation(net, A, B, sup, scores):
+    # TODO new cost_seq calculation
+    msg = "Not yet implemented."
+    logging.error(msg)
+    raise Exception(msg)
+    return 0
 
-def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores):
+
+def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, cost_Variant):
+    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
+    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_loop_relation(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
+    else:
+        msg = "Error, could not call a valid cost function for cost_loop."
+        logging.error(msg)
+        raise Exception(msg)
+
+def cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores):
     scores_toggle = toggle(scores)
 
     flag_loop_valid = False
@@ -184,6 +252,14 @@ def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores):
         return False
 
     return c1 + c2 + c3 + c4 + c5
+
+def cost_loop_relation(net, A, B, sup, start_A, end_A, input_B, output_B, scores):
+    # TODO new cost_seq calculation
+    msg = "Not yet implemented."
+    logging.error(msg)
+    raise Exception(msg)
+    return 0
+
 
 def visualisecpcm(cuts, ratio, size_par):
     cp = [x[2] for x in cuts]

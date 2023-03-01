@@ -81,12 +81,11 @@ class SubtreePlain(object):
             self.original_log = logp
             self.activities = None
 
-            self.initialize_tree(dfg, logp,logm, initial_dfg, activities, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par)
+            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par)
 
 
-    def initialize_tree(self, dfg, logp,logm, initial_dfg, activities, second_iteration=False, end_call=True,
-                        parameters=None, sup= None, ratio = None, size_par = None):
-
+    def initialize_tree(self, dfg, logp, logm, initial_dfg, activities, second_iteration = False, end_call = True,
+                        parameters = None, sup = None, ratio = None, size_par = None):
 
         if activities is None:
             self.activities = get_activities_from_dfg(dfg)
@@ -120,7 +119,7 @@ class SubtreePlain(object):
         # check base cases:
         isbase, cut = dfg_functions.check_base_case(self, logP_var,logM_var, sup, ratio, size_par)
 
-        if isbase==False:
+        if isbase == False:
             dfg2 = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
             netP = generate_nx_graph_from_dfg(dfg2)
             del dfg2[('start', 'end')]
@@ -182,6 +181,9 @@ class SubtreePlain(object):
                 if rej_tau_loop == False and c_rec >0:
                     cut.append(((start_acts_P, end_acts_P), 'loop_tau', cost_loop_P, cost_loop_M,  cost_loop_P - ratio * size_par * cost_loop_M,1))
             ratio_backup = ratio
+            
+            # TODO put declaration in class constructor
+            cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
 
             for pp in possible_partitions:
                 A = pp[0] - {'start', 'end'}
@@ -207,23 +209,24 @@ class SubtreePlain(object):
 
                 #####################################################################
                 # seq check
-
-                    fit_seq = dfg_functions.fit_seq(logP_var, A, B)
-                    if fit_seq > 0.0:
-                        cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores)
-                        cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg)
-                        cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, cost_seq_P - ratio* size_par * cost_seq_M, fit_seq))
+                fit_seq = dfg_functions.fit_seq(logP_var, A, B)
+                if fit_seq > 0.0:
+                    cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, cost_Variant)
+                    cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, cost_Variant)
+                    cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, cost_seq_P - ratio* size_par * cost_seq_M, fit_seq))
                 #####################################################################
+
 
                 #####################################################################
                 # xor check
                 if "exc" in type:
                     fit_exc = dfg_functions.fit_exc(logP_var, A, B)
                     if fit_exc > 0.0:
-                        cost_exc_P = dfg_functions.cost_exc(netP, A, B, feat_scores)
-                        cost_exc_M = dfg_functions.cost_exc(netM, A.intersection(activitiesM), B.intersection(activitiesM), feat_scores)
+                        cost_exc_P = dfg_functions.cost_exc(netP, A, B, feat_scores, cost_Variant)
+                        cost_exc_M = dfg_functions.cost_exc(netM, A.intersection(activitiesM), B.intersection(activitiesM), feat_scores, cost_Variant)
                         cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M, cost_exc_P - ratio* size_par * cost_exc_M, fit_exc))
                 #####################################################################
+
 
                 #####################################################################
                 # xor-tau check
@@ -241,25 +244,27 @@ class SubtreePlain(object):
                     cut.append(((A.union(B), set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1))
                 #####################################################################
 
+
                 #####################################################################
                 # parallel check
                 if "par" in type:
-                    cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores)
-                    cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores)
+                    cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, cost_Variant)
+                    cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, cost_Variant)
                     cut.append(((A, B), 'par', cost_par_P, cost_par_M, cost_par_P - ratio * size_par * cost_par_M,1))
                 #####################################################################
+
 
                 #####################################################################
                 # loop check
                 if "loop" in type:
                     fit_loop = dfg_functions.fit_loop(logP_var, A, B, end_A_P, start_A_P)
                     if (fit_loop > 0.0):
-                        cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores)
-                        cost_loop_M = dfg_functions.cost_loop(netM, A, B, sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores)
+                        cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, cost_Variant)
+                        cost_loop_M = dfg_functions.cost_loop(netM, A, B, sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, cost_Variant)
 
                         if cost_loop_P is not False:
                             cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, cost_loop_P - ratio * size_par * cost_loop_M, fit_loop))
-
+                #####################################################################
 
 
             sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
