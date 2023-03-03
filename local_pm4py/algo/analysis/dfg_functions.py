@@ -7,6 +7,8 @@ import time
 import logging
 from enum import Enum
 
+from pm4py.util import exec_utils
+
 class Cost_Variant(Enum):
     ACTIVITY_FREQUENCY_SCORE = 0 # TODO CHANGE NAME (paper Ali Norouzifar)
     ACTIVITY_RELATION_SCORE = 1
@@ -45,7 +47,6 @@ def add_EE(s):
 def r_to_s(net):
     return (set(nx.descendants(net, 'start')) == (set(net.nodes) - {'start'}))
 
-
 def r_from_e(net):
     return (set(nx.ancestors(net, 'end')) == (set(net.nodes) - {'end'}))
 
@@ -66,6 +67,57 @@ def toggle(dic):
         dic_new[x] = 1/dic[x]
     return dic_new
 
+def get_indirect_follow_dic(log, activity_key):
+    """
+    Calculates the strictly indirectly follow count of activites in a log
+
+    Parameters
+    ----------
+    log
+        Log
+    activity_key
+        Activity key for the activity e.g. concept:name
+
+    Returns
+    ----------
+    dic
+        Dictionary of dictionary, (activity_1 : ( activity_2 : int ) ), cardinality where activity_2 strictly indirectly follows activity_1
+    """
+    
+    dic = {}
+    # debug_activities = []
+
+    for trace in log:
+        explored_activities = []
+        last_checked_activity = None
+        checking_activity = None
+        # debug_activity = []
+        
+        for trace_dic in trace:
+            if activity_key in trace_dic:
+                last_checked_activity = checking_activity
+                checking_activity = trace_dic[activity_key]
+                # debug_activity.append(checking_activity)
+                
+                for activity in explored_activities:
+                    if not activity in dic:
+                        dic[activity] = {checking_activity : 1}
+                    else:
+                        if not checking_activity in dic[activity]:
+                            dic[activity][checking_activity] = 1
+                        else:
+                            dic[activity][checking_activity] +=1
+                
+                if last_checked_activity != None:
+                    if last_checked_activity not in explored_activities:
+                        explored_activities.append(last_checked_activity)
+                        continue
+        # debug_activities.append(debug_activity)
+    # print(debug_activities)
+    # print(dic)
+    return dic
+    
+                
 
 def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
@@ -101,7 +153,6 @@ def cost_seq_relation(net, A, B, start_set, end_set, sup, flow, scores):
     logging.error(msg)
     raise Exception(msg)
     return 0;
-
 
 def fit_seq(log_var,A,B):
     count = 0
@@ -461,6 +512,7 @@ def noise_filtering(dfg0, nt):
                 del dfg[ne[0]]
                 net = net_copy
     return dfg
+
 
 def generate_nx_graph_from_dfg(dfg):
     dfg_acts = set()

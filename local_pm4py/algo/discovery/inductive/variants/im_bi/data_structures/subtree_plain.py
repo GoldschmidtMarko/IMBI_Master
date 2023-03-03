@@ -184,6 +184,13 @@ class SubtreePlain(object):
             
             # TODO put declaration in class constructor
             cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+            
+            dic_indirect_follow_logP = {}
+            dic_indirect_follow_logM = {}
+            
+            if cost_Variant == dfg_functions.Cost_Variant.ACTIVITY_RELATION_SCORE:
+                dic_indirect_follow_logP = dfg_functions.get_indirect_follow_dic(self.log_art, activity_key)
+                dic_indirect_follow_logM = dfg_functions.get_indirect_follow_dic(self.logM_art, activity_key)
 
             for pp in possible_partitions:
                 A = pp[0] - {'start', 'end'}
