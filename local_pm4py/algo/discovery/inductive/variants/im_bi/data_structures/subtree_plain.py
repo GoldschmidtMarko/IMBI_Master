@@ -50,6 +50,65 @@ def generate_nx_graph_from_dfg(dfg):
         G.add_edge(edge[0], edge[1], weight=dfg[edge])
     return G
 
+def get_indirect_follow_dic(log, activity_key, activities):
+    """
+    Calculates the strictly indirectly follow count of activites in a log
+
+    Parameters
+    ----------
+    log
+        Log
+    activity_key
+        Activity key for the activity e.g. concept:name
+    activities
+        List of all activities
+
+    Returns
+    ----------
+    dic
+        Dictionary of dictionary, (activity_1 : ( activity_2 : int ) ), cardinality where activity_2 strictly indirectly follows activity_1
+    """
+    
+    dic = {}
+    # debug_activities = []
+    
+    if "start" not in activities:
+        activities.append("start")
+    if "end" not in activities:
+        activities.append("end")
+    
+    # initialize dic with 0
+    for x in activities:
+        for y in activities:
+            if not x in dic:
+                dic[x] = {y : 0}
+            else:
+                dic[x][y] = 0
+
+    for trace in log:
+        explored_activities = []
+        last_checked_activity = None
+        checking_activity = None
+        # debug_activity = []
+        
+        for trace_dic in trace:
+            if activity_key in trace_dic:
+                last_checked_activity = checking_activity
+                checking_activity = trace_dic[activity_key]
+                # debug_activity.append(checking_activity)
+                
+                for activity in explored_activities:
+                    dic[activity][checking_activity] +=1
+                
+                if last_checked_activity != None:
+                    if last_checked_activity not in explored_activities:
+                        explored_activities.append(last_checked_activity)
+                        continue
+        # debug_activities.append(debug_activity)
+    # print(debug_activities)
+    # print(dic)
+    return dic
+   
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
@@ -187,11 +246,15 @@ class SubtreePlain(object):
             
             dic_indirect_follow_logP = {}
             dic_indirect_follow_logM = {}
+            count_activitiesP = {}
+            count_activitiesM = {}
             
             if cost_Variant == dfg_functions.Cost_Variant.ACTIVITY_RELATION_SCORE:
-                dic_indirect_follow_logP = dfg_functions.get_indirect_follow_dic(self.log_art, activity_key)
-                dic_indirect_follow_logM = dfg_functions.get_indirect_follow_dic(self.logM_art, activity_key)
-
+                dic_indirect_follow_logP = get_indirect_follow_dic(self.log_art, activity_key, list(self.activities.keys()))
+                dic_indirect_follow_logM = get_indirect_follow_dic(self.logM_art, activity_key, list(activitiesM))
+                count_activitiesP = attributes_get.get_attribute_values(self.log_art, activity_key)
+                count_activitiesM = attributes_get.get_attribute_values(self.logM_art, activity_key)
+                
             for pp in possible_partitions:
                 A = pp[0] - {'start', 'end'}
                 B = pp[1] - {'start', 'end'}
@@ -218,8 +281,8 @@ class SubtreePlain(object):
                 # seq check
                 fit_seq = dfg_functions.fit_seq(logP_var, A, B)
                 if fit_seq > 0.0:
-                    cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, cost_Variant)
-                    cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, cost_Variant)
+                    cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, cost_Variant)
+                    cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM, cost_Variant)
                     cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, cost_seq_P - ratio* size_par * cost_seq_M, fit_seq))
                 #####################################################################
 
@@ -229,8 +292,8 @@ class SubtreePlain(object):
                 if "exc" in type:
                     fit_exc = dfg_functions.fit_exc(logP_var, A, B)
                     if fit_exc > 0.0:
-                        cost_exc_P = dfg_functions.cost_exc(netP, A, B, feat_scores, cost_Variant)
-                        cost_exc_M = dfg_functions.cost_exc(netM, A.intersection(activitiesM), B.intersection(activitiesM), feat_scores, cost_Variant)
+                        cost_exc_P = dfg_functions.cost_exc(netP, A, B, feat_scores, fP, dic_indirect_follow_logP, count_activitiesP, cost_Variant)
+                        cost_exc_M = dfg_functions.cost_exc(netM, A.intersection(activitiesM), B.intersection(activitiesM), feat_scores, fM, dic_indirect_follow_logM, count_activitiesM, cost_Variant)
                         cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M, cost_exc_P - ratio* size_par * cost_exc_M, fit_exc))
                 #####################################################################
 
@@ -255,8 +318,8 @@ class SubtreePlain(object):
                 #####################################################################
                 # parallel check
                 if "par" in type:
-                    cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, cost_Variant)
-                    cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, cost_Variant)
+                    cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fP, dic_indirect_follow_logP, cost_Variant)
+                    cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fM,dic_indirect_follow_logM, cost_Variant)
                     cut.append(((A, B), 'par', cost_par_P, cost_par_M, cost_par_P - ratio * size_par * cost_par_M,1))
                 #####################################################################
 
@@ -266,8 +329,8 @@ class SubtreePlain(object):
                 if "loop" in type:
                     fit_loop = dfg_functions.fit_loop(logP_var, A, B, end_A_P, start_A_P)
                     if (fit_loop > 0.0):
-                        cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, cost_Variant)
-                        cost_loop_M = dfg_functions.cost_loop(netM, A, B, sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, cost_Variant)
+                        cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, fP, dic_indirect_follow_logP, cost_Variant)
+                        cost_loop_M = dfg_functions.cost_loop(netM, A, B, sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, cost_Variant)
 
                         if cost_loop_P is not False:
                             cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, cost_loop_P - ratio * size_par * cost_loop_M, fit_loop))

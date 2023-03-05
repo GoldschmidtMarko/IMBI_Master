@@ -67,63 +67,12 @@ def toggle(dic):
         dic_new[x] = 1/dic[x]
     return dic_new
 
-def get_indirect_follow_dic(log, activity_key):
-    """
-    Calculates the strictly indirectly follow count of activites in a log
-
-    Parameters
-    ----------
-    log
-        Log
-    activity_key
-        Activity key for the activity e.g. concept:name
-
-    Returns
-    ----------
-    dic
-        Dictionary of dictionary, (activity_1 : ( activity_2 : int ) ), cardinality where activity_2 strictly indirectly follows activity_1
-    """
-    
-    dic = {}
-    # debug_activities = []
-
-    for trace in log:
-        explored_activities = []
-        last_checked_activity = None
-        checking_activity = None
-        # debug_activity = []
-        
-        for trace_dic in trace:
-            if activity_key in trace_dic:
-                last_checked_activity = checking_activity
-                checking_activity = trace_dic[activity_key]
-                # debug_activity.append(checking_activity)
-                
-                for activity in explored_activities:
-                    if not activity in dic:
-                        dic[activity] = {checking_activity : 1}
-                    else:
-                        if not checking_activity in dic[activity]:
-                            dic[activity][checking_activity] = 1
-                        else:
-                            dic[activity][checking_activity] +=1
-                
-                if last_checked_activity != None:
-                    if last_checked_activity not in explored_activities:
-                        explored_activities.append(last_checked_activity)
-                        continue
-        # debug_activities.append(debug_activity)
-    # print(debug_activities)
-    # print(dic)
-    return dic
-    
-                
-
-def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, cost_Variant):
+            
+def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_seq_relation(net, A, B, start_set, end_set, sup, flow, scores)
+        return cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow)
     else:
         msg = "Error, could not call a valid cost function for cost_seq."
         logging.error(msg)
@@ -147,12 +96,15 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
 
     return c1 + c2 + c3
 
-def cost_seq_relation(net, A, B, start_set, end_set, sup, flow, scores):
-    # TODO new cost_seq calculation
-    msg = "Not yet implemented."
-    logging.error(msg)
-    raise Exception(msg)
-    return 0;
+def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow):
+    # TODO SUP
+    res = 0;
+    for x in A:
+        for y in B:
+            dividend = flow[(x,y)] + dic_indirect_follow_log[x][y] - (flow[(y,x)] + dic_indirect_follow_log[y][x]);
+            divisor = flow[(x,y)] + dic_indirect_follow_log[x][y] + flow[(y,x)] + dic_indirect_follow_log[y][x] + 1;
+            res += dividend/divisor
+    return res
 
 def fit_seq(log_var,A,B):
     count = 0
@@ -193,11 +145,11 @@ def fit_loop(log_var,A,B,A_end,A_start):
     return fit
 
 
-def cost_exc(net, A, B, scores, cost_Variant):
+def cost_exc(net, A, B, scores, flow, dic_indirect_follow_log, count_activities, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_exc_frequency(net, A, B, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_exc_relation(net, A, B, scores)
+        return cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities)
     else:
         msg = "Error, could not call a valid cost function for cost_exc."
         logging.error(msg)
@@ -209,19 +161,24 @@ def cost_exc_frequency(net, A, B, scores):
     c1 += n_edges(net,B ,A, scaling =scores_toggle)
     return c1
 
-def cost_exc_relation(net, A, B, scores):
-    # TODO new cost_seq calculation
-    msg = "Not yet implemented."
-    logging.error(msg)
-    raise Exception(msg)
-    return 0
+def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities):
+    # TODO SUP
+    res = 0;
+    for x in A:
+        for y in B:
+            dividend1 = count_activities[x] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x]);
+            divisor1 = 2*count_activities[x];
+            dividend2 = count_activities[y] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x]);
+            divisor2 = 2*count_activities[y];
+            res += (dividend1/divisor1) + (dividend2/divisor2);
+    return res
 
 
-def cost_par(net, A, B, sup, scores, cost_Variant):
+def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_par_frequency(net, A, B, sup, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_par_relation(net, A, B, sup, scores)
+        return cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log)
     else:
         msg = "Error, could not call a valid cost function for cost_par."
         logging.error(msg)
@@ -239,19 +196,24 @@ def cost_par_frequency(net, A, B, sup, scores):
 
     return c1+c2
 
-def cost_par_relation(net, A, B, sup, scores):
-    # TODO new cost_seq calculation
-    msg = "Not yet implemented."
-    logging.error(msg)
-    raise Exception(msg)
-    return 0
+def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log):
+    # TODO SUP
+    res = 0;
+    for x in A:
+        for y in B:
+            dividend1 = flow[(x,y)];
+            divisor1 = flow[(y,x)] + 1;
+            dividend2 = flow[(y,x)];
+            divisor2 = flow[(x,y)] + 1;
+            res += min((dividend1/divisor1), (dividend2/divisor2));
+    return res
 
 
-def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, cost_Variant):
+def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, flow, dic_indirect_follow_log, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_loop_relation(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
+        return cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log)
     else:
         msg = "Error, could not call a valid cost function for cost_loop."
         logging.error(msg)
@@ -304,12 +266,28 @@ def cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, score
 
     return c1 + c2 + c3 + c4 + c5
 
-def cost_loop_relation(net, A, B, sup, start_A, end_A, input_B, output_B, scores):
-    # TODO new cost_seq calculation
-    msg = "Not yet implemented."
-    logging.error(msg)
-    raise Exception(msg)
-    return 0
+def cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log):
+    # TODO SUP
+    res = 0;
+    for x in A:
+        for y in B:
+            if flow[(x,y)] > 0:
+                dividend1 = flow[(x,y)];
+                divisor1 = dic_indirect_follow_log[y][x] + 1;
+                dividend2 = dic_indirect_follow_log[y][x];
+                divisor2 = flow[(x,y)] + 1;
+                res += min((dividend1/divisor1), (dividend2/divisor2));
+            elif dic_indirect_follow_log[x][y] > 0:
+                dividend1 = dic_indirect_follow_log[x][y];
+                divisor1 = dic_indirect_follow_log[y][x] + 1;
+                dividend2 = dic_indirect_follow_log[y][x];
+                divisor2 = dic_indirect_follow_log[x][y] + 1;
+                res += min((dividend1/divisor1), (dividend2/divisor2));
+            else:
+                msg = "Error, cost_loop_relation wasnt defined properly."
+                logging.error(msg)
+                raise Exception(msg)
+    return res
 
 
 def visualisecpcm(cuts, ratio, size_par):

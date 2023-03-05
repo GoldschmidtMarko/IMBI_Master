@@ -44,7 +44,6 @@ def apply(log: Union[EventLog, EventStream, pd.DataFrame], parameters: Optional[
     final_marking
         Final marking
     """
-    print('hi')
     return exec_utils.get_variant(variant).apply(log, parameters=parameters)
 
 
