@@ -98,11 +98,11 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
 
 def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow):
     # TODO SUP
-    res = 0;
+    res = 0
     for x in A:
         for y in B:
-            dividend = flow[(x,y)] + dic_indirect_follow_log[x][y] - (flow[(y,x)] + dic_indirect_follow_log[y][x]);
-            divisor = flow[(x,y)] + dic_indirect_follow_log[x][y] + flow[(y,x)] + dic_indirect_follow_log[y][x] + 1;
+            dividend = flow[(x,y)] + dic_indirect_follow_log[x][y] - (flow[(y,x)] + dic_indirect_follow_log[y][x])
+            divisor = flow[(x,y)] + dic_indirect_follow_log[x][y] + flow[(y,x)] + dic_indirect_follow_log[y][x] + 1
             res += dividend/divisor
     return res
 
@@ -163,14 +163,14 @@ def cost_exc_frequency(net, A, B, scores):
 
 def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities):
     # TODO SUP
-    res = 0;
+    res = 0
     for x in A:
         for y in B:
-            dividend1 = count_activities[x] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x]);
-            divisor1 = 2*count_activities[x];
-            dividend2 = count_activities[y] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x]);
-            divisor2 = 2*count_activities[y];
-            res += (dividend1/divisor1) + (dividend2/divisor2);
+            dividend1 = count_activities[x] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
+            divisor1 = 2*count_activities[x]
+            dividend2 = count_activities[y] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
+            divisor2 = 2*count_activities[y]
+            res += (dividend1/divisor1) + (dividend2/divisor2)
     return res
 
 
@@ -198,14 +198,14 @@ def cost_par_frequency(net, A, B, sup, scores):
 
 def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log):
     # TODO SUP
-    res = 0;
+    res = 0
     for x in A:
         for y in B:
-            dividend1 = flow[(x,y)];
-            divisor1 = flow[(y,x)] + 1;
-            dividend2 = flow[(y,x)];
-            divisor2 = flow[(x,y)] + 1;
-            res += min((dividend1/divisor1), (dividend2/divisor2));
+            dividend1 = flow[(x,y)]
+            divisor1 = flow[(y,x)] + 1
+            dividend2 = flow[(y,x)]
+            divisor2 = flow[(x,y)] + 1
+            res += min((dividend1/divisor1), (dividend2/divisor2))
     return res
 
 
@@ -268,25 +268,24 @@ def cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, score
 
 def cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log):
     # TODO SUP
-    res = 0;
+    res = 0
     for x in A:
         for y in B:
-            if flow[(x,y)] > 0:
-                dividend1 = flow[(x,y)];
-                divisor1 = dic_indirect_follow_log[y][x] + 1;
-                dividend2 = dic_indirect_follow_log[y][x];
-                divisor2 = flow[(x,y)] + 1;
-                res += min((dividend1/divisor1), (dividend2/divisor2));
-            elif dic_indirect_follow_log[x][y] > 0:
-                dividend1 = dic_indirect_follow_log[x][y];
-                divisor1 = dic_indirect_follow_log[y][x] + 1;
-                dividend2 = dic_indirect_follow_log[y][x];
-                divisor2 = dic_indirect_follow_log[x][y] + 1;
-                res += min((dividend1/divisor1), (dividend2/divisor2));
-            else:
-                msg = "Error, cost_loop_relation wasnt defined properly."
-                logging.error(msg)
-                raise Exception(msg)
+            
+            # if flow[(x,y)] > 0:
+            
+            dividend1 = flow[(x,y)]
+            divisor1 = dic_indirect_follow_log[y][x] + 1
+            dividend2 = dic_indirect_follow_log[y][x]
+            divisor2 = flow[(x,y)] + 1
+            res += min((dividend1/divisor1), (dividend2/divisor2))
+            
+            # if dic_indirect_follow_log[x][y] > 0:
+            dividend1 = dic_indirect_follow_log[x][y]
+            divisor1 = dic_indirect_follow_log[y][x] + 1
+            dividend2 = dic_indirect_follow_log[y][x]
+            divisor2 = dic_indirect_follow_log[x][y] + 1
+            res += min((dividend1/divisor1), (dividend2/divisor2))
     return res
 
 

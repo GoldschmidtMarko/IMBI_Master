@@ -50,7 +50,8 @@ def generate_nx_graph_from_dfg(dfg):
         G.add_edge(edge[0], edge[1], weight=dfg[edge])
     return G
 
-def get_indirect_follow_dic(log, activity_key, activities):
+
+def get_indirect_follow_dic(log, activity_key : str, activities : "list[str]") -> "dict[str, dict[str, int]]":
     """
     Calculates the strictly indirectly follow count of activites in a log
 
@@ -242,7 +243,8 @@ class SubtreePlain(object):
             ratio_backup = ratio
             
             # TODO put declaration in class constructor
-            cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+            # cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+            cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_RELATION_SCORE
             
             dic_indirect_follow_logP = {}
             dic_indirect_follow_logM = {}
@@ -330,7 +332,7 @@ class SubtreePlain(object):
                     fit_loop = dfg_functions.fit_loop(logP_var, A, B, end_A_P, start_A_P)
                     if (fit_loop > 0.0):
                         cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, fP, dic_indirect_follow_logP, cost_Variant)
-                        cost_loop_M = dfg_functions.cost_loop(netM, A, B, sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, cost_Variant)
+                        cost_loop_M = dfg_functions.cost_loop(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, cost_Variant)
 
                         if cost_loop_P is not False:
                             cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, cost_loop_P - ratio * size_par * cost_loop_M, fit_loop))
@@ -339,7 +341,10 @@ class SubtreePlain(object):
 
             sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
             if len(sorted_cuts) != 0:
-                cut = sorted_cuts[0]
+                if cost_Variant == dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+                    cut = sorted_cuts[0]
+                else:
+                    cut = sorted_cuts[-1]
             else:
                 cut = ('none', 'none', 'none','none','none', 'none')
 
