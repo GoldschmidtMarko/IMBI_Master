@@ -5,6 +5,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import time
 import logging
+import math
 from enum import Enum
 
 from pm4py.util import exec_utils
@@ -67,6 +68,17 @@ def toggle(dic):
         dic_new[x] = 1/dic[x]
     return dic_new
 
+def average(lst : "list[float]") -> float:
+    return sum(lst) / len(lst)
+    
+def standard_deviation(lst : "list[float]") -> float:
+    mean = average(lst)
+    sum = 0
+    for i in lst:
+        sum += math.pow( (i - mean) , 2)
+        
+    # TODO consider dividing by len(lst) - 1
+    return math.sqrt( (sum / ( len(lst) ) ) )
             
 def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
@@ -98,13 +110,13 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
 
 def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow):
     # TODO SUP
-    res = 0
+    scores = []
     for x in A:
         for y in B:
             dividend = flow[(x,y)] + dic_indirect_follow_log[x][y] - (flow[(y,x)] + dic_indirect_follow_log[y][x])
             divisor = flow[(x,y)] + dic_indirect_follow_log[x][y] + flow[(y,x)] + dic_indirect_follow_log[y][x] + 1
-            res += dividend/divisor
-    return res
+            scores.append(dividend/divisor)
+    return average(scores) - standard_deviation(scores)
 
 def fit_seq(log_var,A,B):
     count = 0
@@ -163,22 +175,22 @@ def cost_exc_frequency(net, A, B, scores):
 
 def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities):
     # TODO SUP
-    res = 0
+    scores = []
     for x in A:
         for y in B:
             dividend1 = count_activities[x] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
-            divisor1 = 2*count_activities[x]
+            divisor1 = count_activities[x]
             dividend2 = count_activities[y] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
-            divisor2 = 2*count_activities[y]
-            res += (dividend1/divisor1) + (dividend2/divisor2)
-    return res
+            divisor2 = count_activities[y]
+            scores.append( ((dividend1/divisor1)*0.5 + (dividend2/divisor2)*0.5) )
+    return average(scores) - standard_deviation(scores)
 
 
-def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, cost_Variant):
+def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_par_frequency(net, A, B, sup, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log)
+        return cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor)
     else:
         msg = "Error, could not call a valid cost function for cost_par."
         logging.error(msg)
@@ -196,24 +208,24 @@ def cost_par_frequency(net, A, B, sup, scores):
 
     return c1+c2
 
-def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log):
+def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor):
     # TODO SUP
-    res = 0
+    scores = []
     for x in A:
         for y in B:
             dividend1 = flow[(x,y)]
             divisor1 = flow[(y,x)] + 1
             dividend2 = flow[(y,x)]
             divisor2 = flow[(x,y)] + 1
-            res += min((dividend1/divisor1), (dividend2/divisor2))
-    return res
+            scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
+    return average(scores) * min(calc_repetition_Factor, 1)
 
 
-def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, flow, dic_indirect_follow_log, cost_Variant):
+def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log)
+        return cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor)
     else:
         msg = "Error, could not call a valid cost function for cost_loop."
         logging.error(msg)
@@ -266,27 +278,27 @@ def cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, score
 
     return c1 + c2 + c3 + c4 + c5
 
-def cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log):
+def cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor):
     # TODO SUP
-    res = 0
+    scores = []
     for x in A:
         for y in B:
+            # TODO care of cases redo i and redo s
             
-            # if flow[(x,y)] > 0:
-            
+            # redo s
             dividend1 = flow[(x,y)]
             divisor1 = dic_indirect_follow_log[y][x] + 1
             dividend2 = dic_indirect_follow_log[y][x]
             divisor2 = flow[(x,y)] + 1
-            res += min((dividend1/divisor1), (dividend2/divisor2))
+            scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
             
-            # if dic_indirect_follow_log[x][y] > 0:
+            # redo i
             dividend1 = dic_indirect_follow_log[x][y]
             divisor1 = dic_indirect_follow_log[y][x] + 1
             dividend2 = dic_indirect_follow_log[y][x]
             divisor2 = dic_indirect_follow_log[x][y] + 1
-            res += min((dividend1/divisor1), (dividend2/divisor2))
-    return res
+            scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
+    return average(scores) + ( standard_deviation(scores) * (1 - min(calc_repetition_Factor,1) ) )
 
 
 def visualisecpcm(cuts, ratio, size_par):

@@ -110,6 +110,43 @@ def get_indirect_follow_dic(log, activity_key : str, activities : "list[str]") -
     # print(dic)
     return dic
    
+def get_dic_activities(log, activity_key : str) -> "dict[str, int]":
+    """
+    Returns a dic with each activity and their occurrence 
+
+    Parameters
+    ----------
+    log
+        Log
+    activity_key
+        Activity key for the activity e.g. concept:name
+
+    Returns
+    ----------
+    dic
+        Dictinary str, int
+    """
+    
+    dic = {}
+    for trace in log:
+        for trace_dic in trace:
+            if activity_key in trace_dic:
+                activity = trace_dic[activity_key]
+                if activity not in dic:
+                    dic[activity] = 1
+                else:
+                    dic[activity] += 1
+    return dic
+   
+
+def repetition_Factor(log, activity_key) -> float:
+    dic_activities = get_dic_activities(log, activity_key)
+    
+    numberTraces = len(log)
+    totalNumberEvents = sum(dic_activities.values())
+    numberActivities = len(dic_activities.keys())
+    
+    return (numberTraces / (totalNumberEvents / numberActivities))
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
@@ -250,12 +287,16 @@ class SubtreePlain(object):
             dic_indirect_follow_logM = {}
             count_activitiesP = {}
             count_activitiesM = {}
+            calc_repetition_FactorP = 0
+            calc_repetition_FactorM = 0
             
             if cost_Variant == dfg_functions.Cost_Variant.ACTIVITY_RELATION_SCORE:
                 dic_indirect_follow_logP = get_indirect_follow_dic(self.log_art, activity_key, list(self.activities.keys()))
                 dic_indirect_follow_logM = get_indirect_follow_dic(self.logM_art, activity_key, list(activitiesM))
                 count_activitiesP = attributes_get.get_attribute_values(self.log_art, activity_key)
                 count_activitiesM = attributes_get.get_attribute_values(self.logM_art, activity_key)
+                calc_repetition_FactorP = repetition_Factor(self.log_art, activity_key)
+                calc_repetition_FactorM = repetition_Factor(self.logM_art, activity_key)
                 
             for pp in possible_partitions:
                 A = pp[0] - {'start', 'end'}
@@ -320,8 +361,8 @@ class SubtreePlain(object):
                 #####################################################################
                 # parallel check
                 if "par" in type:
-                    cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fP, dic_indirect_follow_logP, cost_Variant)
-                    cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fM,dic_indirect_follow_logM, cost_Variant)
+                    cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fP, dic_indirect_follow_logP, calc_repetition_FactorP, cost_Variant)
+                    cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fM,dic_indirect_follow_logM, calc_repetition_FactorM, cost_Variant)
                     cut.append(((A, B), 'par', cost_par_P, cost_par_M, cost_par_P - ratio * size_par * cost_par_M,1))
                 #####################################################################
 
@@ -331,8 +372,8 @@ class SubtreePlain(object):
                 if "loop" in type:
                     fit_loop = dfg_functions.fit_loop(logP_var, A, B, end_A_P, start_A_P)
                     if (fit_loop > 0.0):
-                        cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, fP, dic_indirect_follow_logP, cost_Variant)
-                        cost_loop_M = dfg_functions.cost_loop(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, cost_Variant)
+                        cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, fP, dic_indirect_follow_logP, calc_repetition_FactorP, cost_Variant)
+                        cost_loop_M = dfg_functions.cost_loop(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, calc_repetition_FactorM, cost_Variant)
 
                         if cost_loop_P is not False:
                             cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, cost_loop_P - ratio * size_par * cost_loop_M, fit_loop))
