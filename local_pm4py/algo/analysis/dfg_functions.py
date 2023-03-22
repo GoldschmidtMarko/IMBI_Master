@@ -69,9 +69,14 @@ def toggle(dic):
     return dic_new
 
 def average(lst : "list[float]") -> float:
+    if len(lst) == 0:
+        return 0
     return sum(lst) / len(lst)
     
 def standard_deviation(lst : "list[float]") -> float:
+    if len(lst) == 0:
+        return 0
+    
     mean = average(lst)
     sum = 0
     for i in lst:
@@ -225,7 +230,7 @@ def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, flow, d
     if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
     elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor)
+        return cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, dic_indirect_follow_log, calc_repetition_Factor)
     else:
         msg = "Error, could not call a valid cost function for cost_loop."
         logging.error(msg)
@@ -278,26 +283,25 @@ def cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, score
 
     return c1 + c2 + c3 + c4 + c5
 
-def cost_loop_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor):
+def cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, dic_indirect_follow_log, calc_repetition_Factor):
     # TODO SUP
     scores = []
     for x in A:
         for y in B:
-            # TODO care of cases redo i and redo s
-            
-            # redo s
-            dividend1 = flow[(x,y)]
-            divisor1 = dic_indirect_follow_log[y][x] + 1
-            dividend2 = dic_indirect_follow_log[y][x]
-            divisor2 = flow[(x,y)] + 1
-            scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
-            
-            # redo i
-            dividend1 = dic_indirect_follow_log[x][y]
-            divisor1 = dic_indirect_follow_log[y][x] + 1
-            dividend2 = dic_indirect_follow_log[y][x]
-            divisor2 = dic_indirect_follow_log[x][y] + 1
-            scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
+            if (x in end_A and y in input_B) or (x in start_A and y in output_B):
+                # redo s
+                dividend1 = flow[(x,y)]
+                divisor1 = dic_indirect_follow_log[y][x] + 1
+                dividend2 = dic_indirect_follow_log[y][x]
+                divisor2 = flow[(x,y)] + 1
+                scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
+            else:
+                # redo i
+                dividend1 = dic_indirect_follow_log[x][y]
+                divisor1 = dic_indirect_follow_log[y][x] + 1
+                dividend2 = dic_indirect_follow_log[y][x]
+                divisor2 = dic_indirect_follow_log[x][y] + 1
+                scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
     return average(scores) + ( standard_deviation(scores) * (1 - min(calc_repetition_Factor,1) ) )
 
 
