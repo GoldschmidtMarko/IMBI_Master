@@ -20,6 +20,7 @@ from pm4py.algo.filtering.log.start_activities import start_activities_filter
 from pm4py.algo.filtering.log.end_activities import end_activities_filter
 from pm4py.algo.discovery.dfg.utils.dfg_utils import get_activities_from_dfg
 from local_pm4py.algo.analysis import dfg_functions
+from local_pm4py.algo.analysis import custom_enum
 import copy
 from collections import Counter
 
@@ -151,7 +152,7 @@ def repetition_Factor(log, activity_key) -> float:
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
                  start_activities=None, end_activities=None, initial_start_activities=None,
-                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, size_par = None):
+                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
         if real_init:
             self.master_dfg = copy.copy(master_dfg)
@@ -178,11 +179,11 @@ class SubtreePlain(object):
             self.original_log = logp
             self.activities = None
 
-            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par)
+            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant)
 
 
     def initialize_tree(self, dfg, logp, logm, initial_dfg, activities, second_iteration = False, end_call = True,
-                        parameters = None, sup = None, ratio = None, size_par = None):
+                        parameters = None, sup = None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
         if activities is None:
             self.activities = get_activities_from_dfg(dfg)
@@ -197,10 +198,10 @@ class SubtreePlain(object):
         self.original_log = logp
         self.parameters = parameters
 
-        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par)
+        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant)
 
 
-    def detect_cut(self, second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None):
+    def detect_cut(self, second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         ratio = ratio
         sup_thr = sup
 
@@ -280,8 +281,8 @@ class SubtreePlain(object):
             ratio_backup = ratio
             
             # TODO put declaration in class constructor
-            # cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
-            cost_Variant = dfg_functions.Cost_Variant.ACTIVITY_RELATION_SCORE
+            # cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+            # cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
             
             dic_indirect_follow_logP = {}
             dic_indirect_follow_logM = {}
@@ -290,7 +291,7 @@ class SubtreePlain(object):
             calc_repetition_FactorP = 0
             calc_repetition_FactorM = 0
             
-            if cost_Variant == dfg_functions.Cost_Variant.ACTIVITY_RELATION_SCORE:
+            if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
                 dic_indirect_follow_logP = get_indirect_follow_dic(self.log_art, activity_key, list(self.activities.keys()))
                 dic_indirect_follow_logM = get_indirect_follow_dic(self.logM_art, activity_key, list(activitiesM))
                 count_activitiesP = attributes_get.get_attribute_values(self.log_art, activity_key)
@@ -382,7 +383,7 @@ class SubtreePlain(object):
 
             sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
             if len(sorted_cuts) != 0:
-                if cost_Variant == dfg_functions.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+                if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
                     cut = sorted_cuts[0]
                 else:
                     cut = sorted_cuts[-1]
@@ -407,7 +408,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par))
+                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
         elif cut[1] == 'seq':
             self.detected_cut = 'sequential'
             LAP,LBP = split.split('seq', [cut[0][0], cut[0][1]], self.log, activity_key)
@@ -427,7 +428,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par))
+                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
         elif (cut[1] == 'exc') or (cut[1] == 'exc2'):
             self.detected_cut = 'concurrent'
             LAP,LBP = split.split('exc', [cut[0][0], cut[0][1]], self.log, activity_key)
@@ -468,7 +469,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par))
+                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop1':
             self.detected_cut = 'loopCut'
@@ -489,7 +490,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par))
+                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop_tau':
             self.detected_cut = 'loopCut'
@@ -510,17 +511,17 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par))
+                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
 
         elif cut[1] == 'none':
             self.detected_cut = 'flower'
 
 
 def make_tree(logp, logm, dfg, master_dfg, initial_dfg, activities, c, recursion_depth, noise_threshold, start_activities,
-              end_activities, initial_start_activities, initial_end_activities, parameters=None, sup= None, ratio = None, size_par = None):
+              end_activities, initial_start_activities, initial_end_activities, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
     tree = SubtreePlain(logp,logm, dfg, master_dfg, initial_dfg, activities, c, recursion_depth, noise_threshold,
                         start_activities,
-                        end_activities, initial_start_activities, initial_end_activities, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par)
+                        end_activities, initial_start_activities, initial_end_activities, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant)
 
     return tree

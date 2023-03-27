@@ -7,6 +7,7 @@ from pm4py.objects.log.obj import EventLog, EventStream
 import pandas as pd
 from pm4py.objects.petri_net.obj import PetriNet, Marking
 from pm4py.objects.process_tree.obj import ProcessTree
+from local_pm4py.algo.analysis import custom_enum
 
 
 
@@ -47,7 +48,7 @@ def apply(log: Union[EventLog, EventStream, pd.DataFrame], parameters: Optional[
     return exec_utils.get_variant(variant).apply(log, parameters=parameters)
 
 
-def apply_bi(logp: Union[EventLog, EventStream, pd.DataFrame], logm: Union[EventLog, EventStream, pd.DataFrame], parameters: Optional[Dict[Any, Any]] = None, variant=DEFAULT_VARIANT_LOG, sup= None, ratio = None, size_par = None) -> Tuple[PetriNet, Marking, Marking]:
+def apply_bi(logp: Union[EventLog, EventStream, pd.DataFrame], logm: Union[EventLog, EventStream, pd.DataFrame], parameters: Optional[Dict[Any, Any]] = None, variant=DEFAULT_VARIANT_LOG, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE) -> Tuple[PetriNet, Marking, Marking]:
     """
     Apply the chosen IM algorithm to a log obtaining a Petri net along with an initial and final marking
 
@@ -72,7 +73,7 @@ def apply_bi(logp: Union[EventLog, EventStream, pd.DataFrame], logm: Union[Event
     final_marking
         Final marking
     """
-    return exec_utils.get_variant(variant).apply(logp,logm, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par)
+    return exec_utils.get_variant(variant).apply(logp,logm, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant)
 
 
 

@@ -6,13 +6,9 @@ import matplotlib.pyplot as plt
 import time
 import logging
 import math
-from enum import Enum
+from local_pm4py.algo.analysis import custom_enum
 
 from pm4py.util import exec_utils
-
-class Cost_Variant(Enum):
-    ACTIVITY_FREQUENCY_SCORE = 0 # TODO CHANGE NAME (paper Ali Norouzifar)
-    ACTIVITY_RELATION_SCORE = 1
 
 def n_edges(net, S, T, scaling = None):
     net_c = copy.deepcopy(net)
@@ -86,9 +82,9 @@ def standard_deviation(lst : "list[float]") -> float:
     return math.sqrt( (sum / ( len(lst) ) ) )
             
 def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, cost_Variant):
-    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores)
-    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
         return cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow)
     else:
         msg = "Error, could not call a valid cost function for cost_seq."
@@ -163,9 +159,9 @@ def fit_loop(log_var,A,B,A_end,A_start):
 
 
 def cost_exc(net, A, B, scores, flow, dic_indirect_follow_log, count_activities, cost_Variant):
-    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_exc_frequency(net, A, B, scores)
-    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
         return cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities)
     else:
         msg = "Error, could not call a valid cost function for cost_exc."
@@ -192,9 +188,9 @@ def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities
 
 
 def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
-    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_par_frequency(net, A, B, sup, scores)
-    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
         return cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor)
     else:
         msg = "Error, could not call a valid cost function for cost_par."
@@ -227,9 +223,9 @@ def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repeti
 
 
 def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
-    if cost_Variant == Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
-    elif cost_Variant == Cost_Variant.ACTIVITY_RELATION_SCORE:
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
         return cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, dic_indirect_follow_log, calc_repetition_Factor)
     else:
         msg = "Error, could not call a valid cost function for cost_loop."

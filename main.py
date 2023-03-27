@@ -3,16 +3,22 @@ from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from local_pm4py.algo.analysis import Optimzation_Goals
 from local_pm4py.algo.analysis import gui
+from local_pm4py.algo.analysis import custom_enum
 import pm4py
 from pm4py.objects.petri_net.exporter import exporter as pnml_exporter
 import time
 
-support, ratio, LPlus_LogFile, LMinus_LogFile= gui.input()
+support, ratio, LPlus_LogFile, LMinus_LogFile, frequency= gui.input()
 logP = xes_importer.apply(LPlus_LogFile)
 logM = xes_importer.apply(LMinus_LogFile)
 
+if frequency:
+  cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+else:
+  cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
+
 start = time.time()
-net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM))
+net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant)
 end = time.time()
 
 parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT:"pdf"}
