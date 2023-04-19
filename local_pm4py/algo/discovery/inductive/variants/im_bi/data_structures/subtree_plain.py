@@ -19,10 +19,17 @@ import networkx as nx
 from pm4py.algo.filtering.log.start_activities import start_activities_filter
 from pm4py.algo.filtering.log.end_activities import end_activities_filter
 from pm4py.algo.discovery.dfg.utils.dfg_utils import get_activities_from_dfg
+
 from local_pm4py.algo.analysis import dfg_functions
 from local_pm4py.algo.analysis import custom_enum
 import copy
 from collections import Counter
+
+# TODO delete debuging code
+from pm4py import save_vis_dfg
+debugCutDetection = True
+import os
+
 
 def artificial_start_end(log):
     st = 'start'
@@ -30,7 +37,7 @@ def artificial_start_end(log):
     activity_key = xes_constants.DEFAULT_NAME_KEY
     start_event = log_instance.Event()
     start_event[activity_key] = st
-
+    
     end_event = log_instance.Event()
     end_event[activity_key] = en
 
@@ -201,7 +208,7 @@ class SubtreePlain(object):
         self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant)
 
 
-    def detect_cut(self, second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         ratio = ratio
         sup_thr = sup
 
@@ -279,10 +286,6 @@ class SubtreePlain(object):
                 if rej_tau_loop == False and c_rec >0:
                     cut.append(((start_acts_P, end_acts_P), 'loop_tau', cost_loop_P, cost_loop_M,  cost_loop_P - ratio * size_par * cost_loop_M,1))
             ratio_backup = ratio
-            
-            # TODO put declaration in class constructor
-            # cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
-            # cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
             
             dic_indirect_follow_logP = {}
             dic_indirect_follow_logM = {}
@@ -390,6 +393,48 @@ class SubtreePlain(object):
             else:
                 cut = ('none', 'none', 'none','none','none', 'none')
 
+        if debugCutDetection:
+            start_act_cur_dfg = start_activities_get.get_start_activities(self.log, parameters=parameters)
+            end_act_cur_dfg = end_activities_get.get_end_activities(self.log, parameters=parameters)
+            cur_dfg = dfg_inst.apply(self.log, parameters=parameters)
+            
+            # try:
+            #     os.remove("imbi_cuts/cut" + str(self.rec_depth) + ".png")
+            #     os.remove("imbi_cuts/cut" + str(self.rec_depth) + ".txt")
+            # except OSError:
+            #     pass
+            
+            numberBestCutsSaved = 3
+            save_vis_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg, "imbi_cuts/cut" + str(self.rec_depth) + ".png")
+            with open("imbi_cuts/cut" + str(self.rec_depth) + ".txt", "w") as file:
+                if isbase:
+                    cutList = [list(cut)]
+                    for cuts in cutList:
+                        outputString = ""
+                        for string_cut in cuts[1:]:
+                            outputString = outputString + " " + str(string_cut)
+                        file.write("Basecut" + outputString + "\n")
+                        if cuts[0] != "none":
+                            for cut_activity_sets in cuts[0]:
+                                for cut_activity in cut_activity_sets:
+                                    file.write(str(cut_activity) + " | ")
+                                file.write("\n")
+                else:
+                    numberCuts = min(numberBestCutsSaved,len(sorted_cuts))
+                    cutList = sorted_cuts[-numberCuts:]
+                    cutList.reverse()
+                    for cuts in cutList:
+                        outputString = ""
+                        for string_cut in cuts[1:]:
+                            outputString = outputString + " " + str(string_cut)
+                        file.write("cut" + outputString + "\n")
+                        for cut_activity_sets in cuts[0]:
+                            for cut_activity in cut_activity_sets:
+                                file.write(str(cut_activity) + " | ")
+                            file.write("\n")
+                    
+            
+                
         # print(cut)
 
         if cut[1] == 'par':
