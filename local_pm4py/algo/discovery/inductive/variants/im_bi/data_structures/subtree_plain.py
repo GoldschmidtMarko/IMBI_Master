@@ -27,6 +27,7 @@ from collections import Counter
 
 # TODO delete debuging code
 from pm4py import save_vis_dfg
+from pm4py import view_dfg
 debugCutDetection = True
 import os
 
@@ -210,7 +211,7 @@ class SubtreePlain(object):
 
     def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         ratio = ratio
-        sup_thr = sup
+        sup = sup
 
         logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in self.log])
         logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in self.logM])
@@ -271,13 +272,13 @@ class SubtreePlain(object):
                     rej_tau_loop = True
                 for x in start_acts_P:
                     for y in end_acts_P:
-                        L1P = max(0, len(self.log) * sup_thr * (self.start_activities[x] / (sum(self.start_activities.values()))) * (self.end_activities[y] / (sum(self.end_activities.values()))) - dfgP[(y, x)])
+                        L1P = max(0, len(self.log) * sup * (self.start_activities[x] / (sum(self.start_activities.values()))) * (self.end_activities[y] / (sum(self.end_activities.values()))) - dfgP[(y, x)])
                         missing_loopP += L1P
                         c_rec += dfgP[(y, x)]
 
                 for x in start_acts_P.intersection(self.start_activitiesM.keys()):
                     for y in end_acts_P.intersection(self.end_activitiesM.keys()):
-                        L1M = max(0, len(self.logM) * sup_thr * (self.start_activitiesM[x] / (sum(self.start_activitiesM.values()))) * (self.end_activitiesM[y] / (sum(self.end_activitiesM.values()))) - dfgM[(y, x)])
+                        L1M = max(0, len(self.logM) * sup * (self.start_activitiesM[x] / (sum(self.start_activitiesM.values()))) * (self.end_activitiesM[y] / (sum(self.end_activitiesM.values()))) - dfgM[(y, x)])
                         missing_loopM += L1M
 
                 cost_loop_P = missing_loopP
@@ -328,8 +329,8 @@ class SubtreePlain(object):
                 # seq check
                 fit_seq = dfg_functions.fit_seq(logP_var, A, B)
                 if fit_seq > 0.0:
-                    cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, cost_Variant)
-                    cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM, cost_Variant)
+                    cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, self.log,  cost_Variant)
+                    cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM, self.logM,  cost_Variant)
                     cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, cost_seq_P - ratio* size_par * cost_seq_M, fit_seq))
                 #####################################################################
 
@@ -348,16 +349,21 @@ class SubtreePlain(object):
                 #####################################################################
                 # xor-tau check
                 if dfg_functions.n_edges(netP,{'start'},{'end'})>0:
-                    missing_exc_tau_P = 0
-                    missing_exc_tau_P += max(0, sup_thr * len(self.log) - dfg_functions.n_edges(netP,{'start'},{'end'}))
-
-
-                    missing_exc_tau_M = 0
-                    missing_exc_tau_M += max(0, sup_thr * len(self.logM) - dfg_functions.n_edges(netM, {'start'}, {'end'}))
-
-
-                    cost_exc_tau_P = missing_exc_tau_P
-                    cost_exc_tau_M = missing_exc_tau_M
+                    # debugging code
+                    # print(dfg_functions.n_edges(netP,{'start'},{'end'}))
+                    # print(netP.out_degree('start', weight='weight'))
+                    # seqScore = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, self.log,  cost_Variant)
+                    # print("Sequence score: " + str(seqScore))
+                    # start_act_cur_dfg = start_activities_get.get_start_activities(self.log, parameters=parameters)
+                    # end_act_cur_dfg = end_activities_get.get_end_activities(self.log, parameters=parameters)
+                    # cur_dfg = dfg_inst.apply(self.log, parameters=parameters)
+                    # view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
+                    
+                    # debugging code
+        
+                    cost_exc_tau_P = dfg_functions.cost_exc_tau(netP,self.log,sup,cost_Variant)
+                    cost_exc_tau_M = dfg_functions.cost_exc_tau(netM,self.logM,sup,cost_Variant)
+                    # print(cost_exc_tau_P)
                     cut.append(((A.union(B), set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1))
                 #####################################################################
 
@@ -493,7 +499,8 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par))
+                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par,
+                                 cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop':
             self.detected_cut = 'loopCut'

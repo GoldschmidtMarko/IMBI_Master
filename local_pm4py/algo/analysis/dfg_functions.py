@@ -81,11 +81,11 @@ def standard_deviation(lst : "list[float]") -> float:
     # TODO consider dividing by len(lst) - 1
     return math.sqrt( (sum / ( len(lst) ) ) )
             
-def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, cost_Variant):
+def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, log, cost_Variant):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow)
+        return cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow, log)
     else:
         msg = "Error, could not call a valid cost function for cost_seq."
         logging.error(msg)
@@ -109,13 +109,15 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
 
     return c1 + c2 + c3
 
-def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow):
+def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow, log):
     # TODO SUP
     scores = []
     for x in A:
         for y in B:
             dividend = flow[(x,y)] + dic_indirect_follow_log[x][y] - (flow[(y,x)] + dic_indirect_follow_log[y][x])
             divisor = flow[(x,y)] + dic_indirect_follow_log[x][y] + flow[(y,x)] + dic_indirect_follow_log[y][x] + 1
+            res = dividend/divisor
+            # res = res * (n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight'))
             scores.append(dividend/divisor)
     return average(scores) - standard_deviation(scores)
 
@@ -185,6 +187,28 @@ def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities
             divisor2 = count_activities[y]
             scores.append( ((dividend1/divisor1)*0.5 + (dividend2/divisor2)*0.5) )
     return average(scores) - standard_deviation(scores)
+
+def cost_exc_tau(net, log, sup_thr, cost_Variant):
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_exc_tau_frequency(net, log, sup_thr)
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_exc_tau_relation(net, log)
+    else:
+        msg = "Error, could not call a valid cost function for cost_exc_tau."
+        logging.error(msg)
+        raise Exception(msg)
+
+def cost_exc_tau_frequency(net, log, sup_thr):
+    cost = max(0, sup_thr * len(log) - n_edges(net,{'start'},{'end'}))
+    return cost
+
+def cost_exc_tau_relation(net, log):
+    if (n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')) > 0.1:
+    # res = (n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight'))
+        return 1
+    return 0
+
+
 
 
 def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
@@ -412,6 +436,58 @@ def check_base_case(self, logP, logM, sup_thr, ratio, size_par):
         cut = "not_base"
 
     return base_check, cut
+
+def check_base_case_2(self, logP, logM, sup_thr, ratio, size_par):
+    activitiesP = set(a for x in logP.keys() for a in x)
+    
+    counter = logP[()]
+    counterM = logM[()]
+    len_logP = sum(logP.values())
+    acc_contP = sum([len(x) * logP[x] for x in logP])
+    len_logM = sum(logM.values())
+    acc_contM = sum([len(x) * logM[x] for x in logM])
+    
+    # empty check
+    if (counter == len_logP) or (len_logP == 0):
+        self.detected_cut = 'empty_log'
+        cut = ('none', 'empty_log', 'none', 'none')
+        return True, cut
+    
+    # xor check
+    cost_single_exc = max(0, sup_thr * len_logP - counter) - ratio * size_par * max(0,sup_thr * len_logM - counterM)
+    if (counter > (sup_thr / 2) * len_logP) and (cost_single_exc <= 0):
+        cut = (({activitiesP.pop()}, set()), 'exc', 'none', 'none')
+        return True, cut
+
+    if len(activitiesP) <= 1:
+        # loop check
+        del logP[()]
+        if acc_contP > 0:
+            p_prime_Lp = (len_logP - counter) / ((len_logP - counter) + acc_contP)
+        else:
+            p_prime_Lp = 'nd'
+
+        if acc_contM > 0:
+            p_prime_Lm = (len_logM - counterM) / ((len_logM - counterM) + acc_contM)
+        else:
+            p_prime_Lm = 'nd'
+
+        if p_prime_Lm != 'nd':
+            cost_single_loop = max(0, sup_thr/2 - abs(p_prime_Lp - 0.5)) - ratio * size_par * max(0,sup_thr/2 - abs(p_prime_Lm - 0.5))
+        else:
+            cost_single_loop = max(0, sup_thr/2 - ratio * size_par * abs(p_prime_Lp - 0.5))
+
+        if (abs(p_prime_Lp - 0.5) > sup_thr / 2) and (cost_single_loop <= 0):
+        # if (cost_single_loop <= 0):
+            cut = (({activitiesP.pop()}, set()), 'loop1', 'none', 'none')
+            return True, cut
+        else:
+            # single activity
+            self.detected_cut = 'single_activity'
+            cut = ('none', 'single_activity', 'none', 'none')
+            return True, cut
+            
+    return False, "not_base"
 
 
 def find_possible_partitions(net):
