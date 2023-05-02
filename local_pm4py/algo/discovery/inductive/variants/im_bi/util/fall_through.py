@@ -209,8 +209,8 @@ def split_between_end_and_start(trace, start_activities, end_activities, activit
         new_trace_1 = trace
     return new_trace_1, new_trace_2, found_split
 
-
-def strict_tau_loop(l, start_activities, end_activities, activity_key):
+# adapted for cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE with sup param
+def strict_tau_loop(l, start_activities, sup, end_activities, activity_key):
     new_log = obj.EventLog()
     for trace in l:  # for all traces
         t1, t2, found_split = split_between_end_and_start(trace, start_activities, end_activities,
@@ -224,7 +224,7 @@ def strict_tau_loop(l, start_activities, end_activities, activity_key):
         else:
             new_log.append(trace)  # if there is nothing to split, append the whole trace
 
-    if len(new_log) > len(l):
+    if len(new_log) * (sup / 2) > len(l):
         logging.debug("strict_tau_loop")
         return True, new_log
     else:
@@ -252,7 +252,8 @@ def split_before_start(trace, start_activities, activity_key):
     return new_trace_1, new_trace_2, found_split
 
 
-def tau_loop(l, start_activities, activity_key):
+# adapted for cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE with sup param
+def tau_loop(l, start_activities, sup, activity_key):
     # pretty much the same code as in strict_tau_loop, just that we split at a different point
     new_log = obj.EventLog()
     for trace in l:
@@ -269,7 +270,7 @@ def tau_loop(l, start_activities, activity_key):
         else:
             new_log.append(trace)
 
-    if len(new_log) > len(l):
+    if len(new_log) * (sup / 2) > len(l):
         logging.debug("tau_loop")
         return True, new_log
     else:

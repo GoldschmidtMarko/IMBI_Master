@@ -6,7 +6,11 @@ import matplotlib.pyplot as plt
 import time
 import logging
 import math
+from local_pm4py.algo.discovery.inductive.variants.im_bi.util import fall_through
 from local_pm4py.algo.analysis import custom_enum
+
+# TODO delete
+from pm4py import view_dfg
 
 from pm4py.util import exec_utils
 
@@ -192,7 +196,7 @@ def cost_exc_tau(net, log, sup_thr, cost_Variant):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_exc_tau_frequency(net, log, sup_thr)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_exc_tau_relation(net, log)
+        return cost_exc_tau_relation(net, log, sup_thr)
     else:
         msg = "Error, could not call a valid cost function for cost_exc_tau."
         logging.error(msg)
@@ -202,10 +206,43 @@ def cost_exc_tau_frequency(net, log, sup_thr):
     cost = max(0, sup_thr * len(log) - n_edges(net,{'start'},{'end'}))
     return cost
 
-def cost_exc_tau_relation(net, log):
-    if (n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')) > 0.1:
-    # res = (n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight'))
-        return 1
+def cost_exc_tau_relation(net, log, sup):
+    tau_distribution = n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')
+    if tau_distribution > ( 1 - (sup / 2)):
+        return tau_distribution
+    return 0
+
+# outdated
+def cost_loop_tau_relation(net, log, sup, dfg, activity_key):
+    start_acts = set([x[1] for x in dfg if (x[0] == 'start')])-{'end'}
+    end_acts = set([x[0] for x in dfg if (x[1] == 'end')])-{'start'}
+
+    view_dfg(dfg, start_acts, end_acts)
+    
+    count_loopEdge = 0
+    
+    for trace in log:
+        last_act = None
+        for trace_dic in trace:
+            if activity_key in trace_dic:
+                act = trace_dic[activity_key]
+                for start in start_acts:
+                    if last_act != None:
+                        if act == start:
+                            for end in end_acts:
+                                if last_act == end:
+                                    count_loopEdge += 1
+                                    continue
+                            continue
+                last_act = act
+                        
+    count_finish = 0
+    for end in end_acts:
+        count_finish += net.out_degree(end, weight='weight')
+    
+    loop_tau_distribution = count_loopEdge / count_finish
+    if loop_tau_distribution > (1 - sup):
+        return loop_tau_distribution
     return 0
 
 
@@ -437,57 +474,36 @@ def check_base_case(self, logP, logM, sup_thr, ratio, size_par):
 
     return base_check, cut
 
-def check_base_case_2(self, logP, logM, sup_thr, ratio, size_par):
-    activitiesP = set(a for x in logP.keys() for a in x)
+def check_relation_base_case(self, netP, netM, log, logM, sup, ratio, size_par, dfgP, dfgM, activity_key):
+    activitiesP = netP.nodes - {'start', 'end'}
+         
+    # xor tau
+    cut = []
+    cost_exc_tau_P = cost_exc_tau_relation(netP, log, sup)
+    if cost_exc_tau_P > 0:
+        cost_exc_tau_M = cost_exc_tau_relation(netM, logM, sup)
+        # cut.append(({activitiesP.pop()}, 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1))
+        return True, ((activitiesP, set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1), 'none', 'none'
+        
     
-    counter = logP[()]
-    counterM = logM[()]
-    len_logP = sum(logP.values())
-    acc_contP = sum([len(x) * logP[x] for x in logP])
-    len_logM = sum(logM.values())
-    acc_contM = sum([len(x) * logM[x] for x in logM])
+    start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
+    end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
     
-    # empty check
-    if (counter == len_logP) or (len_logP == 0):
-        self.detected_cut = 'empty_log'
-        cut = ('none', 'empty_log', 'none', 'none')
-        return True, cut
+    # strict loop_tau
+    strict_tau_loop, new_log_P = fall_through.strict_tau_loop(log, start_acts_P, sup, end_acts_P, activity_key)
     
-    # xor check
-    cost_single_exc = max(0, sup_thr * len_logP - counter) - ratio * size_par * max(0,sup_thr * len_logM - counterM)
-    if (counter > (sup_thr / 2) * len_logP) and (cost_single_exc <= 0):
-        cut = (({activitiesP.pop()}, set()), 'exc', 'none', 'none')
-        return True, cut
-
-    if len(activitiesP) <= 1:
-        # loop check
-        del logP[()]
-        if acc_contP > 0:
-            p_prime_Lp = (len_logP - counter) / ((len_logP - counter) + acc_contP)
-        else:
-            p_prime_Lp = 'nd'
-
-        if acc_contM > 0:
-            p_prime_Lm = (len_logM - counterM) / ((len_logM - counterM) + acc_contM)
-        else:
-            p_prime_Lm = 'nd'
-
-        if p_prime_Lm != 'nd':
-            cost_single_loop = max(0, sup_thr/2 - abs(p_prime_Lp - 0.5)) - ratio * size_par * max(0,sup_thr/2 - abs(p_prime_Lm - 0.5))
-        else:
-            cost_single_loop = max(0, sup_thr/2 - ratio * size_par * abs(p_prime_Lp - 0.5))
-
-        if (abs(p_prime_Lp - 0.5) > sup_thr / 2) and (cost_single_loop <= 0):
-        # if (cost_single_loop <= 0):
-            cut = (({activitiesP.pop()}, set()), 'loop1', 'none', 'none')
-            return True, cut
-        else:
-            # single activity
-            self.detected_cut = 'single_activity'
-            cut = ('none', 'single_activity', 'none', 'none')
-            return True, cut
-            
-    return False, "not_base"
+    if strict_tau_loop:
+        strict_tau_loopM, new_log_M = fall_through.strict_tau_loop(logM, start_acts_P, sup, end_acts_P, activity_key)
+        return True, ((start_acts_P, end_acts_P), 'loop_tau', 'none', 'none'), new_log_P, new_log_M
+    
+    # loop_tau
+    tau_loop, new_log_P = fall_through.tau_loop(log, start_acts_P, sup, activity_key)
+    
+    if tau_loop:
+        strict_tau_loopM, new_log_M = fall_through.tau_loop(logM, start_acts_P, sup, activity_key)
+        return True, ((start_acts_P, end_acts_P), 'loop_tau', 'none', 'none'), new_log_P, new_log_M
+    
+    return False, "not_base", 'none', 'none'
 
 
 def find_possible_partitions(net):
