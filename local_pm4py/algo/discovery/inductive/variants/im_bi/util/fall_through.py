@@ -224,7 +224,7 @@ def strict_tau_loop(l, start_activities, sup, end_activities, activity_key):
         else:
             new_log.append(trace)  # if there is nothing to split, append the whole trace
 
-    if len(new_log) * (sup / 2) > len(l):
+    if len(new_log) * (1 - sup)  > len(l):
         logging.debug("strict_tau_loop")
         return True, new_log
     else:

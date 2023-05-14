@@ -210,7 +210,7 @@ class SubtreePlain(object):
         self.parameters = parameters
 
         self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant)
-
+        
 
     def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         ratio = ratio
@@ -254,8 +254,11 @@ class SubtreePlain(object):
             # cur_dfg = dfg_inst.apply(self.log, parameters=parameters)
             # view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
             
+            start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
+            end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
+            
             if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-                isRelationBase, cut, new_log_P, new_log_M = dfg_functions.check_relation_base_case(self, netP, netM,self.log,self.logM, sup, ratio, size_par, dfgP, dfgM, activity_key)
+                isRelationBase, cut, new_log_P, new_log_M = dfg_functions.check_relation_base_case(self, netP, netM,self.log,self.logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, self.start_activities,self.end_activities)
                 
                 if isRelationBase == True:
                     isbase = True
@@ -278,37 +281,17 @@ class SubtreePlain(object):
                 activitiesM = set(a for x in logM_var.keys() for a in x)
 
 
-                start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
-                end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
-
                 #########################
                 fP = dfg_functions.max_flow_graph(netP)
                 fM = dfg_functions.max_flow_graph(netM)
-
-                if True and cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-                    missing_loopP = 0
-                    missing_loopM = 0
-                    rej_tau_loop = False
-                    c_rec = 0
-
-                    if len(start_acts_P.intersection(end_acts_P)) !=0:
-                        rej_tau_loop = True
-                    for x in start_acts_P:
-                        for y in end_acts_P:
-                            L1P = max(0, len(self.log) * sup * (self.start_activities[x] / (sum(self.start_activities.values()))) * (self.end_activities[y] / (sum(self.end_activities.values()))) - dfgP[(y, x)])
-                            missing_loopP += L1P
-                            c_rec += dfgP[(y, x)]
-
-                    for x in start_acts_P.intersection(self.start_activitiesM.keys()):
-                        for y in end_acts_P.intersection(self.end_activitiesM.keys()):
-                            L1M = max(0, len(self.logM) * sup * (self.start_activitiesM[x] / (sum(self.start_activitiesM.values()))) * (self.end_activitiesM[y] / (sum(self.end_activitiesM.values()))) - dfgM[(y, x)])
-                            missing_loopM += L1M
-
-                    cost_loop_P = missing_loopP
-                    cost_loop_M = missing_loopM
-
-                    if rej_tau_loop == False and c_rec >0:
+                
+                if len(start_acts_P.intersection(end_acts_P)) == 0 and cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+                    cost_loop_P, c_recP = dfg_functions.cost_loop_tau(start_acts_P,end_acts_P,self.log,sup,dfgP,self.start_activities,self.end_activities,cost_Variant)
+                    cost_loop_M, c_recM = dfg_functions.cost_loop_tau(start_acts_P.intersection(self.start_activitiesM.keys()),end_acts_P.intersection(self.end_activitiesM.keys()), self.logM, sup, dfgM, self.start_activitiesM,self.end_activitiesM,cost_Variant)
+                    if c_recP > 0:
                         cut.append(((start_acts_P, end_acts_P), 'loop_tau', cost_loop_P, cost_loop_M,  cost_loop_P - ratio * size_par * cost_loop_M,1))
+                        
+                        
                 ratio_backup = ratio
                 
                 dic_indirect_follow_logP = {}
@@ -372,17 +355,6 @@ class SubtreePlain(object):
                     #####################################################################
                     # xor-tau check
                     if dfg_functions.n_edges(netP,{'start'},{'end'})>0 and cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-                        # debugging code
-                        # print(dfg_functions.n_edges(netP,{'start'},{'end'}))
-                        # print(netP.out_degree('start', weight='weight'))
-                        # seqScore = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, self.log,  cost_Variant)
-                        # print("Sequence score: " + str(seqScore))
-                        # start_act_cur_dfg = start_activities_get.get_start_activities(self.log, parameters=parameters)
-                        # end_act_cur_dfg = end_activities_get.get_end_activities(self.log, parameters=parameters)
-                        # cur_dfg = dfg_inst.apply(self.log, parameters=parameters)
-                        # view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
-                        # debugging code
-            
                         cost_exc_tau_P = dfg_functions.cost_exc_tau(netP,self.log,sup,cost_Variant)
                         cost_exc_tau_M = dfg_functions.cost_exc_tau(netM,self.logM,sup,cost_Variant)
                         # print(cost_exc_tau_P)
@@ -422,19 +394,19 @@ class SubtreePlain(object):
                 cut = ('none', 'none', 'none','none','none', 'none')
 
         if debugCutDetection:
-            start_act_cur_dfg = start_activities_get.get_start_activities(self.log, parameters=parameters)
-            end_act_cur_dfg = end_activities_get.get_end_activities(self.log, parameters=parameters)
-            cur_dfg = dfg_inst.apply(self.log, parameters=parameters)
-            
-            # try:
-            #     os.remove("imbi_cuts/cut" + str(self.rec_depth) + ".png")
-            #     os.remove("imbi_cuts/cut" + str(self.rec_depth) + ".txt")
-            # except OSError:
-            #     pass
-            
+            dfg_temp = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
+            start_act_cur_dfg = start_activities_get.get_start_activities(self.log_art, parameters=parameters)
+            end_act_cur_dfg = end_activities_get.get_end_activities(self.log_art, parameters=parameters)
+
             numberBestCutsSaved = 3
-            save_vis_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg, "imbi_cuts/cut" + str(self.rec_depth) + ".png")
-            with open("imbi_cuts/cut" + str(self.rec_depth) + ".txt", "w") as file:
+            currentIteration = 1
+            file_path = "imbi_cuts/depth_" + str(self.rec_depth) + "_It_" + str(currentIteration)
+            while(os.path.isfile(file_path + ".png")):
+                currentIteration += 1
+                file_path = "imbi_cuts/depth_" + str(self.rec_depth) + "_It_" + str(currentIteration)
+            
+            save_vis_dfg(dfg_temp, start_act_cur_dfg, end_act_cur_dfg, file_path + ".png")
+            with open(file_path + ".txt", "w") as file:
                 if isbase:
                     cutList = [list(cut)]
                     for cuts in cutList:
@@ -460,14 +432,14 @@ class SubtreePlain(object):
                             for cut_activity in cut_activity_sets:
                                 file.write(str(cut_activity) + " | ")
                             file.write("\n")
-                    
+                        
             
                 
         # print(cut)
 
         if cut[1] == 'par':
             self.detected_cut = 'parallel'
-            LAP,LBP = split.split('par', [cut[0][0], cut[0][1]], self.log, activity_key)
+            LAP, LBP = split.split('par', [cut[0][0], cut[0][1]], self.log, activity_key)
             LAM, LBM = split.split('par', [cut[0][0], cut[0][1]], self.logM, activity_key)
             new_logs = [[LAP,LAM],[LBP,LBM]]
             for l in new_logs:
@@ -484,7 +456,8 @@ class SubtreePlain(object):
                                  parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
         elif cut[1] == 'seq':
             self.detected_cut = 'sequential'
-            LAP,LBP = split.split('seq', [cut[0][0], cut[0][1]], self.log, activity_key)
+  
+            LAP, LBP = split.split('seq', [cut[0][0], cut[0][1]], self.log, activity_key)
             LAM, LBM = split.split('seq', [cut[0][0], cut[0][1]], self.logM, activity_key)
             new_logs = [[LAP,LAM],[LBP,LBM]]
             for l in new_logs:

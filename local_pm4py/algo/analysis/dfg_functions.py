@@ -9,10 +9,13 @@ import math
 from local_pm4py.algo.discovery.inductive.variants.im_bi.util import fall_through
 from local_pm4py.algo.analysis import custom_enum
 
-# TODO delete
-from pm4py import view_dfg
-
 from pm4py.util import exec_utils
+
+def get_direct_edge_count(net, from_node, to_node):
+    if net.get_edge_data(from_node,to_node) == None:
+        return 0
+    else:
+        return net.get_edge_data(from_node,to_node)['weight']
 
 def n_edges(net, S, T, scaling = None):
     net_c = copy.deepcopy(net)
@@ -94,6 +97,27 @@ def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_foll
         msg = "Error, could not call a valid cost function for cost_seq."
         logging.error(msg)
         raise Exception(msg)
+    
+def cost_loop_tau(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o,  cost_Variant):
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_loop_tau_frequency(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o)
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        msg = "Error, cost_loop_tau on cost variant ACTIVITY_RELATION_SCORE."
+        raise Exception(msg)
+    else:
+        msg = "Error, could not call a valid cost function for cost_loop_tau."
+        logging.error(msg)
+        raise Exception(msg)
+    
+def cost_loop_tau_frequency(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o):
+    missing_loop = 0
+    c_rec = 0
+    for x in start_acts:
+        for y in end_acts:
+            L1P = max(0, len(log) * sup * (start_activities_o[x] / (sum(start_activities_o.values()))) * (end_activities_o[y] / (sum(end_activities_o.values()))) - dfg[(y, x)])
+            missing_loop += L1P
+            c_rec += dfg[(y, x)]
+    return missing_loop, c_rec
 
 def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
     scores_toggle = toggle(scores)
@@ -118,11 +142,17 @@ def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow, log):
     scores = []
     for x in A:
         for y in B:
-            dividend = flow[(x,y)] + dic_indirect_follow_log[x][y] - (flow[(y,x)] + dic_indirect_follow_log[y][x])
-            divisor = flow[(x,y)] + dic_indirect_follow_log[x][y] + flow[(y,x)] + dic_indirect_follow_log[y][x] + 1
+            dividend = get_direct_edge_count(net,x,y) + dic_indirect_follow_log[x][y] - (get_direct_edge_count(net,y,x) + dic_indirect_follow_log[y][x])
+            
+            dividend += get_direct_edge_count(net,"start",y) + get_direct_edge_count(net,x,"end")
+            
+            divisor = get_direct_edge_count(net,x,y) + dic_indirect_follow_log[x][y] + get_direct_edge_count(net,y,x) + dic_indirect_follow_log[y][x] + 1
+            
+            divisor += get_direct_edge_count(net,"start",y) + get_direct_edge_count(net,x,"end")
+            
             res = dividend/divisor
             # res = res * (n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight'))
-            scores.append(dividend/divisor)
+            scores.append(res)
     return average(scores) - standard_deviation(scores)
 
 def fit_seq(log_var,A,B):
@@ -185,9 +215,9 @@ def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities
     scores = []
     for x in A:
         for y in B:
-            dividend1 = count_activities[x] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
+            dividend1 = count_activities[x] - (get_direct_edge_count(net,x,y) + get_direct_edge_count(net,y,x) + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
             divisor1 = count_activities[x]
-            dividend2 = count_activities[y] - (flow[(x,y)] + flow[(y,x)] + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
+            dividend2 = count_activities[y] - (get_direct_edge_count(net,x,y) + get_direct_edge_count(net,y,x) + dic_indirect_follow_log[x][y] + dic_indirect_follow_log[y][x])
             divisor2 = count_activities[y]
             scores.append( ((dividend1/divisor1)*0.5 + (dividend2/divisor2)*0.5) )
     return average(scores) - standard_deviation(scores)
@@ -196,7 +226,8 @@ def cost_exc_tau(net, log, sup_thr, cost_Variant):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_exc_tau_frequency(net, log, sup_thr)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_exc_tau_relation(net, log, sup_thr)
+        msg = "Error, could not call cost_exc_tau on cost variant ACTIVITY_RELATION_SCORE."
+        raise Exception(msg)
     else:
         msg = "Error, could not call a valid cost function for cost_exc_tau."
         logging.error(msg)
@@ -206,46 +237,8 @@ def cost_exc_tau_frequency(net, log, sup_thr):
     cost = max(0, sup_thr * len(log) - n_edges(net,{'start'},{'end'}))
     return cost
 
-def cost_exc_tau_relation(net, log, sup):
-    tau_distribution = n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')
-    if tau_distribution > ( 1 - (sup / 2)):
-        return tau_distribution
-    return 0
-
-# outdated
-def cost_loop_tau_relation(net, log, sup, dfg, activity_key):
-    start_acts = set([x[1] for x in dfg if (x[0] == 'start')])-{'end'}
-    end_acts = set([x[0] for x in dfg if (x[1] == 'end')])-{'start'}
-
-    view_dfg(dfg, start_acts, end_acts)
-    
-    count_loopEdge = 0
-    
-    for trace in log:
-        last_act = None
-        for trace_dic in trace:
-            if activity_key in trace_dic:
-                act = trace_dic[activity_key]
-                for start in start_acts:
-                    if last_act != None:
-                        if act == start:
-                            for end in end_acts:
-                                if last_act == end:
-                                    count_loopEdge += 1
-                                    continue
-                            continue
-                last_act = act
-                        
-    count_finish = 0
-    for end in end_acts:
-        count_finish += net.out_degree(end, weight='weight')
-    
-    loop_tau_distribution = count_loopEdge / count_finish
-    if loop_tau_distribution > (1 - sup):
-        return loop_tau_distribution
-    return 0
-
-
+def cost_exc_tau_relation(net, log):
+    return n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')
 
 
 def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
@@ -275,10 +268,10 @@ def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repeti
     scores = []
     for x in A:
         for y in B:
-            dividend1 = flow[(x,y)]
-            divisor1 = flow[(y,x)] + 1
-            dividend2 = flow[(y,x)]
-            divisor2 = flow[(x,y)] + 1
+            dividend1 = get_direct_edge_count(net,x,y)
+            divisor1 = get_direct_edge_count(net,y,x) + 1
+            dividend2 = get_direct_edge_count(net,y,x)
+            divisor2 = get_direct_edge_count(net,x,y) + 1
             scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
     return average(scores) * min(calc_repetition_Factor, 1)
 
@@ -347,10 +340,10 @@ def cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, 
         for y in B:
             if (x in end_A and y in input_B) or (x in start_A and y in output_B):
                 # redo s
-                dividend1 = flow[(x,y)]
+                dividend1 = get_direct_edge_count(net,x,y)
                 divisor1 = dic_indirect_follow_log[y][x] + 1
                 dividend2 = dic_indirect_follow_log[y][x]
-                divisor2 = flow[(x,y)] + 1
+                divisor2 = get_direct_edge_count(net,x,y) + 1
                 scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
             else:
                 # redo i
@@ -474,36 +467,35 @@ def check_base_case(self, logP, logM, sup_thr, ratio, size_par):
 
     return base_check, cut
 
-def check_relation_base_case(self, netP, netM, log, logM, sup, ratio, size_par, dfgP, dfgM, activity_key):
+def cost_loop_tau_relation(start_acts, end_acts,dfg, log, start_activities_o, end_activities_o):
+    score = 0
+    for x in start_acts:
+        for y in end_acts:
+            activityUniqueness = (start_activities_o[x] / (sum(start_activities_o.values()))) * (end_activities_o[y] / (sum(end_activities_o.values())))
+            loopRatio = min(1 , dfg[(y, x)] / len(log))
+            score += activityUniqueness * loopRatio
+    return score
+
+def check_relation_base_case(self, netP, netM, log, logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, start_activities,end_activities):
     activitiesP = netP.nodes - {'start', 'end'}
          
     # xor tau
-    cut = []
-    cost_exc_tau_P = cost_exc_tau_relation(netP, log, sup)
-    if cost_exc_tau_P > 0:
-        cost_exc_tau_M = cost_exc_tau_relation(netM, logM, sup)
-        # cut.append(({activitiesP.pop()}, 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1))
+    cost_exc_tau_P = cost_exc_tau_relation(netP, log)
+    if cost_exc_tau_P > sup:
+        cost_exc_tau_M = cost_exc_tau_relation(netM, logM)
         return True, ((activitiesP, set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1), 'none', 'none'
         
     
+    # strict loop_tau
     start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
     end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
-    
-    # strict loop_tau
-    strict_tau_loop, new_log_P = fall_through.strict_tau_loop(log, start_acts_P, sup, end_acts_P, activity_key)
-    
-    if strict_tau_loop:
+    if cost_loop_tau_relation(start_acts_P,end_acts_P,dfgP,log,start_activities,end_activities) > sup:
+        strict_tau_loop, new_log_P = fall_through.strict_tau_loop(log, start_acts_P, sup, end_acts_P, activity_key)
         strict_tau_loopM, new_log_M = fall_through.strict_tau_loop(logM, start_acts_P, sup, end_acts_P, activity_key)
         return True, ((start_acts_P, end_acts_P), 'loop_tau', 'none', 'none'), new_log_P, new_log_M
     
-    # loop_tau
-    tau_loop, new_log_P = fall_through.tau_loop(log, start_acts_P, sup, activity_key)
-    
-    if tau_loop:
-        strict_tau_loopM, new_log_M = fall_through.tau_loop(logM, start_acts_P, sup, activity_key)
-        return True, ((start_acts_P, end_acts_P), 'loop_tau', 'none', 'none'), new_log_P, new_log_M
-    
     return False, "not_base", 'none', 'none'
+
 
 
 def find_possible_partitions(net):

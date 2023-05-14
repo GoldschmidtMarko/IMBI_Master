@@ -43,7 +43,31 @@ def project(log, A, B):
         new_log.append(trace)
     return new_log
 
-
+# from im
+def split_sequence(cut, l, activity_key):
+    new_logs = []
+    for c in cut:  # for all cut-partitions
+        lo = obj.EventLog()
+        for trace in l:  # for all traces in the log
+            not_in_c = True
+            trace_new = obj.Trace()
+            for j in range(0, len(trace)):  # for every event in the current trace
+                if trace[j][activity_key] in c:
+                    not_in_c = False
+                    while trace[j][activity_key] in c:
+                        trace_new.append(trace[j])  # we only add the events that match the cut partition
+                        if j + 1 < len(trace):
+                            j += 1
+                        else:
+                            j += 1
+                            break
+                    lo.append(trace_new)
+                    break
+            if not_in_c:
+                lo.append(trace_new)
+        new_logs.append(lo)
+    if len(new_logs) > 0:
+        return new_logs
 
 
 def split(cut_type, cut, l, activity_key):
