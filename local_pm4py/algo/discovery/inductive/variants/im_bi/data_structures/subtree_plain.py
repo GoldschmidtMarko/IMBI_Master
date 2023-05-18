@@ -160,6 +160,13 @@ def repetition_Factor(log, activity_key) -> float:
     
     return (numberTraces / (totalNumberEvents / numberActivities))
 
+def combine_score_values(scoreP, scoreM, cost_Variant, ratio, size_par):
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return scoreP - ratio * size_par * scoreM
+    else:
+        res = scoreP - ratio * scoreM
+        return res
+
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
                  start_activities=None, end_activities=None, initial_start_activities=None,
@@ -215,6 +222,7 @@ class SubtreePlain(object):
     def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         ratio = ratio
         sup = sup
+        input_ratio = ratio
 
         logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in self.log])
         logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in self.logM])
@@ -289,10 +297,8 @@ class SubtreePlain(object):
                     cost_loop_P, c_recP = dfg_functions.cost_loop_tau(start_acts_P,end_acts_P,self.log,sup,dfgP,self.start_activities,self.end_activities,cost_Variant)
                     cost_loop_M, c_recM = dfg_functions.cost_loop_tau(start_acts_P.intersection(self.start_activitiesM.keys()),end_acts_P.intersection(self.end_activitiesM.keys()), self.logM, sup, dfgM, self.start_activitiesM,self.end_activitiesM,cost_Variant)
                     if c_recP > 0:
-                        cut.append(((start_acts_P, end_acts_P), 'loop_tau', cost_loop_P, cost_loop_M,  cost_loop_P - ratio * size_par * cost_loop_M,1))
+                        cut.append(((start_acts_P, end_acts_P),'loop_tau',cost_loop_P,cost_loop_M,combine_score_values(cost_loop_P,cost_loop_M,cost_Variant,ratio,size_par),1))
                         
-                        
-                ratio_backup = ratio
                 
                 dic_indirect_follow_logP = {}
                 dic_indirect_follow_logM = {}
@@ -329,15 +335,15 @@ class SubtreePlain(object):
                     if len(set(activitiesM).intersection(A))==0 or len(set(activitiesM).intersection(B))==0:
                         ratio = 0
                     else:
-                        ratio = ratio_backup
-
+                        ratio = input_ratio
                     #####################################################################
                     # seq check
                     fit_seq = dfg_functions.fit_seq(logP_var, A, B)
                     if fit_seq > 0.0:
                         cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, self.log,  cost_Variant)
                         cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM, self.logM,  cost_Variant)
-                        cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, cost_seq_P - ratio* size_par * cost_seq_M, fit_seq))
+                        
+                        cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M,combine_score_values(cost_seq_P,cost_seq_M,cost_Variant,ratio,size_par), fit_seq))
                     #####################################################################
 
 
@@ -348,7 +354,7 @@ class SubtreePlain(object):
                         if fit_exc > 0.0:
                             cost_exc_P = dfg_functions.cost_exc(netP, A, B, feat_scores, fP, dic_indirect_follow_logP, count_activitiesP, cost_Variant)
                             cost_exc_M = dfg_functions.cost_exc(netM, A.intersection(activitiesM), B.intersection(activitiesM), feat_scores, fM, dic_indirect_follow_logM, count_activitiesM, cost_Variant)
-                            cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M, cost_exc_P - ratio* size_par * cost_exc_M, fit_exc))
+                            cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M,combine_score_values(cost_exc_P,cost_exc_M,cost_Variant,ratio,size_par), fit_exc))
                     #####################################################################
 
 
@@ -357,8 +363,8 @@ class SubtreePlain(object):
                     if dfg_functions.n_edges(netP,{'start'},{'end'})>0 and cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
                         cost_exc_tau_P = dfg_functions.cost_exc_tau(netP,self.log,sup,cost_Variant)
                         cost_exc_tau_M = dfg_functions.cost_exc_tau(netM,self.logM,sup,cost_Variant)
-                        # print(cost_exc_tau_P)
-                        cut.append(((A.union(B), set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1))
+                        # print(cost_exc_tau_P) 
+                        cut.append(((A.union(B), set()), 'exc2',cost_exc_tau_P,cost_exc_tau_M,combine_score_values(cost_exc_tau_P,cost_exc_tau_M,cost_Variant,ratio,size_par),1))
                     #####################################################################
 
 
@@ -367,7 +373,7 @@ class SubtreePlain(object):
                     if "par" in type:
                         cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fP, dic_indirect_follow_logP, calc_repetition_FactorP, cost_Variant)
                         cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fM,dic_indirect_follow_logM, calc_repetition_FactorM, cost_Variant)
-                        cut.append(((A, B), 'par', cost_par_P, cost_par_M, cost_par_P - ratio * size_par * cost_par_M,1))
+                        cut.append(((A, B), 'par', cost_par_P, cost_par_M,combine_score_values(cost_par_P,cost_par_M,cost_Variant,ratio,size_par),1))
                     #####################################################################
 
 
@@ -380,16 +386,22 @@ class SubtreePlain(object):
                             cost_loop_M = dfg_functions.cost_loop(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, calc_repetition_FactorM, cost_Variant)
 
                             if cost_loop_P is not False:
-                                cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, cost_loop_P - ratio * size_par * cost_loop_M, fit_loop))
+                                cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M,combine_score_values(cost_loop_P,cost_loop_M,cost_Variant,ratio,size_par), fit_loop))
                     #####################################################################
 
         if isbase == False and isRelationBase == False:
-            sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
-            if len(sorted_cuts) != 0:
+            if len(cut) != 0:
                 if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+                    sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
                     cut = sorted_cuts[0]
                 else:
-                    cut = sorted_cuts[-1]
+                    sorted_cuts = list(filter(lambda x: x[2] > 0, cut))
+                    if len(sorted_cuts) != 0:
+                        sorted_cuts = sorted(sorted_cuts, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
+                        sorted_cuts.reverse()
+                        cut = sorted_cuts[0]
+                    else:
+                     cut = ('none', 'none', 'none','none','none', 'none')   
             else:
                 cut = ('none', 'none', 'none','none','none', 'none')
 
@@ -421,8 +433,7 @@ class SubtreePlain(object):
                                 file.write("\n")
                 else:
                     numberCuts = min(numberBestCutsSaved,len(sorted_cuts))
-                    cutList = sorted_cuts[-numberCuts:]
-                    cutList.reverse()
+                    cutList = sorted_cuts[:numberCuts]
                     for cuts in cutList:
                         outputString = ""
                         for string_cut in cuts[1:]:
@@ -453,7 +464,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
         elif cut[1] == 'seq':
             self.detected_cut = 'sequential'
   
@@ -474,7 +485,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
         elif (cut[1] == 'exc') or (cut[1] == 'exc2'):
             self.detected_cut = 'concurrent'
             LAP,LBP = split.split('exc', [cut[0][0], cut[0][1]], self.log, activity_key)
@@ -501,7 +512,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par,
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
                                  cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop':
@@ -523,7 +534,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop1':
             self.detected_cut = 'loopCut'
@@ -544,7 +555,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
 
         elif cut[1] == 'strict_loop_tau':
             if cost_Variant != custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
@@ -566,7 +577,7 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
         elif cut[1] == 'loop_tau':
             self.detected_cut = 'loopCut'
             if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
@@ -588,7 +599,7 @@ class SubtreePlain(object):
                                     end_activities=end_activities,
                                     initial_start_activities=self.initial_start_activities,
                                     initial_end_activities=self.initial_end_activities,
-                                    parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                    parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
 
             elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
 
@@ -605,7 +616,7 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
 
         elif cut[1] == 'none':
             self.detected_cut = 'flower'

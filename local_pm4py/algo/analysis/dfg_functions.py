@@ -483,7 +483,7 @@ def check_relation_base_case(self, netP, netM, log, logM, sup, ratio, size_par, 
     cost_exc_tau_P = cost_exc_tau_relation(netP, log)
     if cost_exc_tau_P > sup:
         cost_exc_tau_M = cost_exc_tau_relation(netM, logM)
-        return True, ((activitiesP, set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * size_par * cost_exc_tau_M,1), 'none', 'none'
+        return True, ((activitiesP, set()), 'exc2', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * cost_exc_tau_M,1), 'none', 'none'
         
     
     # strict loop_tau
