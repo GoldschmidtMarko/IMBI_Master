@@ -412,6 +412,13 @@ class SubtreePlain(object):
 
             numberBestCutsSaved = 3
             currentIteration = 1
+            
+            folder_name = "imbi_cuts"
+            # Check if the folder already exists
+            if not os.path.exists(folder_name):
+                # Create the folder
+                os.makedirs(folder_name)
+                
             file_path = "imbi_cuts/depth_" + str(self.rec_depth) + "_It_" + str(currentIteration)
             while(os.path.isfile(file_path + ".png")):
                 currentIteration += 1
