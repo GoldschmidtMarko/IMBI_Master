@@ -32,6 +32,214 @@ from pm4py import view_dfg
 debugCutDetection = True
 import os
 
+def get_cutted_edges(cut_Partitions, cost_Variant, netP, netM):
+    """
+    Returns all edges (as activity pair) that were cut in netP and netM
+
+    Parameters
+    ----------
+    cut_Partitions
+        last cut_Partitions as a pair (set A, set B)
+    netP
+        netP
+    netM
+        netM
+
+    Returns
+    ----------
+    edges
+        List of activity pairs that were cut in netP and netM
+    """
+    def adj(node_set, net):
+        adj_set = set()
+        for node in node_set:
+            adj_set = adj_set.union(set(net.neighbors(node)))
+        return adj_set
+    
+    edges = []
+    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        # consider directly and indirectly follow relation
+        a = 3 
+    else:
+        # consider directly follow relation
+        activity_A = cut_Partitions[0][0]
+        activity_B = cut_Partitions[0][1]
+        
+        for net in [netP, netM]:
+            # activity pair from A to B
+            for activity_a in activity_A:
+                if net.has_node(activity_a):
+                    for neighbor_b in set(net.neighbors(activity_a)):
+                        if neighbor_b in activity_B:
+                            if (activity_a, neighbor_b) not in edges:
+                                edges.append((activity_a, neighbor_b))
+                        
+            # activity pair from B to A
+            for activity_b in activity_B:
+                if net.has_node(activity_b):
+                    for neighbor_a in set(net.predecessors(activity_b)):
+                        if neighbor_a in activity_A:
+                            if (activity_b, neighbor_a) not in edges:
+                                edges.append((activity_b, neighbor_a))
+                        
+        # insert reverse edge (since all cost func check for edge and reverse edge)
+        for (act_1, act_2) in edges:
+            if (act_2, act_1) not in edges:
+                edges.append((act_2, act_1))
+                    
+        return edges
+    
+    
+    
+    
+    
+    
+    
+
+def analyse_calculated_cut_caching(calculated_cut_caching, cost_variant, netP, activities):
+    """
+    Calculates all cuts that can possible change after a cut have been made
+
+    Parameters
+    ----------
+    calculated_cut_caching
+        calculated_cut_caching containing last cut and a list of all calculated cuts
+    cost_variant
+        Used cost_variant
+    netP
+        NetP
+
+    Returns
+    ----------
+    valid_cuts
+        Cuts that were calculated beforehand and saved in calculated_cut_caching
+    checking_cuts
+        List of possible partitions that has to recalculated
+    """
+    
+    def seperate_cuts(cuts):
+        res_partitions = []
+        for cut in cuts:
+            for cut_type in cut[2]:
+                res_partitions.append((cut[0]- {'start', 'end'},cut[1]- {'start', 'end'},{cut_type}))
+        return res_partitions
+    
+    def cut_projection(cut_partition, local_activites):
+        return cut_partition.intersection(local_activites.keys())
+    
+    def isSetEqual(set1, set2):
+        if len(set1) != len(set2):
+            return False
+        for it in set1:
+            if it not in set2:
+                return False
+        return True
+    
+    def isCutInList(cut_tuple, pp):
+        if len(cut_tuple) == 3:
+            # for the syntax ({partition_a}, {partition_b}, {cut_type})
+            cut_tupleNew = (cut_tuple[0] - {'start', 'end'}, cut_tuple[1] - {'start', 'end'}, cut_tuple[2])
+            for cut in pp:
+                A = cut[0] - {'start', 'end'}
+                B = cut[1] - {'start', 'end'}
+                for cut_type in cut[2]:
+                    if isSetEqual(cut_tupleNew[0],A) and isSetEqual(cut_tupleNew[1],B) and cut_tupleNew[2] == {cut_type}:
+                        return True
+            return False
+        else:
+            # for the syntax (({partition_a}, {partition_b}), cut_type, value1, value2, value3, value4)
+            cut_tupleNew = (cut_tuple[0][0] - {'start', 'end'}, cut_tuple[0][1] - {'start', 'end'}, cut_tuple[1])
+            for cut in pp:
+                A = cut[0][0] - {'start', 'end'}
+                B = cut[0][1] - {'start', 'end'}
+                if isSetEqual(cut_tupleNew[0],A) and isSetEqual(cut_tupleNew[1],B) and cut_tupleNew[2] == cut[1]:
+                    return True
+            return False
+    
+    def does_same_cut_have_different_values(cut1, cut2):
+        if cut1[0][0] == cut2[0][0] and cut1[0][1] == cut2[0][1] and cut1[1] == cut2[1] and cut1[5] != cut2[5]:
+            return True
+        return False
+    
+    def validate_correct_cuts(valid_cuts, checking_cuts, netP):
+        pp = seperate_cuts(dfg_functions.find_possible_partitions(netP))
+        def convertTuple(tuples):
+            string = ""
+            for it in tuples:
+                string = string + " " + str(it)
+            return string
+        
+        def size_of_pp(pp):
+            res = 0
+            for it in pp:
+                for temp in it[2]:
+                    res += 1
+            return res
+
+        for it in checking_cuts:
+            if isCutInList(it,pp) == False:
+                print("checkingCut not found: " + convertTuple(it))
+                raise Exception("Error")
+        for it in valid_cuts:
+            if isCutInList((it[0][0],it[0][1],{it[1]}),pp) == False:
+                print("validCut not found: " + convertTuple((it[0][0],it[0][1],{it[1]})))
+                raise Exception("Error")
+        if size_of_pp(pp) != len(valid_cuts) + len(checking_cuts):
+            print("Size doesnt match: " + str(len(pp)) + " != " + str(len(valid_cuts) + len(checking_cuts)))
+            raise Exception("Error")
+    
+    
+    # base case where no cuts where calculated (first iteration)
+    if calculated_cut_caching is None or len(calculated_cut_caching["calculated_cuts"]) == 0:
+        pp = seperate_cuts(dfg_functions.find_possible_partitions(netP))
+        return [] , pp
+    
+    
+    # Get all edges that were cut by the previous cut
+    # calculated_cut_caching = dict({"cut" : None,
+    #                                "last_netP" : None,
+    #                                "last_netM" : None,
+    #                                "base_case" : False,
+    #                                "calculated_cuts" : []})
+    cutting_edges = get_cutted_edges(calculated_cut_caching["cut"], cost_variant, calculated_cut_caching["last_netP"], calculated_cut_caching["last_netM"])
+    
+    # projection step
+    # remove activites not in remaining net and check if edge is present in cut
+    valid_cuts = []
+    checking_cuts = seperate_cuts(dfg_functions.find_possible_partitions(netP))
+    
+    for cut in calculated_cut_caching["calculated_cuts"]:
+        edgePresent = False
+        for edge in cutting_edges:
+            # check if edge is present in cut
+            if edge[0] in cut[0][0] and edge[1] in cut[0][1]:
+                edgePresent = True
+                break
+        
+        if edgePresent == False:
+            partition_A = cut_projection(cut[0][0], activities)
+            partition_B = cut_projection(cut[0][1], activities)
+            # check if cut has one partition, which is a subset of the remaining activites
+            if partition_A.issubset(activities) or partition_B.issubset(activities):
+                # check if projected cut has elements in both partitions. If not, then the cut doesnt provide valid information
+                if len(partition_A) != 0 and len(partition_B) != 0:
+                    if isCutInList((partition_A, partition_B, {cut[1]}),checking_cuts) == True:
+                        projected_cut = ((partition_A,partition_B),cut[1],cut[2],cut[3],cut[4],cut[5])
+                        if isCutInList(projected_cut,valid_cuts) == False:
+                            valid_cuts.append(projected_cut)
+                
+    for valid_cut in valid_cuts:
+        if isCutInList((valid_cut[0][0],valid_cut[0][1],{valid_cut[1]}),checking_cuts) == True:
+            checking_cuts.remove((valid_cut[0][0],valid_cut[0][1],{valid_cut[1]}))
+    
+    
+    print("Checking cuts: " + str(len(checking_cuts)) + "/" + str(len(checking_cuts) + len(valid_cuts)))
+    
+    
+    validate_correct_cuts(valid_cuts,checking_cuts,netP)
+    
+    return valid_cuts, checking_cuts
+    
 
 def artificial_start_end(log):
     st = 'start'
@@ -170,7 +378,7 @@ def combine_score_values(scoreP, scoreM, cost_Variant, ratio, size_par):
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
                  start_activities=None, end_activities=None, initial_start_activities=None,
-                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
         if real_init:
             self.master_dfg = copy.copy(master_dfg)
@@ -196,12 +404,21 @@ class SubtreePlain(object):
             self.inverted_dfg = None
             self.original_log = logp
             self.activities = None
+            
+            # additional variable for cut caching
+            self.calculated_cut_caching = calculated_cut_caching
+            if calculated_cut_caching is None:
+                calculated_cut_caching = dict({"cut" : None,
+                                               "last_netP" : None,
+                                               "last_netM" : None,
+                                               "base_case" : False,
+                                               "calculated_cuts" : []})
 
-            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant)
+            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par, calculated_cut_caching = calculated_cut_caching, cost_Variant = cost_Variant)
 
 
     def initialize_tree(self, dfg, logp, logm, initial_dfg, activities, second_iteration = False, end_call = True,
-                        parameters = None, sup = None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+                        parameters = None, sup = None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
         if activities is None:
             self.activities = get_activities_from_dfg(dfg)
@@ -216,10 +433,10 @@ class SubtreePlain(object):
         self.original_log = logp
         self.parameters = parameters
 
-        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant)
+        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, calculated_cut_caching = calculated_cut_caching, cost_Variant = cost_Variant)
         
 
-    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         ratio = ratio
         sup = sup
         input_ratio = ratio
@@ -243,7 +460,10 @@ class SubtreePlain(object):
         isRelationBase = False
 
         # check base cases:
-        isbase, cut = dfg_functions.check_base_case(self, logP_var,logM_var, sup, ratio, size_par)
+        isbase, cut = dfg_functions.check_base_case(self, logP_var, logM_var, sup, ratio, size_par)
+        
+        netP = None
+        netM = None
         
         if isbase == False:
             dfg2 = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
@@ -283,9 +503,15 @@ class SubtreePlain(object):
                         feat_scores_togg[y] = 1
 
 
-                possible_partitions = dfg_functions.find_possible_partitions(netP)
-
                 cut = []
+
+                cut_opti = False
+                if cut_opti == True:
+                    cutSaved, possible_partitions = analyse_calculated_cut_caching(calculated_cut_caching, cost_Variant, netP, self.activities)
+                    cut = cut + cutSaved
+                else:
+                    possible_partitions = dfg_functions.find_possible_partitions(netP)
+
                 activitiesM = set(a for x in logM_var.keys() for a in x)
 
 
@@ -389,6 +615,7 @@ class SubtreePlain(object):
                                 cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M,combine_score_values(cost_loop_P,cost_loop_M,cost_Variant,ratio,size_par), fit_loop))
                     #####################################################################
 
+        sorted_cuts = []
         if isbase == False and isRelationBase == False:
             if len(cut) != 0:
                 if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
@@ -405,10 +632,21 @@ class SubtreePlain(object):
             else:
                 cut = ('none', 'none', 'none','none','none', 'none')
 
+        # calculated_cut_caching = dict({"cut" : None, "last_netP" : None, "last_netM" : None, "base_case" : False, "calculated_cuts" : []})
+        calculated_cut_caching["cut"] = cut
+        calculated_cut_caching["last_netP"] = netP
+        calculated_cut_caching["last_netM"] = netM
+        calculated_cut_caching["base_case"] = (isbase or isRelationBase)
+        calculated_cut_caching["calculated_cuts"] = sorted_cuts
+
         if debugCutDetection:
             dfg_temp = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
             start_act_cur_dfg = start_activities_get.get_start_activities(self.log_art, parameters=parameters)
             end_act_cur_dfg = end_activities_get.get_end_activities(self.log_art, parameters=parameters)
+            
+            dfgM_temp = dfg_discovery.apply(self.logM_art, variant=dfg_discovery.Variants.FREQUENCY)
+            start_act_cur_dfgM = start_activities_get.get_start_activities(self.logM_art, parameters=parameters)
+            end_act_cur_dfgM = end_activities_get.get_end_activities(self.logM_art, parameters=parameters)
 
             numberBestCutsSaved = 3
             currentIteration = 1
@@ -425,6 +663,7 @@ class SubtreePlain(object):
                 file_path = "imbi_cuts/depth_" + str(self.rec_depth) + "_It_" + str(currentIteration)
             
             save_vis_dfg(dfg_temp, start_act_cur_dfg, end_act_cur_dfg, file_path + ".png")
+            save_vis_dfg(dfgM_temp, start_act_cur_dfgM, end_act_cur_dfgM, file_path + "_M.png")
             with open(file_path + ".txt", "w") as file:
                 if isbase:
                     cutList = [list(cut)]
@@ -471,7 +710,8 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
         elif cut[1] == 'seq':
             self.detected_cut = 'sequential'
   
@@ -492,7 +732,8 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
         elif (cut[1] == 'exc') or (cut[1] == 'exc2'):
             self.detected_cut = 'concurrent'
             LAP,LBP = split.split('exc', [cut[0][0], cut[0][1]], self.log, activity_key)
@@ -520,7 +761,7 @@ class SubtreePlain(object):
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
                                  parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
-                                 cost_Variant=cost_Variant))
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop':
             self.detected_cut = 'loopCut'
@@ -541,7 +782,8 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop1':
             self.detected_cut = 'loopCut'
@@ -562,7 +804,8 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'strict_loop_tau':
             if cost_Variant != custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
@@ -584,7 +827,8 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
         elif cut[1] == 'loop_tau':
             self.detected_cut = 'loopCut'
             if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
@@ -606,7 +850,8 @@ class SubtreePlain(object):
                                     end_activities=end_activities,
                                     initial_start_activities=self.initial_start_activities,
                                     initial_end_activities=self.initial_end_activities,
-                                    parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                    parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
             elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
 
@@ -623,7 +868,8 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par, cost_Variant=cost_Variant))
+                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'none':
             self.detected_cut = 'flower'
