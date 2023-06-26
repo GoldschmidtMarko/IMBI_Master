@@ -10,7 +10,7 @@
 *.fot
 *.cb
 *.cb2
-.*.lb
+.*.lb 
 
 ## Process Mining
 *.xes
