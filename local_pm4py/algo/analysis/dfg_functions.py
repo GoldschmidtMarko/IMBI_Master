@@ -414,7 +414,7 @@ def visualisecpcm(cuts, ratio, size_par):
     plt.show()
 
 
-def check_base_case(self, logP, logM, sup_thr, ratio, size_par):
+def check_base_case(detected_cut, logP, logM, sup_thr, ratio, size_par):
     activitiesP = set(a for x in logP.keys() for a in x)
 
     if len(activitiesP) <= 1:
@@ -428,7 +428,7 @@ def check_base_case(self, logP, logM, sup_thr, ratio, size_par):
 
         # empty check
         if (counter == len_logP) or (len_logP == 0):
-            self.detected_cut = 'empty_log'
+            detected_cut = 'empty_log'
             cut = ('none', 'empty_log', 'none', 'none')
         else:
             # xor check
@@ -459,13 +459,13 @@ def check_base_case(self, logP, logM, sup_thr, ratio, size_par):
                     cut = (({activitiesP.pop()}, set()), 'loop1', 'none', 'none')
                 else:
                     # single activity
-                    self.detected_cut = 'single_activity'
+                    detected_cut = 'single_activity'
                     cut = ('none', 'single_activity', 'none', 'none')
     else:
         base_check = False
         cut = "not_base"
 
-    return base_check, cut
+    return base_check, cut, detected_cut
 
 def cost_loop_tau_relation(start_acts, end_acts,dfg, log, start_activities_o, end_activities_o):
     score = 0
@@ -476,7 +476,7 @@ def cost_loop_tau_relation(start_acts, end_acts,dfg, log, start_activities_o, en
             score += activityUniqueness * loopRatio
     return score
 
-def check_relation_base_case(self, netP, netM, log, logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, start_activities,end_activities):
+def check_relation_base_case(netP, netM, log, logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, start_activities,end_activities):
     activitiesP = netP.nodes - {'start', 'end'}
          
     # xor tau
