@@ -244,14 +244,18 @@ def save_cut(cut, file_name):
   with open(file_name + ".txt", "w") as file:
     file.write("# partitionA | partitionB | cut_type" + "\n")
     outputString = ""
-    for act in cut[0][0]:
-      outputString += str(act) + " "
-    file.write(outputString + "\n")
-    
-    outputString = ""
-    for act in cut[0][1]:
-      outputString += str(act) + " "
-    file.write(outputString + "\n")
+    if isinstance(cut[0], tuple):
+      for act in cut[0][0]:
+        outputString += str(act) + " "
+      file.write(outputString + "\n")
+      
+      outputString = ""
+      for act in cut[0][1]:
+        outputString += str(act) + " "
+      file.write(outputString + "\n")
+    else:
+      file.write("\n")
+      file.write("\n")
     
     file.write(str(cut[1]) + "\n")
     
@@ -334,9 +338,7 @@ def generate_data_piece(file_path, number_of_activites, support, ratio, data_pie
 def generate_data_piece_star_function(args):
     return generate_data_piece(*args)
     
-def generate_data(file_path):
-  
-  
+def generate_data(file_path, sup_step, ratio_step):
   if os.path.exists(file_path):
     shutil.rmtree(file_path)
   
@@ -345,19 +347,33 @@ def generate_data(file_path):
       # Create the folder
       os.makedirs(file_path)
       
-  max_number_activites = 6
+  
       
   num_processors_available = multiprocessing.cpu_count()
   print("Number of available processors:", num_processors_available)
   num_processors = max(1,round(num_processors_available/2))
   
-  number_of_data_pieces_per_variation = 2
+  
+  max_number_activites = 6
+  number_of_data_pieces_per_variation = 8
+  
+  # Setup sup list
+  if sup_step == 0:
+    sup_list = [0]
+  else:
+    sup_list = np.round(np.arange(0,1 + sup_step,sup_step),1)
+    
+  # Setup ratio list
+  if ratio_step == 0:
+    ratio_list = [0]
+  else:
+    ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
   
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
   list_data_pool = [(file_path, number_activ, sup, ratio, data_piece_index)
               for number_activ in range(max_number_activites + 1)
-              for sup in np.round(np.arange(0,1.2,0.2),1)
-              for ratio in np.round(np.arange(0,1.2,0.2),1)
+              for sup in sup_list
+              for ratio in ratio_list
               for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)]
 
   # Create a pool of workers
@@ -365,14 +381,88 @@ def generate_data(file_path):
     list(tqdm(pool.imap(generate_data_piece_star_function, list_data_pool), total=len(list_data_pool)))
 
 
+   
+def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
+  result_dic = dict()
+  
+  # Setup sup list
+  if sup_step == 0:
+    sup_list = [0]
+  else:
+    sup_list = np.round(np.arange(0,1 + sup_step,sup_step),1)
     
+  # Setup ratio list
+  if ratio_step == 0:
+    ratio_list = [0]
+  else:
+    ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
+    
+    
+  for integer in range(1,40):
+    current_path = file_path + "/Data_" + str(integer)
+    if os.path.exists(current_path):
+      result_dic["Data_" + str(integer)] = dict()
+      for sup in sup_list:
+        for ratio in ratio_list:
+          sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio)
+          current_path_variant = current_path + "/" + sup_ratio_string
+          if os.path.exists(current_path_variant):
+            result_dic["Data_" + str(integer)][sup_ratio_string] = dict()
+            for data_integer in range(1,1000):
+              current_path_variant_data = current_path_variant + "/" + "Cut_" + str(integer) + "_" + sup_ratio_string + "_Data_" + str(data_integer) + ".txt"
+              if os.path.exists(current_path_variant_data):
+                with open(current_path_variant_data, 'r') as file:
+                  # Read all the lines in the file
+                  lines = file.readlines()
+                  if len(lines) >= 4:
+                    cut_type = lines[3][:-1]  # to remove /n
+                    if cut_type in result_dic["Data_" + str(integer)][sup_ratio_string]:
+                      result_dic["Data_" + str(integer)][sup_ratio_string][cut_type] += 1
+                    else:
+                      result_dic["Data_" + str(integer)][sup_ratio_string][cut_type] = 1
+              else:
+                break
+              
+  
+  def aggregate_cut_types(input_dic):
+    dic_cut_types = dict()
+    
+    for dic_variant in input_dic.values():
+      for key, value in dic_variant.items():
+        if key not in dic_cut_types:
+          dic_cut_types[key] = value
+        else:
+          dic_cut_types[key] += value
+          
+    sum = 0
+    for value in dic_cut_types.values():
+      sum += value
+      
+    res_distribution = dict()
+    for key, value in dic_cut_types.items():
+      res_distribution[key] = round(value / sum,2)
+    return res_distribution
+  
+  for key, dic_data in result_dic.items():
+    print(key)
+    res_dict = aggregate_cut_types(dic_data)
+    for key, value in res_dict.items():
+      print("|" + key + ": " + str(value) + "| ", end="")
+    print("")
+    
+   
     
 if __name__ == '__main__':
   random.seed(random_seed)
   
-  generate_data(relative_path)
-  # generate_data_piece(relative_path,4,0,0)
+  # generate_data(relative_path,0.2,0.2)
+  # generate_data_piece(relative_path,9,0,0,1)
+  # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
+
+  for i in range(10,20):
+    print("Number of activites: " + str(i))
+    generate_data_piece(relative_path,i,0,0,1)
   
 
-# log_statistic(relative_path + "data1")
+  # log_statistic(relative_path + "data1")
 

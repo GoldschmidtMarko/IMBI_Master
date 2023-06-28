@@ -496,9 +496,30 @@ def check_relation_base_case(netP, netM, log, logM, sup, ratio, size_par, dfgP, 
     
     return False, "not_base", 'none', 'none'
 
-
+def remove_infrequent_edges(dfg, threshold):
+    # Step 1: Determine the out-edge frequency for each node
+    edge_frequencies = {}
+    for (u, v) , weight in dfg.items():
+        edge = (u, v)
+        if u in edge_frequencies:
+            edge_frequencies[u][edge] = weight
+        else:
+            edge_frequencies[u] = dict()
+            edge_frequencies[u][edge] = weight
+    
+    # Step 3: Iterate over the edges and remove the infrequent ones
+    for node in edge_frequencies.values():
+        sum = 0
+        for edge, frequency in node.items():
+            sum += frequency
+            
+        for edge, frequency in node.items():
+            if (frequency/sum) < threshold:
+                del dfg[edge]
+    return dfg
 
 def find_possible_partitions(net):
+    
     time_search_start = time.time()
     def adj(node_set, net):
         adj_set = set()

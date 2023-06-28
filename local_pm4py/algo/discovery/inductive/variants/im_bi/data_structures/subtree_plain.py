@@ -31,6 +31,7 @@ from pm4py import save_vis_dfg
 from pm4py import view_dfg
 debugCutDetection = True
 import os
+from tqdm import tqdm
 
 def get_cutted_edges(cut_Partitions, cost_Variant, netP, netM):
     """
@@ -399,7 +400,7 @@ def get_best_cut(log, logM, sup= None, ratio = None, cost_Variant = custom_enum.
         calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,size_par,calculated_cut_caching,cost_Variant,"None",parameters)
         return cut
 
-def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None):
+def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, pruning_threshold = 0, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None):
         logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in log])
         logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in logM])
         
@@ -416,23 +417,32 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
         
         netP = None
         netM = None
+        new_log_P = None
+        new_log_M = None
         
+        show_runtime = False
+                
         if isbase == False:
             dfg2 = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,pruning_threshold)
+
             netP = generate_nx_graph_from_dfg(dfg2)
             del dfg2[('start', 'end')]
 
             dfg2M = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
+            dfg2M = dfg_functions.remove_infrequent_edges(dfg2M,pruning_threshold)
             netM = generate_nx_graph_from_dfg(dfg2M)
             del dfg2M[('start', 'end')]
             
             dfgP = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+            dfgP = dfg_functions.remove_infrequent_edges(dfgP,pruning_threshold)
             dfgM = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
+            dfgM = dfg_functions.remove_infrequent_edges(dfgM,pruning_threshold)
             
 
             start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
             end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
-            
+
             if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
                 isRelationBase, cut, new_log_P, new_log_M = dfg_functions.check_relation_base_case(netP, netM,log,logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, self_start_activities,self_end_activities)
                 
@@ -453,13 +463,32 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
 
                 cut = []
 
+                start_partition = time.time()
                 cut_opti = False
                 if cut_opti == True:
                     cutSaved, possible_partitions = analyse_calculated_cut_caching(calculated_cut_caching, cost_Variant, netP, self_activities)
                     cut = cut + cutSaved
                 else:
                     possible_partitions = dfg_functions.find_possible_partitions(netP)
+                end_partition = time.time()
+                
+                partition_time = end_partition - start_partition
+                if show_runtime:
+                    print("Finding partition time: " + str(partition_time))
 
+                # recalculate and assign since net pruning in find_possible_partitions change them
+                start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
+                end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
+
+                def seperate_cuts(cuts):
+                    res_partitions = []
+                    for cut in cuts:
+                        for cut_type in cut[2]:
+                            res_partitions.append((cut[0],cut[1],{cut_type}))
+                    return res_partitions
+                
+                possible_partitions = seperate_cuts(possible_partitions)
+                    
                 activitiesM = set(a for x in logM_var.keys() for a in x)
 
 
@@ -488,8 +517,9 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                     count_activitiesM = attributes_get.get_attribute_values(logM_art, activity_key)
                     calc_repetition_FactorP = repetition_Factor(log_art, activity_key)
                     calc_repetition_FactorM = repetition_Factor(logM_art, activity_key)
-                    
-                for pp in possible_partitions:
+                  
+                
+                for pp in tqdm(possible_partitions,total=len(possible_partitions)) if show_runtime else possible_partitions:
                     A = pp[0] - {'start', 'end'}
                     B = pp[1] - {'start', 'end'}
 
@@ -587,13 +617,13 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
             calculated_cut_caching["base_case"] = (isbase or isRelationBase)
             calculated_cut_caching["calculated_cuts"] = sorted_cuts
         
-        return calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut
+        return calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M
 
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
                  start_activities=None, end_activities=None, initial_start_activities=None,
-                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, pruning_threshold = 0, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
         if real_init:
             self.master_dfg = copy.copy(master_dfg)
@@ -629,11 +659,11 @@ class SubtreePlain(object):
                                                "base_case" : False,
                                                "calculated_cuts" : []})
 
-            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par, calculated_cut_caching = calculated_cut_caching, cost_Variant = cost_Variant)
+            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, calculated_cut_caching = calculated_cut_caching, cost_Variant = cost_Variant)
 
 
     def initialize_tree(self, dfg, logp, logm, initial_dfg, activities, second_iteration = False, end_call = True,
-                        parameters = None, sup = None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+                        parameters = None, sup = None, ratio = None, pruning_threshold = 0, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
         if activities is None:
             self.activities = get_activities_from_dfg(dfg)
@@ -648,10 +678,10 @@ class SubtreePlain(object):
         self.original_log = logp
         self.parameters = parameters
 
-        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, calculated_cut_caching = calculated_cut_caching, cost_Variant = cost_Variant)
+        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, calculated_cut_caching = calculated_cut_caching, cost_Variant = cost_Variant)
         
 
-    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
         
         ratio = ratio
         sup = sup
@@ -662,210 +692,9 @@ class SubtreePlain(object):
         activity_key = exec_utils.get_param_value(constants.PARAMETER_CONSTANT_ACTIVITY_KEY, parameters,
                                                     pmutil.xes_constants.DEFAULT_NAME_KEY)
         
-        independent_function_call = True
         
-        
-        if independent_function_call == False:
-            ratio = ratio
-            sup = sup
-            input_ratio = ratio
-
-            logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in self.log])
-            logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in self.logM])
-            
-            if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE and sup > 1:
-                msg = "Error, unsupported sup value."
-                logging.error(msg)
-                raise Exception(msg)
-
-            isbase = False
-            isRelationBase = False
-
-            # check base cases:
-            isbase, cut, detected_cut = dfg_functions.check_base_case(self.detected_cut, logP_var, logM_var, sup, ratio, size_par)
-            self.detected_cut = detected_cut
-            
-            
-            netP = None
-            netM = None
-            
-            if isbase == False:
-                dfg2 = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
-                netP = generate_nx_graph_from_dfg(dfg2)
-                del dfg2[('start', 'end')]
-
-                dfg2M = dfg_discovery.apply(self.logM_art, variant=dfg_discovery.Variants.FREQUENCY)
-                netM = generate_nx_graph_from_dfg(dfg2M)
-                del dfg2M[('start', 'end')]
-                
-                dfgP = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
-                dfgM = dfg_discovery.apply(self.logM_art, variant=dfg_discovery.Variants.FREQUENCY)
-                
-                # start_act_cur_dfg = start_activities_get.get_start_activities(self.log, parameters=parameters)
-                # end_act_cur_dfg = end_activities_get.get_end_activities(self.log, parameters=parameters)
-                # cur_dfg = dfg_inst.apply(self.log, parameters=parameters)
-                # view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
-                
-                start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
-                end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
-                
-                if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-                    isRelationBase, cut, new_log_P, new_log_M = dfg_functions.check_relation_base_case(netP, netM,self.log,self.logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, self.start_activities,self.end_activities)
-                    
-                    if isRelationBase == True:
-                        isbase = True
-
-                if isRelationBase == False:
-                    if parameters == {}:
-                        feat_scores_togg = collections.defaultdict(lambda: 1, {})
-                        feat_scores = collections.defaultdict(lambda: 1, {})
-                        for x in dfg2.keys():
-                            feat_scores[x] = 1
-                            feat_scores_togg[x] = 1
-                        for y in dfg2M.keys():
-                            feat_scores[y] = 1
-                            feat_scores_togg[y] = 1
-
-
-                    cut = []
-
-                    cut_opti = False
-                    if cut_opti == True:
-                        cutSaved, possible_partitions = analyse_calculated_cut_caching(calculated_cut_caching, cost_Variant, netP, self.activities)
-                        cut = cut + cutSaved
-                    else:
-                        possible_partitions = dfg_functions.find_possible_partitions(netP)
-
-                    activitiesM = set(a for x in logM_var.keys() for a in x)
-
-
-                    #########################
-                    fP = dfg_functions.max_flow_graph(netP)
-                    fM = dfg_functions.max_flow_graph(netM)
-                    
-                    if len(start_acts_P.intersection(end_acts_P)) == 0 and cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-                        cost_loop_P, c_recP = dfg_functions.cost_loop_tau(start_acts_P,end_acts_P,self.log,sup,dfgP,self.start_activities,self.end_activities,cost_Variant)
-                        cost_loop_M, c_recM = dfg_functions.cost_loop_tau(start_acts_P.intersection(self.start_activitiesM.keys()),end_acts_P.intersection(self.end_activitiesM.keys()), self.logM, sup, dfgM, self.start_activitiesM,self.end_activitiesM,cost_Variant)
-                        if c_recP > 0:
-                            cut.append(((start_acts_P, end_acts_P),'loop_tau',cost_loop_P,cost_loop_M,combine_score_values(cost_loop_P,cost_loop_M,cost_Variant,ratio,size_par),1))
-                            
-                    
-                    dic_indirect_follow_logP = {}
-                    dic_indirect_follow_logM = {}
-                    count_activitiesP = {}
-                    count_activitiesM = {}
-                    calc_repetition_FactorP = 0
-                    calc_repetition_FactorM = 0
-                    
-                    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-                        dic_indirect_follow_logP = get_indirect_follow_dic(self.log_art, activity_key, list(self.activities.keys()))
-                        dic_indirect_follow_logM = get_indirect_follow_dic(self.logM_art, activity_key, list(activitiesM))
-                        count_activitiesP = attributes_get.get_attribute_values(self.log_art, activity_key)
-                        count_activitiesM = attributes_get.get_attribute_values(self.logM_art, activity_key)
-                        calc_repetition_FactorP = repetition_Factor(self.log_art, activity_key)
-                        calc_repetition_FactorM = repetition_Factor(self.logM_art, activity_key)
-                        
-                    for pp in possible_partitions:
-                        A = pp[0] - {'start', 'end'}
-                        B = pp[1] - {'start', 'end'}
-
-                        start_A_P = set([x[1] for x in dfgP if ((x[0] == 'start') and (x[1] in A))])
-                        end_A_P = set([x[0] for x in dfgP if (x[0] in A and (x[1] == 'end'))])
-                        start_B_P = set([x[1] for x in dfgP if (x[1] in B and (x[0] == 'start'))])
-                        input_B_P = set([x[1] for x in dfgP if ((x[0] not in B) and (x[1] in B))])
-                        output_B_P = set([x[0] for x in dfgP if ((x[0] in B) and (x[1] not in B))])
-
-                        start_A_M = set([x[1] for x in dfgM if ((x[0] == 'start') and (x[1] in A))])
-                        end_A_M = set([x[0] for x in dfgM if (x[0] in A and (x[1] == 'end'))])
-                        start_B_M = set([x[1] for x in dfgM if (x[1] in B and (x[0] == 'start'))])
-                        input_B_M = set([x[1] for x in dfgM if ((x[0] not in B) and (x[1] in B))])
-                        output_B_M = set([x[0] for x in dfgM if ((x[0] in B) and (x[1] not in B))])
-
-                        type = pp[2]
-                        if len(set(activitiesM).intersection(A))==0 or len(set(activitiesM).intersection(B))==0:
-                            ratio = 0
-                        else:
-                            ratio = input_ratio
-                        #####################################################################
-                        # seq check
-                        fit_seq = dfg_functions.fit_seq(logP_var, A, B)
-                        if fit_seq > 0.0:
-                            cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP, self.log,  cost_Variant)
-                            cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM, self.logM,  cost_Variant)
-                            
-                            cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M,combine_score_values(cost_seq_P,cost_seq_M,cost_Variant,ratio,size_par), fit_seq))
-                        #####################################################################
-
-
-                        #####################################################################
-                        # xor check
-                        if "exc" in type:
-                            fit_exc = dfg_functions.fit_exc(logP_var, A, B)
-                            if fit_exc > 0.0:
-                                cost_exc_P = dfg_functions.cost_exc(netP, A, B, feat_scores, fP, dic_indirect_follow_logP, count_activitiesP, cost_Variant)
-                                cost_exc_M = dfg_functions.cost_exc(netM, A.intersection(activitiesM), B.intersection(activitiesM), feat_scores, fM, dic_indirect_follow_logM, count_activitiesM, cost_Variant)
-                                cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M,combine_score_values(cost_exc_P,cost_exc_M,cost_Variant,ratio,size_par), fit_exc))
-                        #####################################################################
-
-
-                        #####################################################################
-                        # xor-tau check
-                        if dfg_functions.n_edges(netP,{'start'},{'end'})>0 and cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-                            cost_exc_tau_P = dfg_functions.cost_exc_tau(netP,self.log,sup,cost_Variant)
-                            cost_exc_tau_M = dfg_functions.cost_exc_tau(netM,self.logM,sup,cost_Variant)
-                            # print(cost_exc_tau_P) 
-                            cut.append(((A.union(B), set()), 'exc2',cost_exc_tau_P,cost_exc_tau_M,combine_score_values(cost_exc_tau_P,cost_exc_tau_M,cost_Variant,ratio,size_par),1))
-                        #####################################################################
-
-
-                        #####################################################################
-                        # parallel check
-                        if "par" in type:
-                            cost_par_P = dfg_functions.cost_par(netP, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fP, dic_indirect_follow_logP, calc_repetition_FactorP, cost_Variant)
-                            cost_par_M = dfg_functions.cost_par(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, feat_scores, fM,dic_indirect_follow_logM, calc_repetition_FactorM, cost_Variant)
-                            cut.append(((A, B), 'par', cost_par_P, cost_par_M,combine_score_values(cost_par_P,cost_par_M,cost_Variant,ratio,size_par),1))
-                        #####################################################################
-
-
-                        #####################################################################
-                        # loop check
-                        if "loop" in type:
-                            fit_loop = dfg_functions.fit_loop(logP_var, A, B, end_A_P, start_A_P)
-                            if (fit_loop > 0.0):
-                                cost_loop_P = dfg_functions.cost_loop(netP, A, B, sup, start_A_P, end_A_P, input_B_P, output_B_P, feat_scores, fP, dic_indirect_follow_logP, calc_repetition_FactorP, cost_Variant)
-                                cost_loop_M = dfg_functions.cost_loop(netM, A.intersection(activitiesM), B.intersection(activitiesM), sup, start_A_M, end_A_M, input_B_M, output_B_M, feat_scores, fM, dic_indirect_follow_logM, calc_repetition_FactorM, cost_Variant)
-
-                                if cost_loop_P is not False:
-                                    cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M,combine_score_values(cost_loop_P,cost_loop_M,cost_Variant,ratio,size_par), fit_loop))
-                        #####################################################################
-
-            sorted_cuts = []
-            if isbase == False and isRelationBase == False:
-                if len(cut) != 0:
-                    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-                        sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
-                        cut = sorted_cuts[0]
-                    else:
-                        sorted_cuts = list(filter(lambda x: x[2] > 0, cut))
-                        if len(sorted_cuts) != 0:
-                            sorted_cuts = sorted(sorted_cuts, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
-                            sorted_cuts.reverse()
-                            cut = sorted_cuts[0]
-                        else:
-                            cut = ('none', 'none', 'none','none','none', 'none')   
-                else:
-                    cut = ('none', 'none', 'none','none','none', 'none')
-
-            # calculated_cut_caching = dict({"cut" : None, "last_netP" : None, "last_netM" : None, "base_case" : False, "calculated_cuts" : []})
-            calculated_cut_caching["cut"] = cut
-            calculated_cut_caching["last_netP"] = netP
-            calculated_cut_caching["last_netM"] = netM
-            calculated_cut_caching["base_case"] = (isbase or isRelationBase)
-            calculated_cut_caching["calculated_cuts"] = sorted_cuts
-            
-        else:
-            calculated_cut_caching,isbase, cut, sorted_cuts, detected_cut = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio,size_par,calculated_cut_caching,cost_Variant,self.detected_cut,self.parameters)
-            self.detected_cut = detected_cut
+        calculated_cut_caching,isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,calculated_cut_caching,cost_Variant,self.detected_cut,self.parameters)
+        self.detected_cut = detected_cut
 
         if debugCutDetection:
             dfg_temp = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
@@ -938,7 +767,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
         elif cut[1] == 'seq':
             self.detected_cut = 'sequential'
@@ -960,7 +789,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
         elif (cut[1] == 'exc') or (cut[1] == 'exc2'):
             self.detected_cut = 'concurrent'
@@ -988,7 +817,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop':
@@ -1010,7 +839,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'loop1':
@@ -1032,7 +861,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'strict_loop_tau':
@@ -1055,7 +884,7 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
         elif cut[1] == 'loop_tau':
             self.detected_cut = 'loopCut'
@@ -1078,7 +907,7 @@ class SubtreePlain(object):
                                     end_activities=end_activities,
                                     initial_start_activities=self.initial_start_activities,
                                     initial_end_activities=self.initial_end_activities,
-                                    parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                    parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
             elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
@@ -1096,7 +925,7 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = input_ratio, size_par = size_par,
+                                parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
 
         elif cut[1] == 'none':
@@ -1105,10 +934,10 @@ class SubtreePlain(object):
 
 
 def make_tree(logp, logm, dfg, master_dfg, initial_dfg, activities, c, recursion_depth, noise_threshold, start_activities,
-              end_activities, initial_start_activities, initial_end_activities, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+              end_activities, initial_start_activities, initial_end_activities, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
 
     tree = SubtreePlain(logp,logm, dfg, master_dfg, initial_dfg, activities, c, recursion_depth, noise_threshold,
                         start_activities,
-                        end_activities, initial_start_activities, initial_end_activities, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant)
+                        end_activities, initial_start_activities, initial_end_activities, parameters=parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant)
 
     return tree
