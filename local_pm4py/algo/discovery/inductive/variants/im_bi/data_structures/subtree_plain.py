@@ -266,7 +266,8 @@ def generate_nx_graph_from_dfg(dfg):
     for act in dfg_acts:
         G.add_node(act)
     for edge in dfg:
-        G.add_edge(edge[0], edge[1], weight=dfg[edge])
+        if dfg[edge] > 0:
+            G.add_edge(edge[0], edge[1], weight=dfg[edge])
     return G
 
 
@@ -376,7 +377,7 @@ def combine_score_values(scoreP, scoreM, cost_Variant, ratio, size_par):
         res = scoreP - ratio * scoreM
         return res
 
-def get_best_cut(log, logM, sup= None, ratio = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+def get_best_cut_with_cut_type(log, logM, cut_type = "", sup= None, ratio = None, pruning_threshold = 0, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
     
         log_art = artificial_start_end(log.__deepcopy__())
         logM_art = artificial_start_end(logM.__deepcopy__())
@@ -397,7 +398,36 @@ def get_best_cut(log, logM, sup= None, ratio = None, cost_Variant = custom_enum.
         activity_key = exec_utils.get_param_value(constants.PARAMETER_CONSTANT_ACTIVITY_KEY, parameters, 
                                                   pmutil.xes_constants.DEFAULT_NAME_KEY)
         
-        calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,size_par,calculated_cut_caching,cost_Variant,"None",parameters)
+        calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,calculated_cut_caching,cost_Variant,"None",parameters)
+        
+        for cur_cut in sorted_cuts:
+            if cur_cut[1] == cut_type:
+                return True, cur_cut
+                
+        return False, cut
+
+def get_best_cut(log, logM, sup= None, ratio = None, pruning_threshold = 0, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+    
+        log_art = artificial_start_end(log.__deepcopy__())
+        logM_art = artificial_start_end(logM.__deepcopy__())
+        parameters = {}
+        
+        start_activities = start_activities_filter.get_start_activities(log)
+        start_activitiesM = start_activities_filter.get_start_activities(logM)
+        end_activities = end_activities_filter.get_end_activities(log)
+        end_activitiesM = end_activities_filter.get_end_activities(logM)
+        
+        dfg = [(k, v) for k, v in dfg_inst.apply(log, parameters=parameters).items() if v > 0]
+        activities = get_activities_from_dfg(dfg)
+
+        calculated_cut_caching = None
+        
+        size_par=len(log)/len(logM)
+        
+        activity_key = exec_utils.get_param_value(constants.PARAMETER_CONSTANT_ACTIVITY_KEY, parameters, 
+                                                  pmutil.xes_constants.DEFAULT_NAME_KEY)
+        
+        calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,calculated_cut_caching,cost_Variant,"None",parameters)
         return cut
 
 def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, pruning_threshold = 0, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None):
@@ -424,20 +454,22 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 
         if isbase == False:
             dfg2 = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,pruning_threshold)
+            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,self_end_activities, pruning_threshold)
 
             netP = generate_nx_graph_from_dfg(dfg2)
-            del dfg2[('start', 'end')]
+            if ('start', 'end') in dfg2:
+                del dfg2[('start', 'end')]
 
             dfg2M = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfg2M = dfg_functions.remove_infrequent_edges(dfg2M,pruning_threshold)
+            dfg2M = dfg_functions.remove_infrequent_edges(dfg2M,self_end_activitiesM,pruning_threshold)
             netM = generate_nx_graph_from_dfg(dfg2M)
-            del dfg2M[('start', 'end')]
+            if ('start', 'end') in dfg2M:
+                del dfg2M[('start', 'end')]
             
             dfgP = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfgP = dfg_functions.remove_infrequent_edges(dfgP,pruning_threshold)
+            dfgP = dfg_functions.remove_infrequent_edges(dfgP,self_end_activities,pruning_threshold, show_pruning=False)
             dfgM = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfgM = dfg_functions.remove_infrequent_edges(dfgM,pruning_threshold)
+            dfgM = dfg_functions.remove_infrequent_edges(dfgM,self_end_activitiesM,pruning_threshold)
             
 
             start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}

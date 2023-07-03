@@ -16,6 +16,12 @@ def get_direct_edge_count(net, from_node, to_node):
         return 0
     else:
         return net.get_edge_data(from_node,to_node)['weight']
+    
+def get_frequency(dfg, edge):
+    if edge not in dfg:
+        return 0
+    else:
+        return dfg[edge]
 
 def n_edges(net, S, T, scaling = None):
     net_c = copy.deepcopy(net)
@@ -114,9 +120,9 @@ def cost_loop_tau_frequency(start_acts, end_acts, log, sup, dfg, start_activitie
     c_rec = 0
     for x in start_acts:
         for y in end_acts:
-            L1P = max(0, len(log) * sup * (start_activities_o[x] / (sum(start_activities_o.values()))) * (end_activities_o[y] / (sum(end_activities_o.values()))) - dfg[(y, x)])
+            L1P = max(0, len(log) * sup * (start_activities_o[x] / (sum(start_activities_o.values()))) * (end_activities_o[y] / (sum(end_activities_o.values()))) - get_frequency(dfg,(y,x)))
             missing_loop += L1P
-            c_rec += dfg[(y, x)]
+            c_rec += get_frequency(dfg,(y,x))
     return missing_loop, c_rec
 
 def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
@@ -124,6 +130,7 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
     c1 = n_edges(net, B, A, scaling=scores_toggle)
 
     c2 = 0
+    
     for x in A:
         for y in B:
             c2 += max(0, scores[(x, y)] * net.out_degree(x, weight='weight') * sup * (net.out_degree(y, weight='weight') / (
@@ -496,27 +503,49 @@ def check_relation_base_case(netP, netM, log, logM, sup, ratio, size_par, dfgP, 
     
     return False, "not_base", 'none', 'none'
 
-def remove_infrequent_edges(dfg, threshold):
-    # Step 1: Determine the out-edge frequency for each node
-    edge_frequencies = {}
-    for (u, v) , weight in dfg.items():
-        edge = (u, v)
-        if u in edge_frequencies:
-            edge_frequencies[u][edge] = weight
-        else:
-            edge_frequencies[u] = dict()
-            edge_frequencies[u][edge] = weight
+
+def remove_infrequent_edges(dfg, end_activities, threshold, show_pruning = False):
+    node_set = set()
     
-    # Step 3: Iterate over the edges and remove the infrequent ones
-    for node in edge_frequencies.values():
-        sum = 0
-        for edge, frequency in node.items():
-            sum += frequency
-            
-        for edge, frequency in node.items():
-            if (frequency/sum) < threshold:
-                del dfg[edge]
-    return dfg
+    # Step 1: Determine the out-edge frequency for each node
+    number_edges = len(dfg)
+    edge_max_out = {}
+    for (u, v), weight in dfg.items():
+        node_set.add(u)
+        node_set.add(v)
+        
+        if u not in edge_max_out:
+            edge_max_out[u] = weight
+        else:
+            edge_max_out[u] = max(weight, edge_max_out[u])
+        if u in end_activities:
+            edge_max_out[u] = max(edge_max_out[u], end_activities[u])
+    
+    dfg_list = [(x, y) for x, y in dfg.items()]
+    dfg_list_filtered = dfg_list.copy()
+    
+    # generate nx graph
+    nx_graph = generate_nx_graph_from_dfg(dfg)
+    
+    for x in dfg_list:
+        if x[1] < threshold * edge_max_out[x[0][0]]:
+            nx_graph.remove_edge(*x[0])
+            # check start end reachability
+            if nx.has_path(nx_graph,"start","end"):
+                dfg_list_filtered.remove(x)
+            else:
+                nx_graph.add_edge(*x[0])
+
+    dfg_list_filtered = [x[0] for x in dfg_list_filtered]
+    # filter the elements in the DFG
+    graph = {x: y for x, y in dfg.items() if x in dfg_list_filtered}
+    
+    number_edges_after = len(dfg_list_filtered)
+    if show_pruning == True:
+        print("Pruning Edges: " + str(number_edges) + " -> " + str(number_edges_after))
+      
+    return graph
+
 
 def find_possible_partitions(net):
     

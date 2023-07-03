@@ -133,13 +133,13 @@ def log_statistic(log_path):
   print("Longest trace length:", longest_length)
   print("Smallest trace length:", smallest_length)
 
-def find_best_cut(path_lopP, path_logM, sup, ratio):
+def find_best_cut(path_lopP, path_logM, sup, ratio, pruning_threshold):
   
   parameter = {Import_Parameter.SHOW_PROGRESS_BAR: False}
   log = xes_importer.apply(path_lopP + ".xes", parameters=parameter)
   logM = xes_importer.apply(path_logM + ".xes", parameters=parameter)
 
-  best_cut = get_best_cut(log,logM,sup,ratio)
+  best_cut = get_best_cut(log,logM,sup,ratio,pruning_threshold)
   return best_cut
   
 def view_log(log):
@@ -177,6 +177,7 @@ def generate_random_process_tree(activites_list):
   # generated_ProcessTrees[0]._print_tree()
   return generated_ProcessTrees[0] 
 
+# TODO make noise similar to traces by small local mutation
 def generate_log_from_process_tree(activites_list, noise_factor = 0):
   process_tree = generate_random_process_tree(activites_list)
   log = pm4py.play_out(process_tree)
@@ -185,6 +186,7 @@ def generate_log_from_process_tree(activites_list, noise_factor = 0):
   number_avg_trace_length = int(get_avg_trace_length_from_log(log))
   number_avg_trace_length_deviation = int((number_avg_trace_length / 8))
   
+  # noise added
   for i in range (number_noise_traces):
     trace = Trace()
     generated_trace = generate_trace(activites_list, trace_length=get_number_depending_on_deviation(number_avg_trace_length, number_avg_trace_length_deviation))
@@ -284,21 +286,23 @@ def get_partial_activity_names(activity_names, number_activites, activity_string
   return list(new_activity_names)
       
   
-def generate_data_piece(file_path, number_of_activites, support, ratio, data_piece_index):
+def generate_data_piece(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index):
   if number_of_activites <= 0:
     return
 
   warnings.filterwarnings("ignore")
   
   folder_name = file_path + "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold) + "_Data_" + str(data_piece_index)
+
+  
   
   # Check if the folder already exists
   if os.path.exists(folder_name):
       # Create the folder
       os.makedirs(folder_name, exist_ok=True)
      
-  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
+  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
   
   # Check if the folder with param already exists
   if not os.path.exists(folder_name):
@@ -331,14 +335,14 @@ def generate_data_piece(file_path, number_of_activites, support, ratio, data_pie
   save_log(logP, folder_name + "/logP_" + ending_File_string)
   save_log(logM, folder_name + "/logM_" + ending_File_string)
   
-  cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio)
+  cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio, pruning_threshold)
   
   save_cut(cut,folder_name + "/Cut_" + ending_File_string)
   
 def generate_data_piece_star_function(args):
     return generate_data_piece(*args)
     
-def generate_data(file_path, sup_step, ratio_step):
+def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parallel = True):
   if os.path.exists(file_path):
     shutil.rmtree(file_path)
   
@@ -354,7 +358,7 @@ def generate_data(file_path, sup_step, ratio_step):
   num_processors = max(1,round(num_processors_available/2))
   
   
-  max_number_activites = 6
+  max_number_activites = 10
   number_of_data_pieces_per_variation = 8
   
   # Setup sup list
@@ -368,21 +372,28 @@ def generate_data(file_path, sup_step, ratio_step):
     ratio_list = [0]
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
-  
+    
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
-  list_data_pool = [(file_path, number_activ, sup, ratio, data_piece_index)
+  list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index)
               for number_activ in range(max_number_activites + 1)
               for sup in sup_list
               for ratio in ratio_list
               for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)]
 
-  # Create a pool of workers
-  with multiprocessing.Pool(num_processors) as pool:
-    list(tqdm(pool.imap(generate_data_piece_star_function, list_data_pool), total=len(list_data_pool)))
+  if use_parallel:
+    print("Number of used processors:", num_processors)
+    # Create a pool of workers
+    with multiprocessing.Pool(num_processors) as pool:
+      list(tqdm(pool.imap(generate_data_piece_star_function, list_data_pool), total=len(list_data_pool)))
+      
+  else:
+    for it in list_data_pool:
+      print("Running: " + str(it))
+      generate_data_piece_star_function(it)
 
 
    
-def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
+def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, pruning_threshold):
   result_dic = dict()
   
   # Setup sup list
@@ -404,7 +415,7 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
       result_dic["Data_" + str(integer)] = dict()
       for sup in sup_list:
         for ratio in ratio_list:
-          sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio)
+          sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
           current_path_variant = current_path + "/" + sup_ratio_string
           if os.path.exists(current_path_variant):
             result_dic["Data_" + str(integer)][sup_ratio_string] = dict()
@@ -451,18 +462,49 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
     print("")
     
    
+def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index):
+  if number_of_activites <= 0:
+    return
+
+  warnings.filterwarnings("ignore")
+  
+  folder_name = file_path + "/Data_" + str(number_of_activites)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold) + "_Data_" + str(data_piece_index)
+
+  
+  
+  # Check if the folder already exists
+  if os.path.exists(folder_name):
+      # Create the folder
+      os.makedirs(folder_name, exist_ok=True)
+     
+  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
+  
+  # Check if the folder with param already exists
+  if not os.path.exists(folder_name):
+      # Create the folder
+      os.makedirs(folder_name, exist_ok=True)
+      
+  cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio, pruning_threshold)
+  
+  save_cut(cut,folder_name + "/Cut_" + ending_File_string)
+   
+cut_types = ["single_activity", "loop1", "exc", "exc2", "seq", "par", "loop_tau", "loop", "none"]
     
 if __name__ == '__main__':
   random.seed(random_seed)
   
-  # generate_data(relative_path,0.2,0.2)
-  # generate_data_piece(relative_path,9,0,0,1)
-  # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
-
-  for i in range(10,20):
-    print("Number of activites: " + str(i))
-    generate_data_piece(relative_path,i,0,0,1)
+  # generate_data(relative_path,0.2,0.2,0.2,True)
   
+  # generate_data_piece(relative_path,9,0,0,1)
+  
+  get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0.2)
+
+  # for i in range(10,20):
+  #  print("Number of activites: " + str(i))
+  #  generate_data_piece(relative_path,i,0,0,0.3,1)
+  
+  # manual_run('GNN_partitioning/GNN_Data', 4, 0.2, 0.6, 0.2, 5)
 
   # log_statistic(relative_path + "data1")
 
