@@ -430,6 +430,7 @@ def get_best_cut(log, logM, sup= None, ratio = None, pruning_threshold = 0, cost
         calculated_cut_caching, isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,calculated_cut_caching,cost_Variant,"None",parameters)
         return cut
 
+
 def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, pruning_threshold = 0, size_par = None, calculated_cut_caching = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None):
         logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in log])
         logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in logM])
@@ -599,7 +600,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                         cost_exc_tau_P = dfg_functions.cost_exc_tau(netP,log,sup,cost_Variant)
                         cost_exc_tau_M = dfg_functions.cost_exc_tau(netM,logM,sup,cost_Variant)
                         # print(cost_exc_tau_P) 
-                        cut.append(((A.union(B), set()), 'exc2',cost_exc_tau_P,cost_exc_tau_M,combine_score_values(cost_exc_tau_P,cost_exc_tau_M,cost_Variant,ratio,size_par),1))
+                        cut.append(((A.union(B), set()), 'exc-tau',cost_exc_tau_P,cost_exc_tau_M,combine_score_values(cost_exc_tau_P,cost_exc_tau_M,cost_Variant,ratio,size_par),1))
                     #####################################################################
 
 
@@ -628,12 +629,12 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
         if isbase == False and isRelationBase == False:
             if len(cut) != 0:
                 if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-                    sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
+                    sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc','exc-tau','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
                     cut = sorted_cuts[0]
                 else:
                     sorted_cuts = list(filter(lambda x: x[2] > 0, cut))
                     if len(sorted_cuts) != 0:
-                        sorted_cuts = sorted(sorted_cuts, key=lambda x: (x[4], x[2],['exc','exc2','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
+                        sorted_cuts = sorted(sorted_cuts, key=lambda x: (x[4], x[2],['exc','exc-tau','seq','par','loop','loop_tau'].index(x[1]), -(len(x[0][0]) * len(x[0][1]) / (len(x[0][0]) + len(x[0][1])))))
                         sorted_cuts.reverse()
                         cut = sorted_cuts[0]
                     else:
@@ -823,7 +824,7 @@ class SubtreePlain(object):
                                  initial_end_activities=self.initial_end_activities,
                                  parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par,
                                  calculated_cut_caching=calculated_cut_caching, cost_Variant=cost_Variant))
-        elif (cut[1] == 'exc') or (cut[1] == 'exc2'):
+        elif (cut[1] == 'exc') or (cut[1] == 'exc-tau'):
             self.detected_cut = 'concurrent'
             LAP,LBP = split.split('exc', [cut[0][0], cut[0][1]], self.log, activity_key)
             LAM, LBM = split.split('exc', [cut[0][0], cut[0][1]], self.logM, activity_key)

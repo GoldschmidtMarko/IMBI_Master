@@ -12,6 +12,9 @@ from pm4py.objects.log.importer.xes import importer as xes_importer
 import sys
 sys.path.append('c:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master')
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut
+from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut_with_cut_type
+from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import artificial_start_end
+from local_pm4py.algo.discovery.dfg import algorithm as dfg_discovery
 from pm4py.statistics.end_activities.log import get as end_activities_get
 from pm4py.statistics.start_activities.log import get as start_activities_get
 from pm4py.algo.discovery.dfg.variants import native as dfg_inst
@@ -133,14 +136,13 @@ def log_statistic(log_path):
   print("Longest trace length:", longest_length)
   print("Smallest trace length:", smallest_length)
 
-def find_best_cut(path_lopP, path_logM, sup, ratio, pruning_threshold):
-  
-  parameter = {Import_Parameter.SHOW_PROGRESS_BAR: False}
-  log = xes_importer.apply(path_lopP + ".xes", parameters=parameter)
-  logM = xes_importer.apply(path_logM + ".xes", parameters=parameter)
-
-  best_cut = get_best_cut(log,logM,sup,ratio,pruning_threshold)
+def find_best_cut(lopP, logM, sup, ratio, pruning_threshold):
+  best_cut = get_best_cut(lopP,logM,sup,ratio,pruning_threshold)
   return best_cut
+
+def find_best_cut_type(lopP, logM, sup, ratio, pruning_threshold, cut_type):
+  result, best_cut = get_best_cut_with_cut_type(lopP,logM, cut_type, sup,ratio,pruning_threshold)
+  return result, best_cut
   
 def view_log(log):
   start_act_cur_dfg = start_activities_get.get_start_activities(log)
@@ -161,21 +163,86 @@ def generate_random_process_tree(activites_list):
     
   # combine 2 random process Trees and add the father back to the list, until only 1 remains
   while(len(generated_ProcessTrees) > 1):
-    random_items = random.sample(generated_ProcessTrees, 2)
-    processTree1 = random_items[0]
-    processTree2 = random_items[1]
-    generated_ProcessTrees.remove(processTree1)
-    generated_ProcessTrees.remove(processTree2)
-    
-    operatorList = [Operator.SEQUENCE,Operator.LOOP,Operator.PARALLEL,Operator.XOR]
-    new_operator = random.choice(operatorList)
-    
-    generated_ProcessTrees.append(ProcessTree(children=[processTree1, processTree2],operator=new_operator))
+    generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees)
     
     
   # print("Generated Tree")
   # generated_ProcessTrees[0]._print_tree()
   return generated_ProcessTrees[0] 
+
+
+def combine_process_trees_from_list(process_tree_list, operator = None):
+  random_items = random.sample(process_tree_list, 2)
+  processTree1 = random_items[0]
+  processTree2 = random_items[1]
+  process_tree_list.remove(processTree1)
+  process_tree_list.remove(processTree2)
+  
+  if operator == None:
+    operatorList = [Operator.SEQUENCE,Operator.LOOP,Operator.PARALLEL,Operator.XOR]
+    new_operator = random.choice(operatorList)
+  else:
+    new_operator = operator
+  
+  process_tree_list.append(ProcessTree(children=[processTree1, processTree2],operator=new_operator))
+  
+  return process_tree_list
+
+def generate_random_process_tree_for_cut_type(activites_list, cut_type):
+  if len(activites_list) == 1:
+    return ProcessTree(label=activites_list[0])
+  
+  generated_ProcessTrees = []
+  # generating leave node
+  for activity_name in activites_list:
+    generated_ProcessTrees.append(ProcessTree(label=activity_name))
+    
+  
+  # generating tau node
+  number_random_tau_labels = random.randint(0,len(activites_list))
+  for i in range(number_random_tau_labels):
+    generated_ProcessTrees.append(ProcessTree(label=None))
+    
+  basic_cuts = ["exc","seq", "par", "loop"]
+  special_cuts = ["exc-tau","loop_tau"]
+  
+  if cut_type in basic_cuts:
+    # combine 2 random process Trees and add the father back to the list, until only 2 remains
+    while(len(generated_ProcessTrees) > 2):
+      generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees)
+    if cut_type == "seq":
+      new_operator = Operator.SEQUENCE
+    elif cut_type == "par":
+      new_operator = Operator.PARALLEL
+    elif cut_type == "loop":
+      new_operator = Operator.LOOP
+    elif cut_type == "exc":
+      new_operator = Operator.XOR
+    generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees, new_operator)
+    return generated_ProcessTrees[0] 
+  elif cut_type in special_cuts:
+    if cut_type == "exc-tau":
+      new_operator = Operator.XOR
+    elif cut_type == "loop_tau":
+      new_operator = Operator.LOOP
+      
+    # combine 2 random process Trees and add the father back to the list, until only 1 remains
+    while(len(generated_ProcessTrees) > 1):
+      generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees)
+
+    # add tauTree to operant
+    tauTree = ProcessTree(label=None)
+    
+    return ProcessTree(children=[generated_ProcessTrees[0] , tauTree],operator=new_operator)
+      
+  else:
+    # combine 2 random process Trees and add the father back to the list, until only 1 remains
+    while(len(generated_ProcessTrees) > 1):
+      generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees)
+    return generated_ProcessTrees[0] 
+  
+  return generated_ProcessTrees[0] 
+
 
 # TODO make noise similar to traces by small local mutation
 def generate_log_from_process_tree(activites_list, noise_factor = 0):
@@ -198,6 +265,100 @@ def generate_log_from_process_tree(activites_list, noise_factor = 0):
     log.append(trace)
     
   return log
+
+# TODO make noise similar to traces by small local mutation
+def generate_log_from_process_tree_for_cut_type(activites_list, cut_type, noise_factor = 0):
+  process_tree = generate_random_process_tree_for_cut_type(activites_list, cut_type)
+  log = pm4py.play_out(process_tree)
+  number_noise_traces = int(noise_factor * len(log))
+  
+  number_avg_trace_length = int(get_avg_trace_length_from_log(log))
+  number_avg_trace_length_deviation = int((number_avg_trace_length / 8))
+  
+  # noise added
+  for i in range (number_noise_traces):
+    trace = Trace()
+    generated_trace = generate_trace(activites_list, trace_length=get_number_depending_on_deviation(number_avg_trace_length, number_avg_trace_length_deviation))
+    for event in generated_trace:
+      event1 = {"concept:name": str(event)}
+      trace.append(event1)
+
+    # Add the trace to the event log
+    log.append(trace)
+    
+  return log
+
+# expands the matrix matrix_P and matrix_M so that the columns/ rows of both matrix have the the same activity
+def generate_union_adjacency_matrices(matrix_P, nodeListP, matrix_M, nodeListM):
+  # Find the common set of labels
+  common_labels = ["start", "end"]
+  common_labels = common_labels + list(set(nodeListP).union(set(nodeListM)) - {"start", "end"})
+  
+  # Create new expanded matrices
+  expanded_matrix1 = np.zeros((len(common_labels), len(common_labels)), dtype=int)
+  expanded_matrix2 = np.zeros((len(common_labels), len(common_labels)), dtype=int)
+
+  # Copy values from original matrices to expanded matrices
+  for i, label in enumerate(common_labels):
+    if label in nodeListP:
+        row_idx = nodeListP.index(label)
+        expanded_matrix1[i, i] = matrix_P[row_idx, row_idx]  # Diagonal element
+        for j, other_label in enumerate(common_labels[i+1:], start=i+1):
+            if other_label in nodeListP:
+                other_row_idx = nodeListP.index(other_label)
+                expanded_matrix1[i, j] = matrix_P[row_idx, other_row_idx]
+                expanded_matrix1[j, i] = matrix_P[other_row_idx, row_idx]
+    if label in nodeListM:
+        row_idx = nodeListM.index(label)
+        expanded_matrix2[i, i] = matrix_M[row_idx, row_idx]  # Diagonal element
+        for j, other_label in enumerate(common_labels[i+1:], start=i+1):
+            if other_label in nodeListM:
+                other_row_idx = nodeListM.index(other_label)
+                expanded_matrix2[i, j] = matrix_M[row_idx, other_row_idx]
+                expanded_matrix2[j, i] = matrix_M[other_row_idx, row_idx]
+
+  # print("P")
+  # print(nodeListP)
+  # print(matrix_P)
+
+  # print("")
+  # print(common_labels)
+  # print(expanded_matrix1)
+  # print("")
+  
+  # print("M")
+  # print(nodeListM)
+  # print(matrix_M)
+
+  # print("")
+  # print(common_labels)
+  # print(expanded_matrix2)
+  
+  return common_labels, expanded_matrix1, expanded_matrix2
+
+def generate_adjacency_matrix_from_log(log):
+  log_art = artificial_start_end(log.__deepcopy__())
+  dfg = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+  
+  
+  unique_nodes = ["start", "end"]
+  unique_nodes = unique_nodes + list(set([node for edge in dfg.keys() for node in edge]) - {"start", "end"})
+  num_nodes = len(unique_nodes)
+  
+  # Initialize an empty adjacency matrix
+  adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
+
+  # Populate the adjacency matrix
+  for edge, count in dfg.items():
+      source_node, target_node = edge
+      source_index = unique_nodes.index(source_node)
+      target_index = unique_nodes.index(target_node)
+      adj_matrix[source_index, target_index] = count
+  
+  # print(unique_nodes)
+  # print(adj_matrix)
+  return unique_nodes, adj_matrix
+
   
 def get_min_trace_length_from_log(log):
    # Initialize variables for longest and smallest trace length
@@ -242,26 +403,42 @@ def save_log(log, file_name):
   parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
   apply(log, file_name + ".xes", parameters=parameter)
   
-def save_cut(cut, file_name):
+def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node, sup, ratio, partitionA, partitionB):
   with open(file_name + ".txt", "w") as file:
-    file.write("# partitionA | partitionB | cut_type" + "\n")
+    file.write("# unique_node | adj_matrix_P | adj_matrix_M | sup | ratio | partitionA | partitionB" + "\n")
+    # adj_matrix_P
     outputString = ""
-    if isinstance(cut[0], tuple):
-      for act in cut[0][0]:
-        outputString += str(act) + " "
-      file.write(outputString + "\n")
-      
+    for value in unique_node:
+      outputString += str(value) + " "
+    file.write(outputString + "\n")
+    for row in adj_matrix_P:
       outputString = ""
-      for act in cut[0][1]:
-        outputString += str(act) + " "
+      for value in row:
+        outputString += str(value) + " "
       file.write(outputString + "\n")
-    else:
-      file.write("\n")
-      file.write("\n")
+    file.write("\n")
+    # adj_matrix_M
+    for row in adj_matrix_M:
+      outputString = ""
+      for value in row:
+        outputString += str(value) + " "
+      file.write(outputString + "\n")
+    file.write("\n")
+    # sup
+    file.write(str(sup) + "\n")
+    # ratio
+    file.write(str(ratio) + "\n")
+    # partitionA
+    outputString = ""
+    for value in partitionA:
+      outputString += str(value) + " "
+    file.write(outputString + "\n")
+    # partitionB
+    outputString = ""
+    for value in partitionB:
+      outputString += str(value) + " "
+    file.write(outputString + "\n")
     
-    file.write(str(cut[1]) + "\n")
-    
-
 def get_partial_activity_names(activity_names, number_activites, activity_string_length, number_activity_intersections):
   input_activity_names = activity_names
   new_activity_names = set()
@@ -285,14 +462,20 @@ def get_partial_activity_names(activity_names, number_activites, activity_string
     
   return list(new_activity_names)
       
-  
-def generate_data_piece(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index):
+def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index, cut_type):
   if number_of_activites <= 0:
     return
 
   warnings.filterwarnings("ignore")
   
-  folder_name = file_path + "/Data_" + str(number_of_activites)
+  folder_name = file_path + "/" + cut_type
+  
+  # Check if the folder already exists
+  if os.path.exists(folder_name):
+      # Create the folder
+      os.makedirs(folder_name, exist_ok=True)
+  
+  folder_name += "/Data_" + str(number_of_activites)
   ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold) + "_Data_" + str(data_piece_index)
 
   
@@ -316,12 +499,12 @@ def generate_data_piece(file_path, number_of_activites, support, ratio, pruning_
   for files in checking_files_names:
     if os.path.exists(files):
         # Delete the file
-        shutil.rmtree(files)
+        os.remove(files)
   
   activity_list = generate_activity_name_list(number_of_activites,
                                               random.randint(5,8))
   
-  logP = generate_log_from_process_tree(activity_list, 0)
+  logP = generate_log_from_process_tree_for_cut_type(activity_list,cut_type, 0)
   
   number_activity_intersections = random.randint(0,number_of_activites)
   
@@ -329,18 +512,25 @@ def generate_data_piece(file_path, number_of_activites, support, ratio, pruning_
                                                   random.randint(5,8),
                                                   number_activity_intersections)
   
-  logM = generate_log_from_process_tree(activity_list_near, 0)
+  logM = generate_log_from_process_tree_for_cut_type(activity_list_near, cut_type, 0)
   
 
-  save_log(logP, folder_name + "/logP_" + ending_File_string)
-  save_log(logM, folder_name + "/logM_" + ending_File_string)
+  # save_log(logP, folder_name + "/logP_" + ending_File_string)
+  # save_log(logM, folder_name + "/logM_" + ending_File_string)
   
-  cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio, pruning_threshold)
+  result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
   
-  save_cut(cut,folder_name + "/Cut_" + ending_File_string)
+  if result == True:
+    unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
+    unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
+    unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+    
+    save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,support,ratio,cut[0][0],cut[0][1])
+    
+    
   
-def generate_data_piece_star_function(args):
-    return generate_data_piece(*args)
+def generate_data_piece_star_function_cut_Type(args):
+    return generate_data_piece_for_cut_type(*args)
     
 def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parallel = True):
   if os.path.exists(file_path):
@@ -358,8 +548,8 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
   num_processors = max(1,round(num_processors_available/2))
   
   
-  max_number_activites = 10
-  number_of_data_pieces_per_variation = 8
+  max_number_activites = 5
+  number_of_data_pieces_per_variation = 30
   
   # Setup sup list
   if sup_step == 0:
@@ -373,23 +563,28 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     
+  # excluded for now: single_activity, none
+  # TODO add loop1
+  cut_types = ["exc", "exc-tau", "seq", "par", "loop_tau", "loop"]
+    
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
-  list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index)
-              for number_activ in range(max_number_activites + 1)
+  list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index, cut_type)
+              for number_activ in range(2,max_number_activites + 1)
               for sup in sup_list
               for ratio in ratio_list
-              for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)]
+              for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)
+              for cut_type in cut_types]
 
   if use_parallel:
     print("Number of used processors:", num_processors)
     # Create a pool of workers
     with multiprocessing.Pool(num_processors) as pool:
-      list(tqdm(pool.imap(generate_data_piece_star_function, list_data_pool), total=len(list_data_pool)))
+      list(tqdm(pool.imap(generate_data_piece_star_function_cut_Type, list_data_pool), total=len(list_data_pool)))
       
   else:
     for it in list_data_pool:
       print("Running: " + str(it))
-      generate_data_piece_star_function(it)
+      generate_data_piece_star_function_cut_Type(it)
 
 
    
@@ -408,57 +603,36 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, prun
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     
+  cut_types = ["exc", "exc-tau", "seq", "par", "loop_tau", "loop"]
     
-  for integer in range(1,40):
-    current_path = file_path + "/Data_" + str(integer)
-    if os.path.exists(current_path):
-      result_dic["Data_" + str(integer)] = dict()
-      for sup in sup_list:
-        for ratio in ratio_list:
-          sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
-          current_path_variant = current_path + "/" + sup_ratio_string
-          if os.path.exists(current_path_variant):
-            result_dic["Data_" + str(integer)][sup_ratio_string] = dict()
-            for data_integer in range(1,1000):
-              current_path_variant_data = current_path_variant + "/" + "Cut_" + str(integer) + "_" + sup_ratio_string + "_Data_" + str(data_integer) + ".txt"
-              if os.path.exists(current_path_variant_data):
-                with open(current_path_variant_data, 'r') as file:
-                  # Read all the lines in the file
-                  lines = file.readlines()
-                  if len(lines) >= 4:
-                    cut_type = lines[3][:-1]  # to remove /n
-                    if cut_type in result_dic["Data_" + str(integer)][sup_ratio_string]:
-                      result_dic["Data_" + str(integer)][sup_ratio_string][cut_type] += 1
+  for cut in cut_types:
+    current_path_cut = file_path + "/" + cut
+    if os.path.exists(current_path_cut):
+      result_dic[cut] = dict()
+      for integer in range(2,30):
+        current_path_cut_Data = current_path_cut + "/Data_" + str(integer)
+        if os.path.exists(current_path_cut_Data):
+          if integer not in result_dic[cut]:
+            result_dic[cut][integer] = 0
+          for sup in sup_list:
+            for ratio in ratio_list:
+              sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
+              current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
+              if os.path.exists(current_path_variant):
+                for data_integer in range(1,50):
+                  current_path_variant_data = current_path_variant + "/" + "Data_" + str(data_integer) + ".txt"
+                  if os.path.exists(current_path_variant_data):
+                    if integer not in result_dic[cut]:
+                      result_dic[cut][integer] = 1
                     else:
-                      result_dic["Data_" + str(integer)][sup_ratio_string][cut_type] = 1
-              else:
-                break
-              
-  
-  def aggregate_cut_types(input_dic):
-    dic_cut_types = dict()
-    
-    for dic_variant in input_dic.values():
-      for key, value in dic_variant.items():
-        if key not in dic_cut_types:
-          dic_cut_types[key] = value
+                      result_dic[cut][integer] += 1
         else:
-          dic_cut_types[key] += value
-          
-    sum = 0
-    for value in dic_cut_types.values():
-      sum += value
-      
-    res_distribution = dict()
-    for key, value in dic_cut_types.items():
-      res_distribution[key] = round(value / sum,2)
-    return res_distribution
+          break
   
   for key, dic_data in result_dic.items():
     print(key)
-    res_dict = aggregate_cut_types(dic_data)
-    for key, value in res_dict.items():
-      print("|" + key + ": " + str(value) + "| ", end="")
+    for key, value in dic_data.items():
+      print("|" + str(key) + ": " + str(value) + "| ", end="")
     print("")
     
    
@@ -487,24 +661,16 @@ def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold
       
   cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio, pruning_threshold)
   
-  save_cut(cut,folder_name + "/Cut_" + ending_File_string)
    
-cut_types = ["single_activity", "loop1", "exc", "exc2", "seq", "par", "loop_tau", "loop", "none"]
-    
 if __name__ == '__main__':
   random.seed(random_seed)
   
-  # generate_data(relative_path,0.2,0.2,0.2,True)
+  generate_data(relative_path,0.2,0.2,0,True)
   
-  # generate_data_piece(relative_path,9,0,0,1)
   
-  get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0.2)
+  # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0)
 
-  # for i in range(10,20):
-  #  print("Number of activites: " + str(i))
-  #  generate_data_piece(relative_path,i,0,0,0.3,1)
-  
-  # manual_run('GNN_partitioning/GNN_Data', 4, 0.2, 0.6, 0.2, 5)
+  # manual_run('GNN_partitioning/GNN_Data', 4, 0.2, 0.6, 0, 5)
 
   # log_statistic(relative_path + "data1")
 
