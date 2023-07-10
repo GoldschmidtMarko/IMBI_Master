@@ -8,85 +8,58 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import pandas as pd
 from torch.utils.data import DataLoader
+import torch.optim.lr_scheduler as lr_scheduler
+import random
 
-def generate_Model(num_features, hidden_dim, output_dim):
-    class GraphConvolutionLayer(nn.Module):
-        def __init__(self, in_features, out_features):
-            super(GraphConvolutionLayer, self).__init__()
-            self.linear = nn.Linear(in_features, out_features)
+import gnn_models
 
-        def forward(self, adjacency_matrix_P, adjacency_matrix_M, features):
-            
-            # Multiplay adjacency_matrix_P with features (sup, ratio)
-            output1  = torch.matmul(adjacency_matrix_P, features)
-            
-            # Multiplay adjacency_matrix_M with features (sup, ratio)
-            output2  = torch.matmul(adjacency_matrix_M, features)
-            
-            # Aggregate information
-            output = output1 + output2
-            
-            # Apply linear transformation
-            output = self.linear(output)
-            
-            # Apply activation function
-            output = F.relu(output)
-            
-            return output
-    
-    class GNNClassifier(nn.Module):
-        def __init__(self, input_dim, hidden_dim, output_dim):
-            super(GNNClassifier, self).__init__()
-            self.gc1 = GraphConvolutionLayer(input_dim, hidden_dim)
-            self.gc2 = GraphConvolutionLayer(hidden_dim, output_dim)
+# current max = 5000
+dataSet_numbers = 300
+model_number = 6
+random_seed = 1996
+cut_type = "seq"
+num_epochs = 100
+show_gradient = False
 
-        def forward(self, adjacency_matrix_P, adjacency_matrix_M, features):
-            # Perform first graph convolution
-            hidden1 = self.gc1(adjacency_matrix_P, adjacency_matrix_M, features)
-            hidden1 = F.relu(hidden1)
-            
-            
-            # Perform second graph convolution
-            hidden2 = self.gc2(adjacency_matrix_P, adjacency_matrix_M, hidden1)
-            hidden2 = F.relu(hidden2)
-
-            return hidden2
-
-    # Create the GNN classifier model
-    model = GNNClassifier(num_features, hidden_dim, output_dim)
-    
-    return model
 
 def transform_data_to_model(data):
     # converting the data to torch
-    torch_matrix_P = torch.from_numpy(data["adjacency_matrix_P"])
-    torch_matrix_M = torch.from_numpy(data["adjacency_matrix_M"])
+    torch_matrix_P = torch.from_numpy(data["adjacency_matrix_P"]).to(torch.float32)
+    torch_matrix_M = torch.from_numpy(data["adjacency_matrix_M"]).to(torch.float32)
+    
+    epsilon = 1e-8
+    
+    # torch_matrix_P += torch.eye(torch_matrix_P.size(0)) * epsilon
+    # torch_matrix_M += torch.eye(torch_matrix_M.size(0)) * epsilon
 
-    # normalization
-    torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
-    torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
+    # normalization, removed since it could have negative effects
+    # torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
+    # torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
 
     # Create the feature matrix
     tensor_feature_matrix = torch.tensor([[data["support"], data["ratio"]] for _ in range(data["Number_nodes"])])
     return torch_matrix_P, torch_matrix_M, tensor_feature_matrix
 
 def get_ignore_mask(data):
+    # 0
+    ignoreValue = 0
+    
     maskList = []
     for label in data["Labels"]:
         if label in data["partitionA"] or label in data["partitionB"]:
             maskList.append(1)
         else:
-            maskList.append(0)
+            maskList.append(ignoreValue)
             
     # ignore padded nodes
     if len(maskList) < data["Number_nodes"]:
-        maskList = maskList + [0 for _ in range(data["Number_nodes"] - len(maskList))]
+        maskList = maskList + [ignoreValue for _ in range(data["Number_nodes"] - len(maskList))]
         
     # converting the mask to tensor
     mask = torch.tensor(maskList, dtype=torch.float32)
     return mask
 
-def evaluate_model(model, test_data):
+def evaluate_model(model_number, model, test_data):
 
     # 2. Set the Model to Evaluation Mode
     model.eval()
@@ -97,14 +70,7 @@ def evaluate_model(model, test_data):
     # 3. Forward Pass
     with torch.no_grad():
         for data in test_data:
-            # converting the data to torch
-            torch_matrix_P, torch_matrix_M, tensor_feature_matrix = transform_data_to_model(data)
-            # print(torch_matrix_P)
-            # print(torch_matrix_M)
-            # print(tensor_feature_matrix)
-
-            # Forward pass to get predictions
-            predictions = model(torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
+            predictions = gnn_models.get_model_outcome(model_number, model, data)
             
             # Apply softmax to obtain probability distributions over classes
             probs = F.sigmoid(predictions)
@@ -115,16 +81,19 @@ def evaluate_model(model, test_data):
             mask = get_ignore_mask(data)
             mask = torch.unsqueeze(mask, dim=1)
             
+            # Convert the mask to a boolean mask
+            boolean_mask = (mask == 1)
+            
             target_tensor = torch.tensor(data["Truth"])
             
             target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
             
             # Apply the mask to the ground truth labels and logits tensors
-            masked_ground_truth_labels = target_tensor_transposed * mask
-            masked_logits = binary_predictions * mask
+            masked_ground_truth_labels = target_tensor_transposed[boolean_mask]
+            masked_logits = binary_predictions[boolean_mask]
             
             # Apply the mask to the ground truth labels and logits tensors
-            masked_ground_truth_labels = target_tensor.bool()
+            masked_ground_truth_labels = masked_ground_truth_labels.bool()
             masked_predicted_labels = masked_logits.bool()
             
             data_accuracy = (masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
@@ -142,12 +111,14 @@ def evaluate_model(model, test_data):
     
     return accuracy, fully_accurate/len(accuracy_list)
 
-def train_model(model, num_epochs, training_data):
+def train_model(model_number, model, num_epochs, training_data):
     # Define the loss function
     criterion = nn.BCEWithLogitsLoss()
 
     # Define the optimizer
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    # optimizer = optim.SGD(model.parameters(), lr=0.01, weight_decay=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    # scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     
     # Define the batch size
     # TODO FOR PARALLEL
@@ -166,13 +137,9 @@ def train_model(model, num_epochs, training_data):
             # Zero the gradients
             optimizer.zero_grad()
 
-            # converting the data to torch
-            torch_matrix_P, torch_matrix_M, tensor_feature_matrix = transform_data_to_model(data)
-
             # Forward pass
-            logits = model(torch_matrix_P.to(torch.float32),
-                        torch_matrix_M.to(torch.float32),
-                        tensor_feature_matrix)
+            logits = gnn_models.get_model_outcome(model_number, model, data)
+            
   
             # Assuming you have a tensor `mask` that indicates which nodes to ignore
             mask = get_ignore_mask(data)
@@ -192,20 +159,24 @@ def train_model(model, num_epochs, training_data):
             # Backward pass
             loss.backward()
             
-            # Check gradients
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    print(f"Gradients for {name}:")
-                    print(param.grad)
-
             # Update the weights
             optimizer.step()
+            
+        # Adjust the learning rate
+        # scheduler.step()
 
         # Print the loss for monitoring
         print(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item()}")
-        accuracy, full_accuracy = evaluate_model(model, training_data)
+        accuracy, full_accuracy = evaluate_model(model_number,model, training_data)
         print("Avg accuracy: " + str(accuracy))
         print("Full accuracy: " + str(full_accuracy))
+        
+        # Check gradients
+        for name, param in model.named_parameters():
+            if param.grad is not None and show_gradient:
+                print(f"Gradients for {name}:")
+                print(param.grad)
+
 
 
     print("Training finished.")
@@ -293,43 +264,46 @@ def read_all_data_for_cut_Type(file_path, cut_type):
     dataList = []
     max_node_size_in_dataset = 0
     currentPath = file_path
+    pathFiles = []
     
     if os.path.exists(currentPath):
         currentPath += "/" + cut_type
         if os.path.exists(currentPath):
-            for root, _ , files in os.walk(file_path):
+            for root, _ , files in os.walk(currentPath):
                 for file in files:
                     if file.endswith(".txt"):  # Filter for text files
-                        if len(dataList) > 1:
-                            break
-                        
-                        file_path = os.path.join(root, file)
-                        
-                        data = read_data_from_path(file_path)
-                        max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
-                        dataList.append(data)
-                        
+                        pathFiles.append(os.path.join(root, file))
+
+
+    # we sort the files in reverse, so we start with high node graphs
+    pathFiles = sorted(pathFiles, reverse=True)
+    # random.shuffle(pathFiles)
+    for pathFile in pathFiles:
+        if len(dataList) > dataSet_numbers:
+            break
+        data = read_data_from_path(pathFile)
+        max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
+        dataList.append(data)
 
                         
                         
     dataList = setup_dataSet(dataList,max_node_size_in_dataset)
-    return dataList
+    return dataList, max_node_size_in_dataset
                     
 def run():
     relative_path = "GNN_partitioning/GNN_Data"
 
     print("Reading Data")
-    dataList = read_all_data_for_cut_Type(relative_path, "seq")
+    dataList, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type)
 
 
     # Example usage
     hidden_dim = 32  # Hidden dimension in GNN layers
     output_dim = 1  # Number of output classes
 
-    print("Generating Model")
-    model = generate_Model(2, hidden_dim, output_dim)
-
-
+    print("Generating Model: " + str(model_number))
+    model = gnn_models.generate_model(model_number,max_node_size_in_dataset, hidden_dim, output_dim)
+    
     # Split the data and labels into training and test sets
     train_data, test_data = train_test_split(dataList, test_size=0.2, random_state=1996)
 
@@ -338,26 +312,26 @@ def run():
 
     print()
     print("INITIAL STATISTIC")
-    accuracy, full_accuracy = evaluate_model(model, test_data)
+    accuracy, full_accuracy = evaluate_model(model_number,model, test_data)
     print("Avg accuracy: " + str(accuracy))
     print("Full accuracy: " + str(full_accuracy))
 
     print()
     print("Training Model")
-    num_epochs = 20
-    train_model(model, num_epochs, train_data)
+    train_model(model_number,model, num_epochs, train_data)
 
     print()
     print("FINAL STATISTIC")
     print("Evaluating Model")
-    accuracy, full_accuracy = evaluate_model(model, test_data)
+    accuracy, full_accuracy = evaluate_model(model_number,model, test_data)
     print("Avg accuracy: " + str(accuracy))
     print("Full accuracy: " + str(full_accuracy))
 
 
 
-
-run()
+if __name__ == '__main__':
+    random.seed(random_seed)
+    run()
 
 
 
