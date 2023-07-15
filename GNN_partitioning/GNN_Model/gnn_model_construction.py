@@ -4,41 +4,91 @@ import torch.nn.functional as F
 import torch.optim as optim
 import os
 import numpy as np
+import time
+import multiprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import pandas as pd
 from torch.utils.data import DataLoader
 import torch.optim.lr_scheduler as lr_scheduler
+# from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Import_Parameter
+from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
+from pm4py.objects.log.importer.xes.importer import apply
+import sys
+sys.path.append('c:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master')
+from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_score_for_cut_type
 import random
+# Import libraries
+from matplotlib import pyplot as plt
+import warnings
+from GNN_partitioning.GNN_Data_Generation.gnn_generation import find_best_cut_type
+import math
+from tqdm import tqdm
 
 import gnn_models
 
-# current max = 5000
-dataSet_numbers = 300
-model_number = 6
+relative_path = "GNN_partitioning/GNN_Data"
+# current max = 6000
+dataSet_numbers = 600
 random_seed = 1996
-cut_type = "seq"
-num_epochs = 100
 show_gradient = False
 
-
-def transform_data_to_model(data):
-    # converting the data to torch
-    torch_matrix_P = torch.from_numpy(data["adjacency_matrix_P"]).to(torch.float32)
-    torch_matrix_M = torch.from_numpy(data["adjacency_matrix_M"]).to(torch.float32)
+def analyse_dataframe_result(df, data_settings = None, detailed = False):
+    accuracy = df["Accuracy"].mean()
+    full_accuracy_number = 0
+    for index, row in df.iterrows():
+        if row['Right_Prediction'] == row['Nodes']:
+            full_accuracy_number += 1
+    full_accuracy = full_accuracy_number / len(df)
+    print("Accuracy: " + str(accuracy))
+    print("Full Accuracy: " + str(full_accuracy))
     
-    epsilon = 1e-8
+    if detailed:
+        df['distance_ratio'] = df.apply(lambda row: (abs(row['Actual_Score'] - row['Predicted_Score'])) / max(abs(row['Actual_Score']),(abs(row['Actual_Score'] - row['Predicted_Score']))) if row['Actual_Score'] != 0 else 0, axis=1)
+
+        df_grouped = df.groupby('Nodes')
+        
+        data_accuracy_list = []
+        data_missClass_list = []
+        data_distance_list = []
+        data_Label_list = []
+        # Iterate over the groups and store each group as a separate DataFrame
+        for group_name, group_df in df_grouped:
+            data_accuracy_list.append(group_df["Accuracy"])
+            data_missClass_list.append(group_df["Nodes"] - group_df["Right_Prediction"])
+            data_distance_list.append(group_df['distance_ratio'])
+            data_Label_list.append(group_name)
+
+        fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
+        
+        # Add a global title
+        fig.suptitle('Cut type: ' + data_settings["cut_type"] + " | Hidden dim: " + str(data_settings["hidden_dim"]) + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]))
+        
+        axes[0].boxplot(data_accuracy_list)
+        axes[0].set_title('Accuracy')
+        axes[0].set_ylabel('Accuracy')
+        axes[0].set_xticklabels(data_Label_list)
+        
+        axes[1].boxplot(data_missClass_list)
+        axes[1].set_title('Number of misclassified nodes')
+        axes[1].set_ylabel('# of misclassified nodes')
+        axes[1].set_xticklabels(data_Label_list)
+        
+        axes[2].boxplot(data_distance_list)
+        axes[2].set_title('Difference actual to predicted score')
+        axes[2].set_ylabel('Percentage')
+        axes[2].set_xticklabels(data_Label_list)
+        
+        fig.text(0.5, 0.05, 'Total accuracy: ' + str(accuracy) + " | " + "Full accuracy: " + str(full_accuracy), ha='center')
+        
+        # axes[1].plot(x2, y2)
+        plt.tight_layout()
+        # show plot
+        # plt.show()
+        
+        fig_name = "GNN_results_" + data_settings["cut_type"] + "_hidden_dim_" + str(data_settings["hidden_dim"]) + "_dataset_" + str(len(df)) + "_model_" + str(data_settings["model_number"]) + "_epochs_" + str(data_settings["num_epochs"]) + "_batch_" + str(data_settings["batch_size"])
+        fig.savefig(fig_name + ".pdf")
     
-    # torch_matrix_P += torch.eye(torch_matrix_P.size(0)) * epsilon
-    # torch_matrix_M += torch.eye(torch_matrix_M.size(0)) * epsilon
-
-    # normalization, removed since it could have negative effects
-    # torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
-    # torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
-
-    # Create the feature matrix
-    tensor_feature_matrix = torch.tensor([[data["support"], data["ratio"]] for _ in range(data["Number_nodes"])])
-    return torch_matrix_P, torch_matrix_M, tensor_feature_matrix
 
 def get_ignore_mask(data):
     # 0
@@ -59,59 +109,143 @@ def get_ignore_mask(data):
     mask = torch.tensor(maskList, dtype=torch.float32)
     return mask
 
-def evaluate_model(model_number, model, test_data):
+def get_log(file_name):
+  warnings.filterwarnings("ignore")
+  # Export the event log to a XES file
+  parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
+  log = apply(file_name + ".xes", parameters=parameter)
+  return log
 
+def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, pruning, datapiece):
+    typeName = "Sup_"  + str(sup) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning)
+    filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
+    logPathP = filePath + "/logP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    logPathM = filePath + "/logM_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    
+    logP = get_log(logPathP)
+    logM = get_log(logPathM)
+    
+    
+    score = get_score_for_cut_type(logP, logM, A, B, cut_type, sup, ratio)
+    return score
+    
+
+def partition_names(predictions, names, mask):
+    # Convert the tensors to numpy arrays for easier manipulation
+    predictions = np.array(predictions)
+    names = np.array(names)
+    mask = np.array(mask)
+    
+    names_partitionA = []
+    names_partitionB = []
+    
+    for i in range(len(mask)):
+        if mask[i] == 1:
+            if predictions[i] == 0:
+                names_partitionA.append(names[i])
+            else:
+                names_partitionB.append(names[i])
+
+    return names_partitionA, names_partitionB
+       
+def combine_dataframes(current_df, results):
+    # Combine the list of DataFrames into a single DataFrame
+    combined_df = pd.concat([current_df, results])
+    return combined_df
+    
+def evaluate_model_helper(model_number, model_params, data, model_args, detailed = False):
+    model = gnn_models.generate_model_args(model_args)
+    model.load_state_dict(model_params)
+    
     # 2. Set the Model to Evaluation Mode
     model.eval()
     
-    accuracy_list = []
-    fully_accurate = 0
+    df_res = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
     
     # 3. Forward Pass
     with torch.no_grad():
-        for data in test_data:
-            predictions = gnn_models.get_model_outcome(model_number, model, data)
-            
-            # Apply softmax to obtain probability distributions over classes
-            probs = F.sigmoid(predictions)
-            
-            binary_predictions = torch.round(probs)
-            
-            # Assuming you have a tensor `mask` that indicates which nodes to ignore
-            mask = get_ignore_mask(data)
-            mask = torch.unsqueeze(mask, dim=1)
-            
-            # Convert the mask to a boolean mask
-            boolean_mask = (mask == 1)
-            
-            target_tensor = torch.tensor(data["Truth"])
-            
-            target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
-            
-            # Apply the mask to the ground truth labels and logits tensors
-            masked_ground_truth_labels = target_tensor_transposed[boolean_mask]
-            masked_logits = binary_predictions[boolean_mask]
-            
-            # Apply the mask to the ground truth labels and logits tensors
-            masked_ground_truth_labels = masked_ground_truth_labels.bool()
-            masked_predicted_labels = masked_logits.bool()
-            
-            data_accuracy = (masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
-            accuracy_list.append(data_accuracy)
-            
-            equal_mask = (masked_ground_truth_labels == masked_predicted_labels)
-            if torch.all(equal_mask):
-                fully_accurate += 1
+        predictions = gnn_models.get_model_outcome(model_number, model, data)
+        
+        # Apply softmax to obtain probability distributions over classes
+        probs = F.sigmoid(predictions)
+        
+        binary_predictions = torch.round(probs)
+        
+        # Assuming you have a tensor `mask` that indicates which nodes to ignore
+        mask = get_ignore_mask(data)
+        mask = torch.unsqueeze(mask, dim=1)
+        
+        # Convert the mask to a boolean mask
+        boolean_mask = (mask == 1)
+        
+        target_tensor = torch.tensor(data["Truth"])
+        
+        target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
+        
+        # Apply the mask to the ground truth labels and logits tensors 
+        masked_ground_truth_labels = target_tensor_transposed[boolean_mask]
+        masked_logits = binary_predictions[boolean_mask]
+        
+        # Apply the mask to the ground truth labels and logits tensors
+        masked_ground_truth_labels = masked_ground_truth_labels.bool()
+        masked_predicted_labels = masked_logits.bool()
+        
+        partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
 
+        if detailed:
+            
+            actual_score = get_score_value_from_partition(set(data["partitionA"]), set(data["partitionB"]), data["cut_type"], len(data["partitionA"]) + len(data["partitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
+            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["cut_type"], len(data["partitionA"]) + len(data["partitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
+            
+            
+        else:
+            actual_score = None
+            predicted_score = None
 
+        df_res = pd.concat([df_res, pd.DataFrame.from_records([{
+            "Nodes" : len(masked_predicted_labels),
+            "Right_Prediction": torch.sum(masked_ground_truth_labels == masked_predicted_labels).item(),
+            "Wrong_Prediction": torch.sum(masked_ground_truth_labels != masked_predicted_labels).item(),
+            "Accuracy" : (masked_ground_truth_labels == masked_predicted_labels).float().mean().item(),
+            "Predicted_Score" : predicted_score,
+            "Actual_Score" : actual_score
+        }])])
+    return df_res
     
-    # Compute evaluation metrics
-    accuracy = sum(accuracy_list) / len(accuracy_list)
-    # (e.g., precision, recall, F1-score) 
-    
-    return accuracy, fully_accurate/len(accuracy_list)
+def evaluate_model_helper_star(args):
+    return evaluate_model_helper(*args)    
+   
+def evaluate_model(model_number, model_params, test_dict, model_args, detailed = False):
 
-def train_model(model_number, model, num_epochs, training_data):
+    combined_df = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
+
+    all_train_items = [value for values in test_dict.values() for value in values]
+    
+    list_data_pool = [(model_number, model_params, data, model_args, detailed) for data in all_train_items]
+    
+    if detailed:
+        num_processors_available = multiprocessing.cpu_count()
+        print("Number of available processors:", num_processors_available)
+        num_processors = max(1,round(num_processors_available/2))
+        
+        print("Number of used processors:", num_processors)
+        pool_res = None
+        with multiprocessing.Pool(num_processors) as pool:
+            pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
+            
+            for result in pool_res:
+                # Process individual evaluation result
+                combined_df = pd.concat([combined_df, result])
+    else:
+        for data in all_train_items:
+            df_res = evaluate_model_helper(model_number, model_params, data, model_args, detailed)
+            combined_df = combine_dataframes(combined_df, df_res)
+    
+            
+
+    return combined_df
+
+def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args):
     # Define the loss function
     criterion = nn.BCEWithLogitsLoss()
 
@@ -120,38 +254,58 @@ def train_model(model_number, model, num_epochs, training_data):
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     # scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     
-    # Define the batch size
-    # TODO FOR PARALLEL
-    # batch_size = 1
-
     # Create a data loader with the specified batch size
     # data_loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
     # for batch_data in data_loader:
 
+    all_train_items = [value for values in training_dic.values() for value in values]
+    
+    # Compute the total number of batches
+    num_batches = len(all_train_items) // batch_size
+    
+    # Set model to training mode
+    model.train()
     
     for epoch in range(num_epochs):
-        for data in training_data:
-            # Set model to training mode
-            model.train()
-
+        # Shuffle the training data for each epoch
+        random.shuffle(all_train_items)
+        
+        for batch in range(num_batches):
             # Zero the gradients
             optimizer.zero_grad()
+            
+            # Extract the current batch
+            batch_data = all_train_items[batch * batch_size : (batch + 1) * batch_size]
+            
+            logits_list = []
+            mask_list = []
+            batch_labels = []
+            for data in batch_data:
+                logits = gnn_models.get_model_outcome(model_number, model, data)
+                logits_list.append(logits)
+            
+            
 
-            # Forward pass
-            logits = gnn_models.get_model_outcome(model_number, model, data)
             
-  
-            # Assuming you have a tensor `mask` that indicates which nodes to ignore
-            mask = get_ignore_mask(data)
-            mask = torch.unsqueeze(mask, dim=1)
+            for data in batch_data:
+                # Assuming you have a tensor `mask` that indicates which nodes to ignore
+                mask = get_ignore_mask(data)
+                mask = torch.unsqueeze(mask, dim=1)
+                mask_list.append(mask)
+                
+                target_tensor = torch.tensor(data["Truth"],dtype=torch.float32)
+                target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
+                batch_labels.append(target_tensor_transposed)
+                
             
-            target_tensor = torch.tensor(data["Truth"],dtype=torch.float32)
             
-            target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
+            batch_labels = torch.cat(batch_labels, dim=0)
+            mask_list = torch.cat(mask_list, dim=0)
+            logits_list = torch.cat(logits_list, dim=0)
             
             # Apply the mask to the ground truth labels and logits tensors
-            masked_ground_truth_labels = target_tensor_transposed * mask
-            masked_logits = logits * mask
+            masked_ground_truth_labels = batch_labels * mask_list
+            masked_logits = logits_list * mask_list
 
             # Compute the loss
             loss = criterion(masked_logits, masked_ground_truth_labels)
@@ -166,10 +320,10 @@ def train_model(model_number, model, num_epochs, training_data):
         # scheduler.step()
 
         # Print the loss for monitoring
+        print()
         print(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item()}")
-        accuracy, full_accuracy = evaluate_model(model_number,model, training_data)
-        print("Avg accuracy: " + str(accuracy))
-        print("Full accuracy: " + str(full_accuracy))
+        df_res = evaluate_model(model_number, model.state_dict(), training_dic, model_args)
+        analyse_dataframe_result(df_res)
         
         # Check gradients
         for name, param in model.named_parameters():
@@ -207,19 +361,35 @@ def read_data_from_path(file_path):
                     state += 1
                     continue   
                 elif state == 3:
-                    data["support"] = float(line[:-1])
+                    data["cut_type"] = line[:-1]
                     state += 1
                     continue 
                 elif state == 4:
-                    data["ratio"] = float(line[:-1])
+                    data["Support"] = float(line[:-1])
                     state += 1
                     continue 
                 elif state == 5:
-                    data["partitionA"] = line.split(" ")[:-1]
+                    data["Ratio"] = float(line[:-1])
                     state += 1
                     continue 
                 elif state == 6:
+                    data["Pruning"] = int(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 7:
+                    data["Dataitem"] = int(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 8:
+                    data["partitionA"] = line.split(" ")[:-1]
+                    state += 1
+                    continue 
+                elif state == 9:
                     data["partitionB"] = line.split(" ")[:-1]
+                    state += 1
+                    continue 
+                elif state == 10:
+                    data["Score"] = float(line[:-1])
                     state += 1
                     continue 
                 
@@ -248,20 +418,27 @@ def generate_ground_truth(data):
             
     return truthList
 
-def setup_dataSet(dataSet, max_node_size_in_dataset):
-    for data in dataSet:
-        data["Truth"] = generate_ground_truth(data)
-        # Calculate the difference in size
-        diff_size = max_node_size_in_dataset - data["adjacency_matrix_P"].shape[0]
-        # Pad the adjacency matrix with zeros
-        data["adjacency_matrix_P"] = np.pad(data["adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
-        data["adjacency_matrix_M"] = np.pad(data["adjacency_matrix_M"], ((0, diff_size), (0, diff_size)), mode='constant')
-        data["Truth"] = data["Truth"] + [-1 for _ in range(max_node_size_in_dataset - len(data["Truth"]))]
-        data["Number_nodes"] = max_node_size_in_dataset
-    return dataSet
+def setup_dataSet(data_dic, max_node_size_in_dataset):
+    for dataList in data_dic.values():
+        for data in dataList:
+            data["Truth"] = generate_ground_truth(data)
+            # Calculate the difference in size
+            diff_size = max_node_size_in_dataset - data["adjacency_matrix_P"].shape[0]
+            # Pad the adjacency matrix with zeros
+            data["adjacency_matrix_P"] = np.pad(data["adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
+            data["adjacency_matrix_M"] = np.pad(data["adjacency_matrix_M"], ((0, diff_size), (0, diff_size)), mode='constant')
+            data["Truth"] = data["Truth"] + [-1 for _ in range(max_node_size_in_dataset - len(data["Truth"]))]
+            data["Number_nodes"] = max_node_size_in_dataset
+    return data_dic
+
+def get_data_length_from_dic(data_dic):
+    length = 0
+    for key in data_dic.keys():
+        length += len(data_dic[key])
+    return length
 
 def read_all_data_for_cut_Type(file_path, cut_type):
-    dataList = []
+    data_dic = dict()
     max_node_size_in_dataset = 0
     currentPath = file_path
     pathFiles = []
@@ -279,53 +456,74 @@ def read_all_data_for_cut_Type(file_path, cut_type):
     pathFiles = sorted(pathFiles, reverse=True)
     # random.shuffle(pathFiles)
     for pathFile in pathFiles:
-        if len(dataList) > dataSet_numbers:
+        if get_data_length_from_dic(data_dic) > dataSet_numbers:
             break
         data = read_data_from_path(pathFile)
         max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
-        dataList.append(data)
+        nodeSize = len(data["partitionA"]) + len(data["partitionB"])
+        if nodeSize in data_dic:
+            data_dic[nodeSize].append(data)
+        else:
+            data_dic[nodeSize] = [data]
 
                         
-                        
-    dataList = setup_dataSet(dataList,max_node_size_in_dataset)
-    return dataList, max_node_size_in_dataset
+    data_dic = setup_dataSet(data_dic,max_node_size_in_dataset)
+    return data_dic, max_node_size_in_dataset
                     
 def run():
-    relative_path = "GNN_partitioning/GNN_Data"
+    time_start = time.time()
 
+    hidden_dim = 32
+    model_number = 8
+    cut_type = "seq"
+    num_epochs = 30
+    batch_size = 10
+    
     print("Reading Data")
-    dataList, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type)
+    data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type)
+
+    data_settings = { "cut_type" : cut_type,
+                     "model_number" : model_number,
+                     "num_epochs" : num_epochs,
+                     "batch_size" : batch_size,
+                     "hidden_dim" : hidden_dim}
 
 
     # Example usage
-    hidden_dim = 32  # Hidden dimension in GNN layers
     output_dim = 1  # Number of output classes
-
     print("Generating Model: " + str(model_number))
-    model = gnn_models.generate_model(model_number,max_node_size_in_dataset, hidden_dim, output_dim)
+    model_args = [model_number, max_node_size_in_dataset, hidden_dim, output_dim]
     
-    # Split the data and labels into training and test sets
-    train_data, test_data = train_test_split(dataList, test_size=0.2, random_state=1996)
+    model = gnn_models.generate_model_args(model_args)
+    
+    train_dict = {}
+    test_dict = {}
+    for key, value in data_dic.items():
+        # Split the data and labels into training and test sets
+        train_data, test_data = train_test_split(value, test_size=0.2, random_state=1996)
+        train_dict[key] = train_data
+        test_dict[key] = test_data
 
-    print("Train data size: " + str(len(train_data)))
-    print("Test data size: " + str(len(test_data)))
+    print("Train data size: " + str(get_data_length_from_dic(train_dict)))
+    print("Test data size: " + str(get_data_length_from_dic(test_dict)))
 
     print()
     print("INITIAL STATISTIC")
-    accuracy, full_accuracy = evaluate_model(model_number,model, test_data)
-    print("Avg accuracy: " + str(accuracy))
-    print("Full accuracy: " + str(full_accuracy))
+    df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args)
+    analyse_dataframe_result(df_res)
 
     print()
     print("Training Model")
-    train_model(model_number,model, num_epochs, train_data)
+    train_model(model_number,model, num_epochs, batch_size, train_dict ,model_args)
 
     print()
     print("FINAL STATISTIC")
     print("Evaluating Model")
-    accuracy, full_accuracy = evaluate_model(model_number,model, test_data)
-    print("Avg accuracy: " + str(accuracy))
-    print("Full accuracy: " + str(full_accuracy))
+    df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, detailed=True)
+    analyse_dataframe_result(df_res, data_settings, True)
+    
+    time_end = time.time()
+    print("Runtime of the program is " + str(round(time_end - time_start,2)) + " seconds")
 
 
 

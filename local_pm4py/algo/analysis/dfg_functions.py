@@ -94,11 +94,11 @@ def standard_deviation(lst : "list[float]") -> float:
     # TODO consider dividing by len(lst) - 1
     return math.sqrt( (sum / ( len(lst) ) ) )
             
-def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, log, cost_Variant):
+def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, cost_Variant):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow, log)
+        return cost_seq_relation(net, A, B, dic_indirect_follow_log)
     else:
         msg = "Error, could not call a valid cost function for cost_seq."
         logging.error(msg)
@@ -144,7 +144,7 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
 
     return c1 + c2 + c3
 
-def cost_seq_relation(net, A, B, dic_indirect_follow_log, sup, flow, log):
+def cost_seq_relation(net, A, B, dic_indirect_follow_log):
     # TODO SUP
     scores = []
     for x in A:
@@ -490,7 +490,7 @@ def check_relation_base_case(netP, netM, log, logM, sup, ratio, size_par, dfgP, 
     cost_exc_tau_P = cost_exc_tau_relation(netP, log)
     if cost_exc_tau_P > sup:
         cost_exc_tau_M = cost_exc_tau_relation(netM, logM)
-        return True, ((activitiesP, set()), 'exc-tau', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * cost_exc_tau_M,1), 'none', 'none'
+        return True, ((activitiesP, set()), 'exc_tau', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * cost_exc_tau_M,1), 'none', 'none'
         
     
     # strict loop_tau

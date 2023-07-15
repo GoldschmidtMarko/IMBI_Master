@@ -4,6 +4,7 @@ import random
 import string
 import os
 import multiprocessing
+from pm4py.objects.log.importer.xes.importer import apply as import_apply
 from pm4py.objects.log.exporter.xes.exporter import apply
 from pm4py.objects.log.obj import EventLog
 from pm4py.objects.log.obj import Trace
@@ -26,7 +27,7 @@ import logging
 from tqdm import tqdm
 import warnings
 from pm4py.objects.log.exporter.xes.variants.etree_xes_exp import Parameters as Export_Parameter
-from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Import_Parameter
+import psutil
 
 
 random_seed = 1996
@@ -41,6 +42,14 @@ number_avg_traces_deviation = 2
 
 relative_path = "GNN_partitioning/GNN_Data"
 
+
+
+def get_log(file_name):
+  warnings.filterwarnings("ignore")
+  # Export the event log to a XES file
+  parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
+  log = import_apply(file_name + ".xes", parameters=parameter)
+  return log
 
 # generating activity names
 def generate_activity_name_list(number_activites, string_length):
@@ -204,7 +213,7 @@ def generate_random_process_tree_for_cut_type(activites_list, cut_type):
     generated_ProcessTrees.append(ProcessTree(label=None))
     
   basic_cuts = ["exc","seq", "par", "loop"]
-  special_cuts = ["exc-tau","loop_tau"]
+  special_cuts = ["exc_tau","loop_tau"]
   
   if cut_type in basic_cuts:
     # combine 2 random process Trees and add the father back to the list, until only 2 remains
@@ -221,7 +230,7 @@ def generate_random_process_tree_for_cut_type(activites_list, cut_type):
     generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees, new_operator)
     return generated_ProcessTrees[0] 
   elif cut_type in special_cuts:
-    if cut_type == "exc-tau":
+    if cut_type == "exc_tau":
       new_operator = Operator.XOR
     elif cut_type == "loop_tau":
       new_operator = Operator.LOOP
@@ -317,23 +326,6 @@ def generate_union_adjacency_matrices(matrix_P, nodeListP, matrix_M, nodeListM):
                 expanded_matrix2[i, j] = matrix_M[row_idx, other_row_idx]
                 expanded_matrix2[j, i] = matrix_M[other_row_idx, row_idx]
 
-  # print("P")
-  # print(nodeListP)
-  # print(matrix_P)
-
-  # print("")
-  # print(common_labels)
-  # print(expanded_matrix1)
-  # print("")
-  
-  # print("M")
-  # print(nodeListM)
-  # print(matrix_M)
-
-  # print("")
-  # print(common_labels)
-  # print(expanded_matrix2)
-  
   return common_labels, expanded_matrix1, expanded_matrix2
 
 def generate_adjacency_matrix_from_log(log):
@@ -403,9 +395,9 @@ def save_log(log, file_name):
   parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
   apply(log, file_name + ".xes", parameters=parameter)
   
-def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node, sup, ratio, partitionA, partitionB):
+def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, pruning, datapiece, partitionA, partitionB, score):
   with open(file_name + ".txt", "w") as file:
-    file.write("# unique_node | adj_matrix_P | adj_matrix_M | sup | ratio | partitionA | partitionB" + "\n")
+    file.write("# unique_node | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | pruning | dataitem | partitionA | partitionB | score" + "\n")
     # adj_matrix_P
     outputString = ""
     for value in unique_node:
@@ -424,10 +416,16 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node, sup, ratio, pa
         outputString += str(value) + " "
       file.write(outputString + "\n")
     file.write("\n")
+    # cut_type
+    file.write(str(cut_type) + "\n")
     # sup
     file.write(str(sup) + "\n")
     # ratio
     file.write(str(ratio) + "\n")
+    # pruning
+    file.write(str(pruning) + "\n")
+    # datapiece
+    file.write(str(datapiece) + "\n")
     # partitionA
     outputString = ""
     for value in partitionA:
@@ -438,6 +436,13 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node, sup, ratio, pa
     for value in partitionB:
       outputString += str(value) + " "
     file.write(outputString + "\n")
+    # score
+    file.write(str(score) + "\n")
+  
+def get_available_disk_space(path):
+    disk_usage = psutil.disk_usage(path)
+    available_space = disk_usage.free / (1024 ** 3)  # Convert bytes to gigabytes
+    return available_space
     
 def get_partial_activity_names(activity_names, number_activites, activity_string_length, number_activity_intersections):
   input_activity_names = activity_names
@@ -514,18 +519,19 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
   
   logM = generate_log_from_process_tree_for_cut_type(activity_list_near, cut_type, 0)
   
-
-  # save_log(logP, folder_name + "/logP_" + ending_File_string)
-  # save_log(logM, folder_name + "/logM_" + ending_File_string)
-  
   result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
+  if cut[4] < 0:
+    result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
   
   if result == True:
+    save_log(logP, folder_name + "/logP_" + ending_File_string)
+    save_log(logM, folder_name + "/logM_" + ending_File_string)
     unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
     unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
     unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
-    
-    save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,support,ratio,cut[0][0],cut[0][1])
+
+    save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,pruning_threshold,data_piece_index,cut[0][0],cut[0][1], cut[4])
+
     
     
   
@@ -533,6 +539,8 @@ def generate_data_piece_star_function_cut_Type(args):
     return generate_data_piece_for_cut_type(*args)
     
 def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parallel = True):
+  
+  # Delete the folder if it already exists
   if os.path.exists(file_path):
     shutil.rmtree(file_path)
   
@@ -548,7 +556,7 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
   num_processors = max(1,round(num_processors_available/2))
   
   
-  max_number_activites = 5
+  max_number_activites = 6
   number_of_data_pieces_per_variation = 30
   
   # Setup sup list
@@ -565,7 +573,7 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
     
   # excluded for now: single_activity, none
   # TODO add loop1
-  cut_types = ["exc", "exc-tau", "seq", "par", "loop_tau", "loop"]
+  cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
     
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
   list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index, cut_type)
@@ -574,6 +582,13 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
               for ratio in ratio_list
               for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)
               for cut_type in cut_types]
+  
+  space_Approx = 4000/(5400 * 1000)
+  
+  if get_available_disk_space(file_path) < space_Approx * len(list_data_pool):
+    print("Error, not enough space available. Approx. space needed: " + str(space_Approx * len(list_data_pool)) + " GB")
+    print("Available space: " + str(get_available_disk_space(file_path)) + " GB")
+    sys.exit()
 
   if use_parallel:
     print("Number of used processors:", num_processors)
@@ -603,7 +618,7 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, prun
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     
-  cut_types = ["exc", "exc-tau", "seq", "par", "loop_tau", "loop"]
+  cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
     
   for cut in cut_types:
     current_path_cut = file_path + "/" + cut
@@ -662,6 +677,8 @@ def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold
   cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio, pruning_threshold)
   
    
+  
+   
 if __name__ == '__main__':
   random.seed(random_seed)
   
@@ -669,7 +686,14 @@ if __name__ == '__main__':
   
   
   # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0)
-
+  
+  # typeName = "Sup_"  + str(1.0) + "_Ratio_" + str(1.0) + "_Pruning_" + str(0)
+  # filePath = relative_path + "/" + "seq" + "/Data_" + str(6) + "/" + typeName
+  # logPathP = filePath + "/logP_" + str(6) + "_" + typeName + "_Data_" + str(2)
+  # logPathM = filePath + "/logM_" + str(6) + "_" + typeName + "_Data_" + str(2)
+  # view_log(get_log(logPathP))
+  # view_log(get_log(logPathM))
+  
   # manual_run('GNN_partitioning/GNN_Data', 4, 0.2, 0.6, 0, 5)
 
   # log_statistic(relative_path + "data1")
