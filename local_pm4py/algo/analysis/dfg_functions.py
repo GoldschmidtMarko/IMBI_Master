@@ -479,7 +479,7 @@ def cost_loop_tau_relation(start_acts, end_acts,dfg, log, start_activities_o, en
     for x in start_acts:
         for y in end_acts:
             activityUniqueness = (start_activities_o[x] / (sum(start_activities_o.values()))) * (end_activities_o[y] / (sum(end_activities_o.values())))
-            loopRatio = min(1 , dfg[(y, x)] / len(log))
+            loopRatio = min(1 , get_frequency(dfg,(y, x)) / len(log))
             score += activityUniqueness * loopRatio
     return score
 
