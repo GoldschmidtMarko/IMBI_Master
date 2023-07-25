@@ -29,11 +29,12 @@ import gnn_models
 
 relative_path = "GNN_partitioning/GNN_Data"
 # current max = 6000
-dataSet_numbers = 600
+dataSet_numbers = 6000000
 random_seed = 1996
 show_gradient = False
+use_symmetric = True
 
-def analyse_dataframe_result(df, data_settings = None, detailed = False):
+def analyse_dataframe_result(df, data_settings = None, detailed = False, file_path = ""):
     accuracy = df["Accuracy"].mean()
     full_accuracy_number = 0
     for index, row in df.iterrows():
@@ -62,7 +63,7 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False):
         fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
         
         # Add a global title
-        fig.suptitle('Cut type: ' + data_settings["cut_type"] + " | Hidden dim: " + str(data_settings["hidden_dim"]) + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]))
+        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Hidden dim: " + str(data_settings["hidden_dim"]) + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]))
         
         axes[0].boxplot(data_accuracy_list)
         axes[0].set_title('Accuracy')
@@ -78,16 +79,16 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False):
         axes[2].set_title('Difference actual to predicted score')
         axes[2].set_ylabel('Percentage')
         axes[2].set_xticklabels(data_Label_list)
-        
-        fig.text(0.5, 0.05, 'Total accuracy: ' + str(accuracy) + " | " + "Full accuracy: " + str(full_accuracy), ha='center')
+
+        fig.text(0.5, 0.005, 'Total accuracy: ' + str(round(accuracy,2)) + " | " + "Full accuracy: " + str(round(full_accuracy,2)), ha='center')
         
         # axes[1].plot(x2, y2)
         plt.tight_layout()
         # show plot
         # plt.show()
         
-        fig_name = "GNN_results_" + data_settings["cut_type"] + "_hidden_dim_" + str(data_settings["hidden_dim"]) + "_dataset_" + str(len(df)) + "_model_" + str(data_settings["model_number"]) + "_epochs_" + str(data_settings["num_epochs"]) + "_batch_" + str(data_settings["batch_size"])
-        fig.savefig(fig_name + ".pdf")
+        fig_name = "/GNN_results_" + data_settings["Cut_type"] + "_hidden_dim_" + str(data_settings["hidden_dim"]) + "_dataset_" + str(len(df)) + "_model_" + str(data_settings["model_number"]) + "_epochs_" + str(data_settings["num_epochs"]) + "_batch_" + str(data_settings["batch_size"])
+        fig.savefig(file_path + fig_name + ".pdf")
     
 
 def get_ignore_mask(data):
@@ -96,7 +97,7 @@ def get_ignore_mask(data):
     
     maskList = []
     for label in data["Labels"]:
-        if label in data["partitionA"] or label in data["partitionB"]:
+        if label in data["PartitionA"] or label in data["PartitionB"]:
             maskList.append(1)
         else:
             maskList.append(ignoreValue)
@@ -190,12 +191,23 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
         masked_ground_truth_labels = masked_ground_truth_labels.bool()
         masked_predicted_labels = masked_logits.bool()
         
+        right_prediction = torch.sum(masked_ground_truth_labels == masked_predicted_labels).item()
+        wrong_prediction = torch.sum(masked_ground_truth_labels != masked_predicted_labels).item()
+        accuracy = (masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
+        if use_symmetric:
+            right_prediction_inverse = torch.sum(~masked_ground_truth_labels == masked_predicted_labels).item()
+            right_prediction = max(right_prediction, right_prediction_inverse)
+            wrong_prediction_inverse = torch.sum(~masked_ground_truth_labels != masked_predicted_labels).item()
+            wrong_prediction = min(wrong_prediction, wrong_prediction_inverse)
+            accuracy_inverse = (~masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
+            accuracy = max(accuracy, accuracy_inverse)
+        
         partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
 
         if detailed:
             
-            actual_score = get_score_value_from_partition(set(data["partitionA"]), set(data["partitionB"]), data["cut_type"], len(data["partitionA"]) + len(data["partitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
-            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["cut_type"], len(data["partitionA"]) + len(data["partitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
+            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
+            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
             
             
         else:
@@ -204,9 +216,9 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
 
         df_res = pd.concat([df_res, pd.DataFrame.from_records([{
             "Nodes" : len(masked_predicted_labels),
-            "Right_Prediction": torch.sum(masked_ground_truth_labels == masked_predicted_labels).item(),
-            "Wrong_Prediction": torch.sum(masked_ground_truth_labels != masked_predicted_labels).item(),
-            "Accuracy" : (masked_ground_truth_labels == masked_predicted_labels).float().mean().item(),
+            "Right_Prediction": right_prediction,
+            "Wrong_Prediction": wrong_prediction,
+            "Accuracy" : accuracy,
             "Predicted_Score" : predicted_score,
             "Actual_Score" : actual_score
         }])])
@@ -245,7 +257,7 @@ def evaluate_model(model_number, model_params, test_dict, model_args, detailed =
 
     return combined_df
 
-def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args):
+def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args, data_settings):
     # Define the loss function
     criterion = nn.BCEWithLogitsLoss()
 
@@ -309,6 +321,13 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
 
             # Compute the loss
             loss = criterion(masked_logits, masked_ground_truth_labels)
+            
+            # for par and exc, solutions are symmetric, so we adjust the loss
+            if use_symmetric:
+                if data_settings["Cut_type"] == "par" or data_settings["Cut_type"] == "exc":
+                    inverse_loss = criterion(masked_logits, 1 - masked_ground_truth_labels)
+                    # Take the minimum loss between both tasks
+                    loss = torch.min(loss, inverse_loss)
 
             # Backward pass
             loss.backward()
@@ -352,60 +371,72 @@ def read_data_from_path(file_path):
                     data["Labels"] = line.split(" ")[:-1]
                     state += 1
                     continue
-                elif state == 1 and line == "\n":
-                    data["adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
+                elif state == 1:
+                    data["Activity_count_P"] = np.array(line.split(" ")[:-1]).astype(int)
                     state += 1
                     continue
-                elif state == 2 and line == "\n":
-                    data["adjacency_matrix_M"] = np.vstack(matrix_M_arrayList)
+                elif state == 2:
+                    data["Activity_count_M"] = np.array(line.split(" ")[:-1]).astype(int)
+                    state += 1
+                    continue
+                elif state == 3 and line == "\n":
+                    data["Adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
+                    state += 1
+                    continue
+                elif state == 4 and line == "\n":
+                    data["Adjacency_matrix_M"] = np.vstack(matrix_M_arrayList)
                     state += 1
                     continue   
-                elif state == 3:
-                    data["cut_type"] = line[:-1]
-                    state += 1
-                    continue 
-                elif state == 4:
-                    data["Support"] = float(line[:-1])
-                    state += 1
-                    continue 
                 elif state == 5:
-                    data["Ratio"] = float(line[:-1])
+                    data["Cut_type"] = line[:-1]
                     state += 1
                     continue 
                 elif state == 6:
-                    data["Pruning"] = int(line[:-1])
+                    data["Support"] = float(line[:-1])
                     state += 1
                     continue 
                 elif state == 7:
-                    data["Dataitem"] = int(line[:-1])
+                    data["Ratio"] = float(line[:-1])
                     state += 1
                     continue 
                 elif state == 8:
-                    data["partitionA"] = line.split(" ")[:-1]
+                    data["Pruning"] = int(line[:-1])
                     state += 1
                     continue 
                 elif state == 9:
-                    data["partitionB"] = line.split(" ")[:-1]
+                    data["Size_par"] = float(line[:-1])
                     state += 1
                     continue 
                 elif state == 10:
+                    data["Dataitem"] = int(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 11:
+                    data["PartitionA"] = line.split(" ")[:-1]
+                    state += 1
+                    continue 
+                elif state == 12:
+                    data["PartitionB"] = line.split(" ")[:-1]
+                    state += 1
+                    continue 
+                elif state == 13:
                     data["Score"] = float(line[:-1])
                     state += 1
                     continue 
                 
-                if state == 1:
+                if state == 3:
                     lineList = line.split(" ")[:-1]
                     np_array = np.array(lineList, dtype=int)
                     matrix_P_arrayList.append(np_array)
-                if state == 2:
+                if state == 4:
                     lineList = line.split(" ")[:-1]
                     np_array = np.array(lineList, dtype=int)
                     matrix_M_arrayList.append(np_array)
     return data
 
 def generate_ground_truth(data):
-    partitionA = data["partitionA"]
-    partitionB = data["partitionB"]
+    partitionA = data["PartitionA"]
+    partitionB = data["PartitionB"]
     labels = data["Labels"]
     truthList = []
     for label in labels:
@@ -423,12 +454,18 @@ def setup_dataSet(data_dic, max_node_size_in_dataset):
         for data in dataList:
             data["Truth"] = generate_ground_truth(data)
             # Calculate the difference in size
-            diff_size = max_node_size_in_dataset - data["adjacency_matrix_P"].shape[0]
+            diff_size = max_node_size_in_dataset - data["Adjacency_matrix_P"].shape[0]
             # Pad the adjacency matrix with zeros
-            data["adjacency_matrix_P"] = np.pad(data["adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
-            data["adjacency_matrix_M"] = np.pad(data["adjacency_matrix_M"], ((0, diff_size), (0, diff_size)), mode='constant')
+            data["Adjacency_matrix_P"] = np.pad(data["Adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
+            data["Adjacency_matrix_M"] = np.pad(data["Adjacency_matrix_M"], ((0, diff_size), (0, diff_size)), mode='constant')
+            
+            data["Activity_count_P"] = np.pad(data["Activity_count_P"], (0, diff_size), mode='constant')
+            data["Activity_count_M"] = np.pad(data["Activity_count_M"], (0, diff_size), mode='constant')
+            
             data["Truth"] = data["Truth"] + [-1 for _ in range(max_node_size_in_dataset - len(data["Truth"]))]
             data["Number_nodes"] = max_node_size_in_dataset
+        
+            
     return data_dic
 
 def get_data_length_from_dic(data_dic):
@@ -460,7 +497,7 @@ def read_all_data_for_cut_Type(file_path, cut_type):
             break
         data = read_data_from_path(pathFile)
         max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
-        nodeSize = len(data["partitionA"]) + len(data["partitionB"])
+        nodeSize = len(data["PartitionA"]) + len(data["PartitionB"])
         if nodeSize in data_dic:
             data_dic[nodeSize].append(data)
         else:
@@ -469,67 +506,91 @@ def read_all_data_for_cut_Type(file_path, cut_type):
                         
     data_dic = setup_dataSet(data_dic,max_node_size_in_dataset)
     return data_dic, max_node_size_in_dataset
+               
+def save_model_parameter(file_name,data_settings, model_args):
+    with open(file_name, 'w') as file:
+        file.write('# Data Settings\n')
+        for key, value in data_settings.items():
+            file.write(key + ': ' + str(value) + '\n')
+        file.write('\n')
+        file.write('# Model Settings\n')
+        text = ["model_number", "max_node_size_in_dataset", "hidden_dim", "output_dim"]
+        for i, arg in enumerate(model_args):
+            file.write(text[i] + ': ' + str(arg) + '\n')
+            
                     
-def run():
+def generate_Models(file_path_models, save_results = False, file_path_results = ""):
     time_start = time.time()
 
     hidden_dim = 32
-    model_number = 8
-    cut_type = "seq"
+    # best models:
+    # 8 - conv
+    # 9 - 3 dense with adj and weight
+    # 10 - k dense with adj and weight
+    # 11 - 3 dense with adj and weight and node frequency
+    model_number = 9
+    cut_types = ["par", "exc","loop", "seq"]
     num_epochs = 30
     batch_size = 10
     
-    print("Reading Data")
-    data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type)
+    for cut_type in cut_types:
+        print("Cut type: " + cut_type)
+        print("Reading Data")
+        data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type)
 
-    data_settings = { "cut_type" : cut_type,
-                     "model_number" : model_number,
-                     "num_epochs" : num_epochs,
-                     "batch_size" : batch_size,
-                     "hidden_dim" : hidden_dim}
+        data_settings = {"Cut_type" : cut_type,
+                        "model_number" : model_number,
+                        "num_epochs" : num_epochs,
+                        "batch_size" : batch_size,
+                        "hidden_dim" : hidden_dim}
 
 
-    # Example usage
-    output_dim = 1  # Number of output classes
-    print("Generating Model: " + str(model_number))
-    model_args = [model_number, max_node_size_in_dataset, hidden_dim, output_dim]
+        # Example usage
+        output_dim = 1  # Number of output classes
+        print("Generating Model: " + str(model_number))
+        model_args = [model_number, max_node_size_in_dataset, hidden_dim, output_dim]
+        
+        model = gnn_models.generate_model_args(model_args)
+        
+        train_dict = {}
+        test_dict = {}
+        for key, value in data_dic.items():
+            # Split the data and labels into training and test sets
+            train_data, test_data = train_test_split(value, test_size=0.2, random_state=1996)
+            train_dict[key] = train_data
+            test_dict[key] = test_data
+
+        print("Train data size: " + str(get_data_length_from_dic(train_dict)))
+        print("Test data size: " + str(get_data_length_from_dic(test_dict)))
+
+        print()
+        print("INITIAL STATISTIC")
+        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args)
+        analyse_dataframe_result(df_res)
+
+        print()
+        print("Training Model")
+        train_model(model_number,model, num_epochs, batch_size, train_dict ,model_args, data_settings)
+
+        print()
+        print("FINAL STATISTIC")
+        print("Evaluating Model")
+        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, detailed=save_results)
+        analyse_dataframe_result(df_res, data_settings, detailed=save_results, file_path=file_path_results)
+        torch.save(model.state_dict(), file_path_models + '/gnn_model_' + cut_type + ".pt")
+        save_model_parameter(file_path_models + '/gnn_model_' + cut_type + ".txt", data_settings, model_args)
     
-    model = gnn_models.generate_model_args(model_args)
-    
-    train_dict = {}
-    test_dict = {}
-    for key, value in data_dic.items():
-        # Split the data and labels into training and test sets
-        train_data, test_data = train_test_split(value, test_size=0.2, random_state=1996)
-        train_dict[key] = train_data
-        test_dict[key] = test_data
-
-    print("Train data size: " + str(get_data_length_from_dic(train_dict)))
-    print("Test data size: " + str(get_data_length_from_dic(test_dict)))
-
-    print()
-    print("INITIAL STATISTIC")
-    df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args)
-    analyse_dataframe_result(df_res)
-
-    print()
-    print("Training Model")
-    train_model(model_number,model, num_epochs, batch_size, train_dict ,model_args)
-
-    print()
-    print("FINAL STATISTIC")
-    print("Evaluating Model")
-    df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, detailed=True)
-    analyse_dataframe_result(df_res, data_settings, True)
     
     time_end = time.time()
     print("Runtime of the program is " + str(round(time_end - time_start,2)) + " seconds")
 
 
 
+
+
 if __name__ == '__main__':
     random.seed(random_seed)
-    run()
+    generate_Models("GNN_partitioning/GNN_Model", True, "GNN_partitioning/GNN_Accuracy_Results")
 
 
 

@@ -197,6 +197,40 @@ def combine_process_trees_from_list(process_tree_list, operator = None):
   
   return process_tree_list
 
+def add_label_to_process_trees(process_tree, input_label, operator = None):
+  def get_all_leaf_nodes(tree):
+    leaf_nodes = []
+
+    if len(tree.children) == 0:
+        leaf_nodes.append(tree)
+    else:
+        for child in tree.children:
+            leaf_nodes.extend(get_all_leaf_nodes(child))
+
+    return leaf_nodes
+  
+  leaf_nodes = get_all_leaf_nodes(process_tree)
+  random_leaf = random.choice(leaf_nodes)
+  cur_label = random_leaf.label
+  
+  if operator == None:
+    operatorList = [Operator.SEQUENCE,Operator.LOOP,Operator.PARALLEL,Operator.XOR]
+    new_operator = random.choice(operatorList)
+  else:
+    new_operator = operator
+  
+  random_leaf.label = None
+  random_leaf.operator = new_operator
+  
+  if random.random() < 0.5:
+    random_leaf.children.append(ProcessTree(label=cur_label))
+    random_leaf.children.append(ProcessTree(label=input_label))
+  else:
+    random_leaf.children.append(ProcessTree(label=input_label))
+    random_leaf.children.append(ProcessTree(label=cur_label))
+  
+  return process_tree
+
 def generate_random_process_tree_for_cut_type(activites_list, cut_type):
   if len(activites_list) == 1:
     return ProcessTree(label=activites_list[0])
@@ -253,6 +287,93 @@ def generate_random_process_tree_for_cut_type(activites_list, cut_type):
   return generated_ProcessTrees[0] 
 
 
+def mutate_process_tree(process_tree, mutation_rate):
+  def mutate_process_tree_operator(process_tree):
+    if process_tree.operator != None:
+      operators = [Operator.SEQUENCE,Operator.LOOP,Operator.PARALLEL,Operator.XOR]
+      operators.remove(process_tree.operator)
+      new_operator = random.choice(operators)
+      process_tree.operator = new_operator
+  
+  def get_tree_depth(tree):
+    if len(tree.children) == 0:
+      return 0
+
+    max_child_depth = 0
+    for child in tree.children:
+        child_depth = get_tree_depth(child)
+        max_child_depth = max(max_child_depth, child_depth)
+
+    return max_child_depth + 1
+  
+  def get_all_operator_nodes(tree):
+    operator_nodes = []
+
+    if tree.operator != None:
+        operator_nodes.append(tree)
+    
+    for child in tree.children:
+        operator_nodes.extend(get_all_operator_nodes(child))
+
+    return operator_nodes
+  
+  operator_nodes = get_all_operator_nodes(process_tree)
+  for node in operator_nodes:
+    current_mutation_chance = mutation_rate / pow(2, get_tree_depth(node))
+    if random.random() < current_mutation_chance:
+      mutate_process_tree_operator(node)
+
+
+def generate_mutated_process_tree_from_process_tree(activites_list, process_tree, mutation_rate = 0.5):
+  def get_all_labels(tree):
+    labels = []
+    if tree.label != None:
+      labels.append(tree.label)  # Add the current node's label
+
+    for child in tree.children:
+        labels.extend(get_all_labels(child))  # Recursively get labels from child nodes
+
+    return labels
+  
+  def remove_labels(tree, label_list):
+    if tree.label in label_list:
+      tree.label = None
+
+    for child in tree.children:
+        remove_labels(child, label_list)  # Recursively
+
+  
+  def copy_process_tree(tree):
+    if tree is None:
+        return None
+
+    new_tree = ProcessTree(label=tree.label, operator=tree.operator)
+    for child in tree.children:
+        new_child = copy_process_tree(child)
+        new_tree.children.append(new_child)
+
+    return new_tree
+
+  new_process_tree = copy_process_tree(process_tree)
+  
+  tree_labels = get_all_labels(new_process_tree)
+  
+  if len(tree_labels) < len(activites_list):
+    additional_labels = set(activites_list) - set(tree_labels)
+    for cur_label in additional_labels:
+      new_process_tree = add_label_to_process_trees(new_process_tree, cur_label)
+    
+  else:
+    # remove labels
+    removing_labels = set(tree_labels) - set(activites_list)
+    remove_labels(new_process_tree, removing_labels)
+  
+  # adding mutation to operators
+  mutate_process_tree(new_process_tree, mutation_rate)
+  
+  return new_process_tree 
+
+
 # TODO make noise similar to traces by small local mutation
 def generate_log_from_process_tree(activites_list, noise_factor = 0):
   process_tree = generate_random_process_tree(activites_list)
@@ -276,8 +397,7 @@ def generate_log_from_process_tree(activites_list, noise_factor = 0):
   return log
 
 # TODO make noise similar to traces by small local mutation
-def generate_log_from_process_tree_for_cut_type(activites_list, cut_type, noise_factor = 0):
-  process_tree = generate_random_process_tree_for_cut_type(activites_list, cut_type)
+def generate_log_from_process_tree_for_cut_type(activites_list, process_tree, noise_factor = 0):
   log = pm4py.play_out(process_tree)
   number_noise_traces = int(noise_factor * len(log))
   
@@ -395,14 +515,25 @@ def save_log(log, file_name):
   parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
   apply(log, file_name + ".xes", parameters=parameter)
   
-def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, pruning, datapiece, partitionA, partitionB, score):
+def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, pruning, datapiece, partitionA, partitionB, score, unique_activity_count_P, unique_activity_count_M, size_par):
   with open(file_name + ".txt", "w") as file:
-    file.write("# unique_node | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | pruning | dataitem | partitionA | partitionB | score" + "\n")
-    # adj_matrix_P
+    file.write("# unique_node | unique_activity_count_P | unique_activity_count_M | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | pruning | size_par | dataitem | partitionA | partitionB | score" + "\n")
+    # unique_node
     outputString = ""
     for value in unique_node:
       outputString += str(value) + " "
     file.write(outputString + "\n")
+    # unique_activity_count_P
+    outputString = ""
+    for value in unique_activity_count_P:
+      outputString += str(value) + " "
+    file.write(outputString + "\n")
+    # unique_activity_count_M
+    outputString = ""
+    for value in unique_activity_count_M:
+      outputString += str(value) + " "
+    file.write(outputString + "\n")
+    # adj_matrix_P
     for row in adj_matrix_P:
       outputString = ""
       for value in row:
@@ -424,6 +555,8 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, 
     file.write(str(ratio) + "\n")
     # pruning
     file.write(str(pruning) + "\n")
+    # pruning
+    file.write(str(size_par) + "\n")
     # datapiece
     file.write(str(datapiece) + "\n")
     # partitionA
@@ -444,28 +577,59 @@ def get_available_disk_space(path):
     available_space = disk_usage.free / (1024 ** 3)  # Convert bytes to gigabytes
     return available_space
     
-def get_partial_activity_names(activity_names, number_activites, activity_string_length, number_activity_intersections):
-  input_activity_names = activity_names
-  new_activity_names = set()
-  for i in range(number_activity_intersections):
-    if len(input_activity_names) > 0:
-      act = random.choice(input_activity_names)
-      input_activity_names.remove(act)
-      new_activity_names.add(act)
-      
-  def generate_random_string(length):
+def get_partial_activity_names(activity_names, percentage_is_subset, min_percentage_subset = 0.5):
+  random_number = random.random()
+  
+  if random_number < percentage_is_subset:
+    # subset
+    min = int(len(activity_names) * min_percentage_subset)
+    max = len(activity_names)
+    number_subset_activities = random.randint(min,max)    
+    new_activity_list = random.sample(activity_names, number_subset_activities)
+    return new_activity_list
+    
+  else:
+    # superset
+    def generate_random_string(length):
       # Generate a random string of given length
       letters = string.ascii_letters
       return ''.join(random.choice(letters) for _ in range(length))
-  
-  max_attempts = number_activites * 10  # Maximum number of attempts to prevent infinite loop
-  
-  while(len(new_activity_names) < number_activites) and max_attempts > 0:
-    newAct = generate_random_string(activity_string_length)
-    new_activity_names.add(newAct)
-    max_attempts -= 1
     
-  return list(new_activity_names)
+    activity_string_length = len(activity_names[0])
+    number_additional_activities = 1
+    if random.random() < 0.5:
+      number_additional_activities = 2
+
+    max_attempts = number_additional_activities * 20  # Maximum number of attempts to prevent infinite loop
+    new_activity_names = set(activity_names)
+
+    while(len(new_activity_names) < len(activity_names) + number_additional_activities) and max_attempts > 0:
+      newAct = generate_random_string(activity_string_length)
+      new_activity_names.add(newAct)
+      max_attempts -= 1
+
+    return list(new_activity_names)
+      
+def get_activity_count(log):
+  # Count the occurrences of each activity
+  activity_count = {}
+  for trace in log:
+      for event in trace:
+          activity = event["concept:name"]
+          if activity in activity_count:
+              activity_count[activity] += 1
+          else:
+              activity_count[activity] = 1
+  return activity_count
+
+def get_activity_count_list_from_unique_list(activity_count, unique_node_list):
+  res = []
+  for node in unique_node_list:
+    if node in activity_count:
+      res.append(activity_count[node])
+    else:
+      res.append(0)
+  return res
       
 def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index, cut_type):
   if number_of_activites <= 0:
@@ -509,28 +673,41 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
   activity_list = generate_activity_name_list(number_of_activites,
                                               random.randint(5,8))
   
-  logP = generate_log_from_process_tree_for_cut_type(activity_list,cut_type, 0)
+  process_tree_P = generate_random_process_tree_for_cut_type(activity_list, cut_type)
   
-  number_activity_intersections = random.randint(0,number_of_activites)
+  logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
   
-  activity_list_near = get_partial_activity_names(activity_list,number_of_activites,
-                                                  random.randint(5,8),
-                                                  number_activity_intersections)
-  
-  logM = generate_log_from_process_tree_for_cut_type(activity_list_near, cut_type, 0)
+  percentage_is_subset = 0.8
+  activity_list_near = get_partial_activity_names(activity_list, percentage_is_subset, min_percentage_subset = 0.5)
+  process_tree_M = generate_mutated_process_tree_from_process_tree(activity_list_near, process_tree_P, mutation_rate=0.5)
+
+  logM = generate_log_from_process_tree_for_cut_type(activity_list_near, process_tree_M, 0)
   
   result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
-  if cut[4] < 0:
-    result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
-  
+
   if result == True:
+    # result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
     save_log(logP, folder_name + "/logP_" + ending_File_string)
     save_log(logM, folder_name + "/logM_" + ending_File_string)
+
     unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
     unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
     unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+    
+    logP_art = artificial_start_end(logP.__deepcopy__())
+    logM_art = artificial_start_end(logM.__deepcopy__())
+    
+    activity_count_P = get_activity_count(logP_art)
+    activity_count_M = get_activity_count(logM_art)
+    unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
+    unique_activity_count_M = get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
+    
+    size_par = len(logP) / len(logM)
 
-    save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,pruning_threshold,data_piece_index,cut[0][0],cut[0][1], cut[4])
+    save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,pruning_threshold,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,unique_activity_count_M,size_par)
+    return 1
+  else:
+    return 0
 
     
     
@@ -541,8 +718,8 @@ def generate_data_piece_star_function_cut_Type(args):
 def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parallel = True):
   
   # Delete the folder if it already exists
-  if os.path.exists(file_path):
-    shutil.rmtree(file_path)
+  # if os.path.exists(file_path):
+  #   shutil.rmtree(file_path)
   
   # Check if the folder already exists
   if not os.path.exists(file_path):
@@ -556,7 +733,8 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
   num_processors = max(1,round(num_processors_available/2))
   
   
-  max_number_activites = 6
+  max_number_activites = 8
+  min_number_activites = 6
   number_of_data_pieces_per_variation = 30
   
   # Setup sup list
@@ -574,10 +752,11 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
   # excluded for now: single_activity, none
   # TODO add loop1
   cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
+  cut_types = ["loop_tau"]
     
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
   list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index, cut_type)
-              for number_activ in range(2,max_number_activites + 1)
+              for number_activ in range(min_number_activites,max_number_activites + 1)
               for sup in sup_list
               for ratio in ratio_list
               for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)
@@ -590,18 +769,21 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
     print("Available space: " + str(get_available_disk_space(file_path)) + " GB")
     sys.exit()
 
+  sum_results = 0
   if use_parallel:
     print("Number of used processors:", num_processors)
     # Create a pool of workers
     with multiprocessing.Pool(num_processors) as pool:
-      list(tqdm(pool.imap(generate_data_piece_star_function_cut_Type, list_data_pool), total=len(list_data_pool)))
+      results = list(tqdm(pool.imap(generate_data_piece_star_function_cut_Type, list_data_pool), total=len(list_data_pool)))
       
+    sum_results = sum(results)
   else:
     for it in list_data_pool:
       print("Running: " + str(it))
-      generate_data_piece_star_function_cut_Type(it)
+      sum_results += generate_data_piece_star_function_cut_Type(it)
 
-
+  print("Number of generated data pieces: " + str(sum_results) + " of " + str(len(list_data_pool)))
+  print("Percentage of generated data pieces: " + str(sum_results / len(list_data_pool) * 100) + "%")
    
 def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, pruning_threshold):
   result_dic = dict()
@@ -682,7 +864,7 @@ def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold
 if __name__ == '__main__':
   random.seed(random_seed)
   
-  generate_data(relative_path,0.2,0.2,0,True)
+  generate_data(relative_path,0.2,0.2,0,False)
   
   
   # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0)

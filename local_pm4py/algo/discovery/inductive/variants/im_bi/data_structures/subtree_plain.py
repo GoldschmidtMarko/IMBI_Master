@@ -602,6 +602,9 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 cut = []
 
                 start_partition = time.time()
+                
+                # from GNN_partitioning.GNN_Data_Generation.gnn_generation import generate_adjacency_matrix_from_log
+                
                 cut_opti = False
                 if cut_opti == True:
                     cutSaved, possible_partitions = analyse_calculated_cut_caching(calculated_cut_caching, cost_Variant, netP, self_activities)

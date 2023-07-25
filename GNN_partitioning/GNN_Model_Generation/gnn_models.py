@@ -1,19 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
+from GNN_partitioning.GNN_Data_Generation.gnn_generation import generate_adjacency_matrix_from_log
+from GNN_partitioning.GNN_Data_Generation.gnn_generation import generate_union_adjacency_matrices
+from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import artificial_start_end
 import os
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
-import pandas as pd
-from torch.utils.data import DataLoader
-import torch.optim.lr_scheduler as lr_scheduler
-import random
-from torch_geometric.nn import global_add_pool
-from torch_geometric.nn import GATConv
-from torch_geometric.utils import to_dense_adj
-
 
 def generate_Model_V1(input_dim, hidden_dim, output_dim):
     class GraphConvolutionLayer(nn.Module):
@@ -109,7 +100,7 @@ def generate_Model_V2(input_dim, hidden_dim, output_dim):
             return output
     
     class GNNClassifier(nn.Module):
-        def __init__(self, input_features, hidden_dim, output_dim, number_global_features = 2):
+        def __init__(self, input_features, hidden_dim, output_dim, number_global_features = 3):
             super(GNNClassifier, self).__init__()
             # + 2 for the global features sup and ratio
             self.gc1 = GraphConvolutionLayer(input_features + number_global_features, hidden_dim)
@@ -119,7 +110,7 @@ def generate_Model_V2(input_dim, hidden_dim, output_dim):
         def forward(self, adjacency_matrix_P, adjacency_matrix_M, global_features):
             
             # Placeholder tensor when there are no node features
-            features = torch.ones(adjacency_matrix_P.size(0), self.gc1.linear_P.in_features - 2)
+            features = torch.ones(adjacency_matrix_P.size(0), self.gc1.linear_P.in_features - 3)
 
             # Perform first graph convolution
             hidden1 = self.gc1(adjacency_matrix_P, adjacency_matrix_M, features, global_features)
@@ -161,8 +152,8 @@ def generate_Model_V3(input_dim, hidden_dim, output_dim):
     class GCNClassifier(nn.Module):
         def __init__(self, input_dim, hidden_dim, output_dim):
             super(GCNClassifier, self).__init__()
-            self.gc1 = GraphConvolutionLayer(64 + 2, hidden_dim)
-            self.gc2 = GraphConvolutionLayer(hidden_dim + 2, output_dim)
+            self.gc1 = GraphConvolutionLayer(64 + 3, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim + 3, output_dim)
             
 
         def forward(self, adjacency_matrix_1, adjacency_matrix_2, global_variables):
@@ -203,8 +194,8 @@ def generate_Model_V4(input_dim, hidden_dim, output_dim):
     class GCNClassifier(nn.Module):
         def __init__(self, input_dim, hidden_dim, output_dim):
             super(GCNClassifier, self).__init__()
-            self.gc1 = GraphConvolutionLayer(input_dim + 2, hidden_dim)
-            self.gc2 = GraphConvolutionLayer(hidden_dim + 2, output_dim)
+            self.gc1 = GraphConvolutionLayer(input_dim + 3, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim + 3, output_dim)
             
 
         def forward(self, adjacency_matrix_1, adjacency_matrix_2, global_variables):
@@ -291,8 +282,8 @@ def generate_Model_V6(input_dim, hidden_dim, output_dim):
     class GCNClassifier(nn.Module):
         def __init__(self, input_dim, hidden_dim, output_dim):
             super(GCNClassifier, self).__init__()
-            self.gc1 = GraphConvolutionLayer(input_dim + 2, hidden_dim)
-            self.gc2 = GraphConvolutionLayer(hidden_dim + 2, output_dim)
+            self.gc1 = GraphConvolutionLayer(input_dim + 3, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim + 3, output_dim)
 
         def forward(self, adjacency_matrix_1, adjacency_matrix_2, features_P, features_M, global_variables):
             hidden1 = self.gc1(adjacency_matrix_1, adjacency_matrix_2, features_P, features_M, global_variables)
@@ -304,7 +295,6 @@ def generate_Model_V6(input_dim, hidden_dim, output_dim):
     model = GCNClassifier(input_dim, hidden_dim, output_dim)
     
     return model
-
 
 def generate_Model_V7(input_dim, hidden_dim, output_dim):
     class GraphConvolutionLayer(nn.Module):
@@ -330,12 +320,12 @@ def generate_Model_V7(input_dim, hidden_dim, output_dim):
     class GCNClassifier(nn.Module):
         def __init__(self, input_dim, hidden_dim, output_dim):
             super(GCNClassifier, self).__init__()
-            self.gc1 = GraphConvolutionLayer(input_dim + 2, hidden_dim)
-            self.gc2 = GraphConvolutionLayer(hidden_dim + 2, hidden_dim)
-            self.gc3 = GraphConvolutionLayer(hidden_dim + 2, hidden_dim)
-            self.gc4 = GraphConvolutionLayer(hidden_dim + 2, hidden_dim)
-            self.gc5 = GraphConvolutionLayer(hidden_dim + 2, hidden_dim)
-            self.gc6 = GraphConvolutionLayer(hidden_dim + 2, output_dim)
+            self.gc1 = GraphConvolutionLayer(input_dim + 3, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim + 3, hidden_dim)
+            self.gc3 = GraphConvolutionLayer(hidden_dim + 3, hidden_dim)
+            self.gc4 = GraphConvolutionLayer(hidden_dim + 3, hidden_dim)
+            self.gc5 = GraphConvolutionLayer(hidden_dim + 3, hidden_dim)
+            self.gc6 = GraphConvolutionLayer(hidden_dim + 3, output_dim)
 
         def forward(self, adjacency_matrix_1, adjacency_matrix_2, features_P, features_M, global_variables):
             hidden1 = self.gc1(adjacency_matrix_1, adjacency_matrix_2, features_P, features_M, global_variables)
@@ -361,7 +351,7 @@ def generate_Model_V8(input_dim, hidden_dim, output_dim):
             super(GraphConvolutionLayer, self).__init__()
             self.linear_Node_Convolution_P = nn.Linear(in_features, out_features)
             self.linear_Node_Convolution_M = nn.Linear(in_features, out_features)
-            self.linear = nn.Linear(2 * (out_features + 2), out_features)
+            self.linear = nn.Linear(2 * (out_features + 3), out_features)
 
         def forward(self, adjacency_matrix_1, adjacency_matrix_2, features_P, features_M, global_variables):
             # First graph convolution
@@ -403,7 +393,7 @@ def generate_Model_V9(input_dim, hidden_dim, output_dim):
     class GCNClassifier(nn.Module):
         def __init__(self, input_dim, hidden_dim, output_dim):
             super(GCNClassifier, self).__init__()
-            self.dense1 = nn.Linear(input_dim*4 + 2, hidden_dim)
+            self.dense1 = nn.Linear(input_dim*4 + 3, hidden_dim)
             self.dense2 = nn.Linear(hidden_dim, hidden_dim)
             self.dense3 = nn.Linear(hidden_dim, hidden_dim)
             self.output_layer  = nn.Linear(hidden_dim, output_dim)
@@ -416,9 +406,9 @@ def generate_Model_V9(input_dim, hidden_dim, output_dim):
             
             hidden1 = F.relu(self.dense1(output))
             hidden2 = F.relu(self.dense2(hidden1))
-            # hidden3 = F.relu(self.dense3(hidden2))
+            hidden3 = F.relu(self.dense3(hidden2))
             # hidden4 = F.relu(self.dense3(hidden3))
-            output = self.output_layer(hidden2)
+            output = self.output_layer(hidden3)
             
             return output
     
@@ -427,95 +417,65 @@ def generate_Model_V9(input_dim, hidden_dim, output_dim):
     
     return model
 
-# GIN (Graph Isomorphism Networks)   , throws error
+# full connected 7 dense layer
 def generate_Model_V10(input_dim, hidden_dim, output_dim):
-    class GINConv(nn.Module):
-        def __init__(self, in_features, out_features, hidden_dim=32):
-            super(GINConv, self).__init__()
-            self.mlp = nn.Sequential(
-                nn.Linear(in_features, hidden_dim),
-                nn.ReLU(),
-                nn.Linear(hidden_dim, out_features),
-                nn.ReLU()
-            )
-            self.bn = nn.BatchNorm1d(out_features)
-            self.eps = nn.Parameter(torch.zeros(1, out_features))
-            
-        def forward(self, x, edge_index):
-            out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x))
-            out = self.bn(out)
-            return out
-        
-        def message(self, x_j):
-            return x_j
+    class GCNClassifier(nn.Module):
+        def __init__(self, input_dim, hidden_dim, output_dim):
+            super(GCNClassifier, self).__init__()
+            self.layers = nn.ModuleList()
+            self.layers.append(nn.Linear(input_dim*4 + 3, hidden_dim))
+            for i in range(1, 8):
+                self.layers.append(nn.Linear(hidden_dim, hidden_dim))
+            self.layers.append(nn.Linear(hidden_dim, output_dim))
 
-        def propagate(self, edge_index, x):
-            row, col = edge_index
-            return self.message(x[col])
-
-    class GIN(nn.Module):
-        def __init__(self, in_features, hidden_dim, num_classes):
-            super(GIN, self).__init__()
-            self.conv1 = GINConv(in_features, in_features, hidden_dim)
-            self.conv2 = GINConv(hidden_dim, in_features, hidden_dim)
-            self.fc = nn.Linear(hidden_dim + 1, num_classes)  # +1 for global feature
+        def forward(self, adjacency_matrix_1, adjacency_matrix_2, features_P, features_M, global_variables):
+            output = torch.cat((adjacency_matrix_1, adjacency_matrix_2), dim=1)
+            output = torch.cat((output, features_P), dim=1)
+            output = torch.cat((output, features_M), dim=1)
+            output = torch.cat((output, global_variables), dim=1)
             
-        def forward(self, adjacency_matrix_1, adjacency_matrix_2, node_features_1, node_features_2, global_feature):
-            x1 = F.relu(self.conv1(node_features_1, adjacency_matrix_1))
-            x1 = F.relu(self.conv2(x1, adjacency_matrix_1))
+            for i, layer in enumerate(self.layers):
+                if i < len(self.layers) - 1:
+                    output = layer(output)
+                    output = F.relu(output)
+                else:
+                    output = layer(output)  
             
-            x2 = F.relu(self.conv1(node_features_2, adjacency_matrix_2))
-            x2 = F.relu(self.conv2(x2, adjacency_matrix_2))
-            
-            x = torch.cat((x1, x2), dim=0)  # Concatenate node representations from both graphs
-            x = global_add_pool(x, torch.zeros(x.size(0), dtype=torch.long).to(x.device))
-            x = torch.cat((x, global_feature), dim=1)  # Concatenate global feature with aggregated node representations
-            x = self.fc(x)
-            return x
-
+            return output
+    
     # Create the GNN classifier model
-    model = GIN(input_dim, hidden_dim, output_dim)
+    model = GCNClassifier(input_dim, hidden_dim, output_dim)
     
     return model
 
-# GAT (Graph Attention Networks)   , throws error
+# full connected 3 dense layer with global feature size_par and graph node frequencies
 def generate_Model_V11(input_dim, hidden_dim, output_dim):
-    class GAT(nn.Module):
-        def __init__(self, in_features, hidden_dim, num_heads, num_classes):
-            super(GAT, self).__init__()
-            self.gatconv1 = GATConv(in_features, hidden_dim, heads=num_heads)
-            self.gatconv2 = GATConv(hidden_dim * num_heads, hidden_dim, heads=num_heads)
-            self.fc = nn.Linear(hidden_dim * num_heads + 1, num_classes)  # +1 for global feature
-            
-        def forward(self, adjacency_matrix_1, adjacency_matrix_2, node_features_1, node_features_2, global_feature):
-            adjacency_matrix_1 = adjacency_matrix_1.long()
-            adjacency_matrix_2 = adjacency_matrix_2.long()
-            
-            node_features_1 = node_features_1.long()
-            node_features_2 = node_features_2.long()
-            
-            adj1 = to_dense_adj(adjacency_matrix_1).squeeze()
-            adj2 = to_dense_adj(adjacency_matrix_2).squeeze()
-            
-            adj1 = adj1.long()
-            
-            temp = self.gatconv1(node_features_1, adj1.long())
+    class GCNClassifier(nn.Module):
+        def __init__(self, input_dim, hidden_dim, output_dim):
+            super(GCNClassifier, self).__init__()
+            self.dense1 = nn.Linear(input_dim*4 + 2 + 3, hidden_dim)
+            self.dense2 = nn.Linear(hidden_dim, hidden_dim)
+            self.dense3 = nn.Linear(hidden_dim, hidden_dim)
+            self.output_layer  = nn.Linear(hidden_dim, output_dim)
 
-            x1 = F.relu(temp.float())
-            x1 = F.relu(self.gatconv2(x1, adj1).float())
+        def forward(self,adj_mat_P, adj_mat_M, weighted_adjacency_matrix_1, weighted_adjacency_matrix_2, features_P, features_M, global_variables):
+            output = torch.cat((adj_mat_P, adj_mat_M), dim=1)
+            output = torch.cat((output, weighted_adjacency_matrix_1), dim=1)
+            output = torch.cat((output, weighted_adjacency_matrix_2), dim=1)
+            output = torch.cat((output, features_P), dim=1)
+            output = torch.cat((output, features_M), dim=1)
+            output = torch.cat((output, global_variables), dim=1)
             
-            x2 = F.relu(self.gatconv1(node_features_2, adj2).float())
-            x2 = F.relu(self.gatconv2(x2, adj2).float())
+            hidden1 = F.relu(self.dense1(output))
+            hidden2 = F.relu(self.dense2(hidden1))
+            hidden3 = F.relu(self.dense3(hidden2))
+            # hidden4 = F.relu(self.dense3(hidden3))
+            output = self.output_layer(hidden3)
             
-            x = torch.cat((x1, x2), dim=0)  # Concatenate node representations from both graphs
-            x = torch.mean(x, dim=0, keepdim=True)  # Average the node representations across the graphs
-            x = torch.cat((x, global_feature), dim=1)  # Concatenate global feature with node representations
-            x = self.fc(x)
-            return x
-
+            return output
+    
     # Create the GNN classifier model
-    num_heads = 4  # Number of attention heads
-    model = GAT(input_dim, hidden_dim, num_heads, output_dim)
+    model = GCNClassifier(input_dim, hidden_dim, output_dim)
     
     return model
 
@@ -548,24 +508,39 @@ def generate_model_args(args):
     return generate_model(*args)
 
 
-def transform_data_to_model(model_number, data):
-    # converting the data to torch
-    torch_matrix_P = torch.from_numpy(data["adjacency_matrix_P"]).to(torch.float32)
-    torch_matrix_M = torch.from_numpy(data["adjacency_matrix_M"]).to(torch.float32)
+def add_epsilon_to_matrix(adjacency_matrix, number_relevant_nodes):
+    def add_epsilon(adjacency_matrix, epsilon, k):
+        adjacency_matrix[:k, :k] += epsilon
+        return adjacency_matrix
     
-    if model_number == 2:
-        epsilon = 1e-8
-        
-        torch_matrix_P += torch.eye(torch_matrix_P.size(0)) * epsilon
-        torch_matrix_M += torch.eye(torch_matrix_M.size(0)) * epsilon
+    epsilon = 1e-8
+    adjacency_matrix = add_epsilon(adjacency_matrix, epsilon, number_relevant_nodes)
+    # def transform_matrix(matrix):
+    #     return torch.where(matrix > 0, torch.ones_like(matrix), matrix)
+    # transformed_matrix = transform_matrix(adjacency_matrix)
+    # print(transformed_matrix)
+    
+    return adjacency_matrix
 
+def transform_data_to_model(data):
+    # converting the data to torch
+    torch_matrix_P = torch.from_numpy(data["Adjacency_matrix_P"]).to(torch.float32)
+    torch_matrix_M = torch.from_numpy(data["Adjacency_matrix_M"]).to(torch.float32)
+    
+    feature_node_frequencies_P = torch.from_numpy(data["Activity_count_P"]).unsqueeze(dim=1).to(torch.float32)
+    feature_node_frequencies_M = torch.from_numpy(data["Activity_count_M"]).unsqueeze(dim=1).to(torch.float32)
+      
     # normalization, removed since it could have negative effects
-    # torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
-    # torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
-
+    torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
+    torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
+    
+    feature_node_frequencies_P = feature_node_frequencies_P / feature_node_frequencies_P.max()
+    feature_node_frequencies_M = feature_node_frequencies_M / feature_node_frequencies_M.max()
+    
     # Create the feature matrix
-    tensor_feature_matrix = torch.tensor([[data["Support"], data["Ratio"]] for _ in range(data["Number_nodes"])])
-    return torch_matrix_P, torch_matrix_M, tensor_feature_matrix
+    global_feature = torch.tensor([[data["Support"], data["Ratio"], data["Size_par"]] for _ in range(data["Adjacency_matrix_P"].shape[0])])
+    
+    return torch_matrix_P, torch_matrix_M, global_feature, feature_node_frequencies_P, feature_node_frequencies_M
 
 def get_ignore_mask(data):
     # 0
@@ -573,7 +548,7 @@ def get_ignore_mask(data):
     
     maskList = []
     for label in data["Labels"]:
-        if label in data["partitionA"] or label in data["partitionB"]:
+        if label in data["PartitionA"] or label in data["PartitionB"]:
             maskList.append(1)
         else:
             maskList.append(ignoreValue)
@@ -586,47 +561,216 @@ def get_ignore_mask(data):
     mask = torch.tensor(maskList, dtype=torch.float32)
     return mask
 
+def generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes):
+    adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
+    adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
+    
+    if False:
+        adj_mat_M = add_epsilon_to_matrix(adj_mat_M, number_relevant_nodes)
+        adj_mat_P = add_epsilon_to_matrix(adj_mat_P, number_relevant_nodes)
+        torch_matrix_P = add_epsilon_to_matrix(torch_matrix_P, number_relevant_nodes)
+        torch_matrix_M = add_epsilon_to_matrix(torch_matrix_M, number_relevant_nodes)
+    return adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M
+
 def get_model_outcome(model_number, model, data):
-    torch_matrix_P, torch_matrix_M, tensor_feature_matrix = transform_data_to_model(model_number, data)
+    torch_matrix_P, torch_matrix_M, global_feature, feature_node_frequencies_P, feature_node_frequencies_M = transform_data_to_model(data)
+    number_relevant_nodes = sum(1 for element in data["Activity_count_P"] if element != 0)
     
     if model_number == 1:
-        return model(torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
+        return model(torch_matrix_P, torch_matrix_M, global_feature)
     elif model_number == 2:
-        return model(torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
+        return model(torch_matrix_P, torch_matrix_M, global_feature)
     elif model_number == 3:
-        return model(torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
+        return model(torch_matrix_P, torch_matrix_M, global_feature)
     elif model_number == 4:
-        return model(torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
+        return model(torch_matrix_P, torch_matrix_M, global_feature)
     elif model_number == 5:
         mapped_matrix = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
         return model(mapped_matrix, torch_matrix_P)
     elif model_number == 6:
-        adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
-        adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
-        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
-    elif model_number == 7:
-        adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
-        adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
-        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
-    elif model_number == 8:
-        adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
-        adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
-        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
-    elif model_number == 9:
-        adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
-        adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
-        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
-    elif model_number == 10:
-        adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
-        adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
-        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
-    elif model_number == 11:
-        adj_mat_P = torch.where(torch_matrix_P > 0, torch.tensor(1.0), torch_matrix_P)
-        adj_mat_M = torch.where(torch_matrix_M > 0, torch.tensor(1.0), torch_matrix_M)
-        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, tensor_feature_matrix)
+        adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
         
+        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, global_feature)
+    elif model_number == 7:
+        adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
+        
+        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, global_feature)
+    elif model_number == 8:
+        adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
+        
+        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, global_feature)
+    elif model_number == 9:
+        adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
+        
+        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, global_feature)
+    elif model_number == 10:
+        adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
+        
+        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, global_feature)
+    elif model_number == 11:
+        adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
+        
+        return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, feature_node_frequencies_P, feature_node_frequencies_M, global_feature)
+        
+def get_activity_count(log):
+  # Count the occurrences of each activity
+  activity_count = {}
+  for trace in log:
+      for event in trace:
+          activity = event["concept:name"]
+          if activity in activity_count:
+              activity_count[activity] += 1
+          else:
+              activity_count[activity] = 1
+  return activity_count
+
+def get_activity_count_list_from_unique_list(activity_count, unique_node_list):
+  res = []
+  for node in unique_node_list:
+    if node in activity_count:
+      res.append(activity_count[node])
+    else:
+      res.append(0)
+  return res
 
 
+def read_model_parameter(file_name):
+    data_settings = {}
+    model_args = {}
+
+    with open(file_name, 'r') as file:
+        section = None
+        for line in file:
+            # Remove leading/trailing whitespace and newline characters
+            line = line.strip()
+            # Skip empty lines
+            if not line:
+                continue
+            # Detect section changes based on '#' symbol
+            if line.startswith('#'):
+                if line == '# Data Settings':
+                    section = 'data_settings'
+                elif line == '# Model Settings':
+                    section = 'model_args'
+                else:
+                    section = None
+            elif section == 'data_settings':
+                # Split the line into key and value
+                key, value = line.split(': ')
+                data_settings[key] = value
+            elif section == 'model_args':
+                # Split the line into key and value
+                key, value = line.split(': ')
+                model_args[key] = value
+
+    return data_settings, model_args
+
+def generate_data_from_log(logP, logM, sup, ratio):
+    unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
+    unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
+    unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+    
+    logP_art = artificial_start_end(logP.__deepcopy__())
+    logM_art = artificial_start_end(logM.__deepcopy__())
+    
+    activity_count_P = get_activity_count(logP_art)
+    activity_count_M = get_activity_count(logM_art)
+    unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
+    unique_activity_count_M = get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
+    
+    size_par = len(logP) / len(logM)
+    
+    data = {"Adjacency_matrix_P": matrix_P,
+            "Adjacency_matrix_M": matrix_M,
+            "Support": sup,
+            "Ratio": ratio,
+            "Size_par": size_par,
+            "Labels": unique_nodeList,
+            "Activity_count_P": unique_activity_count_P,
+            "Activity_count_M": unique_activity_count_M,
+            "Number_nodes": matrix_P.shape[0],
+            "PartitionA": [],
+            "PartitionB": []
+            }
+    
+    return data
+    
+def check_substring_after_last_slash(input_string, substring):
+    # Find the last occurrence of '/'
+    last_slash_index = input_string.rfind('/')
+    
+    # Check if the substring is present after the last slash
+    if last_slash_index != -1 and substring in input_string[last_slash_index + 1:]:
+        return True
+    else:
+        return False
+
+def get_partitions_from_gnn(gnn_file_path, logP, logM, sup, ratio):
+    model_setting_paths = []
+    model_paths = []
+    
+    if os.path.exists(gnn_file_path):
+        for root, _ , files in os.walk(gnn_file_path):
+            for file in files:
+                if file.endswith(".txt"):  # Filter for text files
+                    model_setting_paths.append(os.path.join(root, file))
+                if file.endswith(".pt"):  # Filter for pt files
+                    model_paths.append(os.path.join(root, file))
+    
+    if len(model_setting_paths) != 4 or len(model_paths) != 4:
+        print("Error: not all models or text files are present. Found " + str(len(model_setting_paths)) + " text files and " + str(len(model_paths)) + " models, but expected 4 of each.")
+        return None
+    model_parameters = []
+    for model_setting_path in model_setting_paths:
+        data_settings, model_args = read_model_parameter(model_setting_path)
+        model_parameters.append((data_settings, model_args))
+
+    data = generate_data_from_log(logP, logM, sup, ratio)
+
+    possible_partitions = []
+    for data_setting, model_args in model_parameters:
+        cut_type = data_setting["Cut_type"]
+        model_number = int(data_setting["Model_number"])
+        
+        cur_model_path = ""
+        for model_path in model_paths:
+            if check_substring_after_last_slash(model_path, cut_type):
+                cur_model_path = model_path
+                break
+            
+        if cur_model_path == "":
+            print("Error: no model found for cut type " + cut_type)
+            return None
+        
+        cur_model = generate_model(int(model_args["model_number"]), int(model_args["input_dim"]), int(model_args["hidden_dim"]), int(model_args["output_dim"]))
+        cur_model.load_state_dict(torch.load(cur_model_path))
+        
+        
+        binary_prediction = get_prediction_from_model(model_number, cur_model, data)
+        binary_mask = [0,0] + [ 1 if element != 0 else 0 for element in data["Activity_count_P"] ]
+        result_array = torch.where(binary_mask == 0, torch.tensor(-1), binary_prediction)
+        
+        partitionA = set()
+        partitionB = set()
+        
+        for i, pred in enumerate(result_array):
+            if pred == 0:
+                partitionA.add(data["Labels"][i])
+            if pred == 1:
+                partitionB.add(data["Labels"][i])
+        possible_partitions.append((partitionA, partitionB, cut_type))
+
+    return possible_partitions    
+
+
+
+def get_prediction_from_model(model_number, model, data):
+    model_outcome = get_model_outcome(model_number, model, data)
+    probs = F.sigmoid(model_outcome)
+        
+    binary_predictions = torch.round(probs)
+    
+    return binary_predictions
 
 
 
