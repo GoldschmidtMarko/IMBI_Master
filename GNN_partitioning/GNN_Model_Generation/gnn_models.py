@@ -1,10 +1,86 @@
 import torch
 import torch.nn as nn
+import numpy as np
+from local_pm4py.algo.discovery.dfg import algorithm as dfg_discovery
 import torch.nn.functional as F
-from GNN_partitioning.GNN_Data_Generation.gnn_generation import generate_adjacency_matrix_from_log
-from GNN_partitioning.GNN_Data_Generation.gnn_generation import generate_union_adjacency_matrices
-from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import artificial_start_end
 import os
+import math
+from pm4py.util import xes_constants
+from itertools import combinations
+from pm4py.objects.log import obj as log_instance
+
+
+def artificial_start_end(log):
+    st = 'start'
+    en = 'end'
+    activity_key = xes_constants.DEFAULT_NAME_KEY
+    start_event = log_instance.Event()
+    start_event[activity_key] = st
+    
+    end_event = log_instance.Event()
+    end_event[activity_key] = en
+
+    for trace in log:
+        trace.insert(0, start_event)
+        trace.append(end_event)
+    return log
+
+
+# expands the matrix matrix_P and matrix_M so that the columns/ rows of both matrix have the the same activity
+def generate_union_adjacency_matrices(matrix_P, nodeListP, matrix_M, nodeListM):
+  # Find the common set of labels
+  common_labels = ["start", "end"]
+  common_labels = common_labels + list(set(nodeListP).union(set(nodeListM)) - {"start", "end"})
+  
+  # Create new expanded matrices
+  expanded_matrix1 = np.zeros((len(common_labels), len(common_labels)), dtype=int)
+  expanded_matrix2 = np.zeros((len(common_labels), len(common_labels)), dtype=int)
+
+  # Copy values from original matrices to expanded matrices
+  for i, label in enumerate(common_labels):
+    if label in nodeListP:
+        row_idx = nodeListP.index(label)
+        expanded_matrix1[i, i] = matrix_P[row_idx, row_idx]  # Diagonal element
+        for j, other_label in enumerate(common_labels[i+1:], start=i+1):
+            if other_label in nodeListP:
+                other_row_idx = nodeListP.index(other_label)
+                expanded_matrix1[i, j] = matrix_P[row_idx, other_row_idx]
+                expanded_matrix1[j, i] = matrix_P[other_row_idx, row_idx]
+    if label in nodeListM:
+        row_idx = nodeListM.index(label)
+        expanded_matrix2[i, i] = matrix_M[row_idx, row_idx]  # Diagonal element
+        for j, other_label in enumerate(common_labels[i+1:], start=i+1):
+            if other_label in nodeListM:
+                other_row_idx = nodeListM.index(other_label)
+                expanded_matrix2[i, j] = matrix_M[row_idx, other_row_idx]
+                expanded_matrix2[j, i] = matrix_M[other_row_idx, row_idx]
+
+  return common_labels, expanded_matrix1, expanded_matrix2
+
+def generate_adjacency_matrix_from_log(log):
+  log_art = artificial_start_end(log.__deepcopy__())
+  dfg = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+  
+  
+  unique_nodes = ["start", "end"]
+  unique_nodes = unique_nodes + list(set([node for edge in dfg.keys() for node in edge]) - {"start", "end"})
+  num_nodes = len(unique_nodes)
+  
+  # Initialize an empty adjacency matrix
+  adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
+
+  # Populate the adjacency matrix
+  for edge, count in dfg.items():
+      source_node, target_node = edge
+      source_index = unique_nodes.index(source_node)
+      target_index = unique_nodes.index(target_node)
+      adj_matrix[source_index, target_index] = count
+  
+  # print(unique_nodes)
+  # print(adj_matrix)
+  return unique_nodes, adj_matrix
+
+
 
 def generate_Model_V1(input_dim, hidden_dim, output_dim):
     class GraphConvolutionLayer(nn.Module):
@@ -479,8 +555,56 @@ def generate_Model_V11(input_dim, hidden_dim, output_dim):
     
     return model
 
+# GCN with global variables weight matrix, and 2 graph convolution layers
+def generate_Model_V12(node_features, global_features, hidden_dim, output_dim):
+    class GraphConvolutionLayer(nn.Module):
+        def __init__(self, node_features, global_features, out_features):
+            super(GraphConvolutionLayer, self).__init__()
+            self.linear = nn.Linear(2 * node_features + global_features, out_features)
 
-def generate_model(model_number, input_dim, hidden_dim, output_dim):
+        def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
+            # First graph convolution
+            output_conv_P = torch.matmul(weight_matrix_1, features_P)
+            
+            # Second graph convolution
+            output_conv_M = torch.matmul(weight_matrix_2, features_M)
+
+            output = torch.cat((output_conv_P, output_conv_M), dim=1)
+            output = torch.cat((output, global_variables), dim=1)
+            
+            # n x (2*node_features + global variables)
+            output = self.linear(output)
+            
+            return output
+    
+    class GCNClassifier(nn.Module):
+        def __init__(self, node_features, global_features, hidden_dim, output_dim):
+            super(GCNClassifier, self).__init__()
+            self.gc1 = GraphConvolutionLayer(node_features, global_features, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim, global_features, output_dim)
+
+        def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
+            hidden1 = self.gc1(weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables)
+            hidden1 = F.relu(hidden1)  
+
+            output = self.gc2(weight_matrix_1, weight_matrix_2, hidden1, hidden1, global_variables)
+            return output
+    
+    # Create the GNN classifier model
+    model = GCNClassifier(node_features, global_features, hidden_dim, output_dim)
+    
+    return model
+
+
+
+def generate_model(model_args):
+    model_number = int(model_args["model_number"])
+    input_dim = int(model_args["input_dim"])
+    hidden_dim = int(model_args["hidden_dim"])
+    output_dim = int(model_args["output_dim"])
+    node_features = int(model_args["node_features"])
+    global_features = int(model_args["global_features"])
+    
     if model_number == 1:
         return generate_Model_V1(input_dim, hidden_dim, output_dim)
     elif model_number == 2:
@@ -503,9 +627,11 @@ def generate_model(model_number, input_dim, hidden_dim, output_dim):
         return generate_Model_V10(input_dim, hidden_dim, output_dim)
     elif model_number == 11:
         return generate_Model_V11(input_dim, hidden_dim, output_dim)
+    elif model_number == 12:
+        return generate_Model_V12(node_features, global_features, hidden_dim, output_dim)
     
-def generate_model_args(args):
-    return generate_model(*args)
+def generate_model_args(model_args):
+    return generate_model(model_args)
 
 
 def add_epsilon_to_matrix(adjacency_matrix, number_relevant_nodes):
@@ -572,6 +698,13 @@ def generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, numb
         torch_matrix_M = add_epsilon_to_matrix(torch_matrix_M, number_relevant_nodes)
     return adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M
 
+def get_node_degree(torch_matrix_P, torch_matrix_M):
+    # Calculate the degree for each node
+    node_degree_P = torch.sum(torch_matrix_P > 0, dim=1, dtype=torch.float32, keepdim=True)
+    node_degree_M = torch.sum(torch_matrix_M > 0, dim=1, dtype=torch.float32, keepdim=True)
+
+    return node_degree_P, node_degree_M
+
 def get_model_outcome(model_number, model, data):
     torch_matrix_P, torch_matrix_M, global_feature, feature_node_frequencies_P, feature_node_frequencies_M = transform_data_to_model(data)
     number_relevant_nodes = sum(1 for element in data["Activity_count_P"] if element != 0)
@@ -611,6 +744,9 @@ def get_model_outcome(model_number, model, data):
         adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M = generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, number_relevant_nodes)
         
         return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, feature_node_frequencies_P, feature_node_frequencies_M, global_feature)
+    elif model_number == 12:
+        node_degree_P, node_degree_M = get_node_degree(torch_matrix_P, torch_matrix_M)
+        return model(torch_matrix_P, torch_matrix_M, node_degree_P, node_degree_M, global_feature)
         
 def get_activity_count(log):
   # Count the occurrences of each activity
@@ -686,8 +822,8 @@ def generate_data_from_log(logP, logM, sup, ratio):
             "Ratio": ratio,
             "Size_par": size_par,
             "Labels": unique_nodeList,
-            "Activity_count_P": unique_activity_count_P,
-            "Activity_count_M": unique_activity_count_M,
+            "Activity_count_P": np.array(unique_activity_count_P).astype(int),
+            "Activity_count_M": np.array(unique_activity_count_M).astype(int),
             "Number_nodes": matrix_P.shape[0],
             "PartitionA": [],
             "PartitionB": []
@@ -697,7 +833,9 @@ def generate_data_from_log(logP, logM, sup, ratio):
     
 def check_substring_after_last_slash(input_string, substring):
     # Find the last occurrence of '/'
-    last_slash_index = input_string.rfind('/')
+    last_slash_index = input_string.rfind('\\')
+    if last_slash_index == -1:
+        last_slash_index = input_string.rfind('/')
     
     # Check if the substring is present after the last slash
     if last_slash_index != -1 and substring in input_string[last_slash_index + 1:]:
@@ -705,9 +843,117 @@ def check_substring_after_last_slash(input_string, substring):
     else:
         return False
 
-def get_partitions_from_gnn(gnn_file_path, logP, logM, sup, ratio):
+
+def pad_data(data, max_node_size_in_dataset):
+    diff_size = max_node_size_in_dataset - data["Adjacency_matrix_P"].shape[0]
+    # Pad the adjacency matrix with zeros
+    data["Adjacency_matrix_P"] = np.pad(data["Adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
+    data["Adjacency_matrix_M"] = np.pad(data["Adjacency_matrix_M"], ((0, diff_size), (0, diff_size)), mode='constant')
+
+    data["Activity_count_P"] = np.pad(data["Activity_count_P"], (0, diff_size), mode='constant')
+    data["Activity_count_M"] = np.pad(data["Activity_count_M"], (0, diff_size), mode='constant')
+
+    data["Number_nodes"] = max_node_size_in_dataset
+    return data
+
+def get_local_partitions_from_partition(partition, percentage_of_nodes):
+    number_nodes = len(partition[0]) + len(partition[1])
+    number_exchanging_nodes = math.ceil(number_nodes * percentage_of_nodes)
+    
+    res_partitions = []
+    list_A = list(partition[0])
+    list_B = list(partition[1])
+    
+    for n in range(number_exchanging_nodes + 1):
+        for switched_indices in combinations(range(len(list_A) + len(list_B)), n):
+            new_list_A = list(list_A)
+            new_list_B = list(list_B)
+            
+            for i in switched_indices:
+                if i < len(list_A):
+                    element = list_A[i]
+                    new_list_A.remove(element)
+                    new_list_B.append(element)
+                else:
+                    element = list_B[i - len(list_A)]
+                    new_list_B.remove(element)
+                    new_list_A.append(element)
+            
+            res_partitions.append((set(new_list_A), set(new_list_B), partition[2]))
+    
+    return res_partitions
+
+def get_local_partitions(partitions, percentage_of_nodes):
+    res_partitions = []
+    for partition in partitions:
+        local_partitions = get_local_partitions_from_partition(partition, percentage_of_nodes)
+        for local_partition in local_partitions:
+            res_partitions.append(local_partition)
+        
+    return res_partitions
+    
+def clean_error_partitions(partitions):
+    res_partitions = []
+    for partition in partitions:
+        if len(partition[0]) != 0 and len(partition[1]) != 0:
+            res_partitions.append(partition)
+    return res_partitions
+
+def get_start_end_activites(activities, adjacency_matrix):
+    start_activities = []
+    end_activities = []
+    
+    num_columns = len(adjacency_matrix[0])
+    start_activities_index = []
+
+    for col in range(num_columns):
+        if adjacency_matrix[0][col] != 0:
+            start_activities_index.append(col)
+            
+    end_activities_index = []
+    for row_idx, row in enumerate(adjacency_matrix):
+        if row[1] != 0:
+            end_activities_index.append(row_idx)
+    
+    for index in start_activities_index:
+        start_activities.append(activities[index])
+    for index in end_activities_index:
+        end_activities.append(activities[index])
+    return start_activities, end_activities
+    
+    
+def generate_custom_cut_type_partitions(activities, adjacency_matrix_P):
+    list_activities = set(activities) - {"start", "end"}
+    cut_types = ["exc_tau"]
+    res_partitions = []
+    for cut_type in cut_types:
+        res_partitions.append((list_activities, set(), {cut_type}))
+        
+    cut_types = ["loop_tau"]
+    for cut_type in cut_types:
+        start_activities, end_activities = get_start_end_activites(activities, adjacency_matrix_P)
+        res_partitions.append((set(start_activities), set(end_activities), {cut_type}))
+    
+    return res_partitions
+
+def find_parent_folder(target_name, start_path=os.getcwd()):
+    current_path = os.path.abspath(start_path)
+
+    while current_path != "/":  # Stop at the root directory
+        basename = os.path.basename(current_path)
+        if basename == target_name:
+            return current_path
+        current_path = os.path.dirname(current_path)
+    
+    return None  # Target folder not found in the hierarchy
+
+def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, ratio, percentage_of_nodes = 0):
     model_setting_paths = []
     model_paths = []
+    
+    result = find_parent_folder(root_file_path)
+    gnn_file_path = os.path.join(result, gnn_file_path)
+    
     
     if os.path.exists(gnn_file_path):
         for root, _ , files in os.walk(gnn_file_path):
@@ -726,11 +972,21 @@ def get_partitions_from_gnn(gnn_file_path, logP, logM, sup, ratio):
         model_parameters.append((data_settings, model_args))
 
     data = generate_data_from_log(logP, logM, sup, ratio)
+    
 
     possible_partitions = []
     for data_setting, model_args in model_parameters:
         cut_type = data_setting["Cut_type"]
-        model_number = int(data_setting["Model_number"])
+        model_number = int(data_setting["model_number"])
+        
+        if data["Number_nodes"] > int(model_args["input_dim"]):
+            print("Error: the number of nodes in the genrated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
+            return None
+        
+        data = pad_data(data, int(model_args["input_dim"]))
+        if data["Number_nodes"] != int(model_args["input_dim"]):
+            print("Error: the number of nodes in the genrated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
+            return None
         
         cur_model_path = ""
         for model_path in model_paths:
@@ -742,25 +998,39 @@ def get_partitions_from_gnn(gnn_file_path, logP, logM, sup, ratio):
             print("Error: no model found for cut type " + cut_type)
             return None
         
-        cur_model = generate_model(int(model_args["model_number"]), int(model_args["input_dim"]), int(model_args["hidden_dim"]), int(model_args["output_dim"]))
+        cur_model = generate_model(model_args)
         cur_model.load_state_dict(torch.load(cur_model_path))
         
         
         binary_prediction = get_prediction_from_model(model_number, cur_model, data)
-        binary_mask = [0,0] + [ 1 if element != 0 else 0 for element in data["Activity_count_P"] ]
-        result_array = torch.where(binary_mask == 0, torch.tensor(-1), binary_prediction)
+        binary_prediction_list = binary_prediction.view(-1).tolist()
+        binary_prediction_list = [int(element) for element in binary_prediction_list]
+        binary_mask = [1 if element != 0 else 0 for element in data["Activity_count_P"] ]
+        binary_mask[0] = 0 # start
+        binary_mask[1] = 0 # end
+        
+        for i, mask in enumerate(binary_mask):
+            if mask == 0:
+                binary_prediction_list[i] = -1
         
         partitionA = set()
         partitionB = set()
         
-        for i, pred in enumerate(result_array):
+        for i, pred in enumerate(binary_prediction_list):
             if pred == 0:
                 partitionA.add(data["Labels"][i])
             if pred == 1:
                 partitionB.add(data["Labels"][i])
-        possible_partitions.append((partitionA, partitionB, cut_type))
+        possible_partitions.append((partitionA, partitionB, {cut_type}))
 
-    return possible_partitions    
+    possible_local_partitions = get_local_partitions(possible_partitions, percentage_of_nodes)
+    possible_local_partitions_cleaned = clean_error_partitions(possible_local_partitions)
+    
+    custom_cut_types = generate_custom_cut_type_partitions(data["Labels"],data["Adjacency_matrix_P"])
+    
+    possible_local_partitions = possible_local_partitions_cleaned + custom_cut_types
+
+    return possible_local_partitions    
 
 
 

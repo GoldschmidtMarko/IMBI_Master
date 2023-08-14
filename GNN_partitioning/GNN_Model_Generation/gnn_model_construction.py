@@ -29,7 +29,7 @@ import gnn_models
 
 relative_path = "GNN_partitioning/GNN_Data"
 # current max = 6000
-dataSet_numbers = 6000000
+dataSet_numbers = 1000
 random_seed = 1996
 show_gradient = False
 use_symmetric = True
@@ -63,7 +63,7 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
         fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
         
         # Add a global title
-        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Hidden dim: " + str(data_settings["hidden_dim"]) + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]))
+        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]))
         
         axes[0].boxplot(data_accuracy_list)
         axes[0].set_title('Accuracy')
@@ -87,7 +87,7 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
         # show plot
         # plt.show()
         
-        fig_name = "/GNN_results_" + data_settings["Cut_type"] + "_hidden_dim_" + str(data_settings["hidden_dim"]) + "_dataset_" + str(len(df)) + "_model_" + str(data_settings["model_number"]) + "_epochs_" + str(data_settings["num_epochs"]) + "_batch_" + str(data_settings["batch_size"])
+        fig_name = "/GNN_results_" + data_settings["Cut_type"] + "_dataset_" + str(len(df)) + "_model_" + str(data_settings["model_number"]) + "_epochs_" + str(data_settings["num_epochs"]) + "_batch_" + str(data_settings["batch_size"])
         fig.savefig(file_path + fig_name + ".pdf")
     
 
@@ -507,16 +507,15 @@ def read_all_data_for_cut_Type(file_path, cut_type):
     data_dic = setup_dataSet(data_dic,max_node_size_in_dataset)
     return data_dic, max_node_size_in_dataset
                
-def save_model_parameter(file_name,data_settings, model_args):
+def save_model_parameter(file_name, data_settings, model_args):
     with open(file_name, 'w') as file:
         file.write('# Data Settings\n')
         for key, value in data_settings.items():
             file.write(key + ': ' + str(value) + '\n')
         file.write('\n')
         file.write('# Model Settings\n')
-        text = ["model_number", "max_node_size_in_dataset", "hidden_dim", "output_dim"]
-        for i, arg in enumerate(model_args):
-            file.write(text[i] + ': ' + str(arg) + '\n')
+        for key, value in model_args.items():
+            file.write(key + ': ' + str(value) + '\n')
             
                     
 def generate_Models(file_path_models, save_results = False, file_path_results = ""):
@@ -528,8 +527,10 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 9 - 3 dense with adj and weight
     # 10 - k dense with adj and weight
     # 11 - 3 dense with adj and weight and node frequency
+    # 12 - conv with node degree as node feature
     model_number = 9
     cut_types = ["par", "exc","loop", "seq"]
+    cut_types = ["seq"]
     num_epochs = 30
     batch_size = 10
     
@@ -541,14 +542,22 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
         data_settings = {"Cut_type" : cut_type,
                         "model_number" : model_number,
                         "num_epochs" : num_epochs,
-                        "batch_size" : batch_size,
-                        "hidden_dim" : hidden_dim}
+                        "batch_size" : batch_size}
 
 
         # Example usage
         output_dim = 1  # Number of output classes
+        global_features = 3
+        node_features = 1
         print("Generating Model: " + str(model_number))
-        model_args = [model_number, max_node_size_in_dataset, hidden_dim, output_dim]
+        
+        # model_number, input_dim, hidden_dim, output_dim, node_features, global_features
+        model_args = {"model_number" : model_number,
+                        "input_dim" : max_node_size_in_dataset,
+                        "hidden_dim" : hidden_dim,
+                        "output_dim" : output_dim,
+                        "node_features" : node_features,
+                        "global_features" : global_features}
         
         model = gnn_models.generate_model_args(model_args)
         

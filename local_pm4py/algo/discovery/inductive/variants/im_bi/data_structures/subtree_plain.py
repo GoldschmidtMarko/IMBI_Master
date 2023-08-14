@@ -19,6 +19,7 @@ import networkx as nx
 from pm4py.algo.filtering.log.start_activities import start_activities_filter
 from pm4py.algo.filtering.log.end_activities import end_activities_filter
 from pm4py.algo.discovery.dfg.utils.dfg_utils import get_activities_from_dfg
+from GNN_partitioning.GNN_Model_Generation.gnn_models import get_partitions_from_gnn
 import logging
 
 from local_pm4py.algo.analysis import dfg_functions
@@ -220,6 +221,20 @@ def repetition_Factor(log, activity_key) -> float:
     
     return (numberTraces / (totalNumberEvents / numberActivities))
 
+def show_dfg(log):
+    parameters = {}
+    start_act_cur_dfg = start_activities_get.get_start_activities(log, parameters=parameters)
+    end_act_cur_dfg = end_activities_get.get_end_activities(log, parameters=parameters)
+    cur_dfg = dfg_inst.apply(log, parameters=parameters)
+    view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
+    
+def save_dfg(log, filename):
+    parameters = {}
+    start_act_cur_dfg = start_activities_get.get_start_activities(log, parameters=parameters)
+    end_act_cur_dfg = end_activities_get.get_end_activities(log, parameters=parameters)
+    cur_dfg = dfg_inst.apply(log, parameters=parameters)
+    save_vis_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg, filename)
+
 def combine_score_values(scoreP, scoreM, cost_Variant, ratio, size_par):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return scoreP - ratio * size_par * scoreM
@@ -330,6 +345,7 @@ def get_score_for_cut_type(log, logM, A, B, cut_Type, sup, ratio, cost_Variant =
 
     return 0
 
+# outside call function
 def get_best_cut_with_cut_type(log, logM, cut_type = "", sup= None, ratio = None, pruning_threshold = 0, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
     
         log_art = artificial_start_end(log.__deepcopy__())
@@ -350,7 +366,7 @@ def get_best_cut_with_cut_type(log, logM, cut_type = "", sup= None, ratio = None
         activity_key = exec_utils.get_param_value(constants.PARAMETER_CONSTANT_ACTIVITY_KEY, parameters, 
                                                   pmutil.xes_constants.DEFAULT_NAME_KEY)
         
-        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,cost_Variant,"None",parameters)
+        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, _ = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,cost_Variant,"None",parameters)
         
         for cur_cut in sorted_cuts[:10]:
             if cur_cut[1] == cut_type:
@@ -358,6 +374,7 @@ def get_best_cut_with_cut_type(log, logM, cut_type = "", sup= None, ratio = None
                 
         return False, cut
 
+# outside call function
 def get_best_cut(log, logM, sup= None, ratio = None, pruning_threshold = 0, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
     
         log_art = artificial_start_end(log.__deepcopy__())
@@ -378,11 +395,11 @@ def get_best_cut(log, logM, sup= None, ratio = None, pruning_threshold = 0, cost
         activity_key = exec_utils.get_param_value(constants.PARAMETER_CONSTANT_ACTIVITY_KEY, parameters, 
                                                   pmutil.xes_constants.DEFAULT_NAME_KEY)
         
-        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,cost_Variant,"None",parameters)
+        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, _ = get_cuts(log,logM, log_art, logM_art,start_activities,end_activities,start_activitiesM,end_activitiesM,activities,activity_key,sup,ratio,pruning_threshold,size_par,cost_Variant,"None",parameters)
         return cut
 
 
-def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None):
+def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None, useGNN = False):
         logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in log])
         logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in logM])
         
@@ -405,6 +422,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
         new_log_M = None
         
         show_runtime = False
+        possible_partitions = None
                 
         if isbase == False:
             dfg2 = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
@@ -451,10 +469,18 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
 
                 start_partition = time.time()
                 
-                # from GNN_partitioning.GNN_Data_Generation.gnn_generation import generate_adjacency_matrix_from_log
+                gnn_path = 'GNN_partitioning\\GNN_Model'
+                root_file_path = 'IMBI_Master'
                 
-                cut_opti = False
-                possible_partitions = dfg_functions.find_possible_partitions(netP)
+                if useGNN == True:
+                    possible_partition_gnn = get_partitions_from_gnn(root_file_path, gnn_path, log, logM, sup, ratio, 0.5)
+                    if possible_partition_gnn == None:
+                        possible_partitions = dfg_functions.find_possible_partitions(netP)
+                    else:
+                        possible_partitions = possible_partition_gnn
+                else:
+                    possible_partitions = dfg_functions.find_possible_partitions(netP)
+                    
                 end_partition = time.time()
                 
                 partition_time = end_partition - start_partition
@@ -528,12 +554,13 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                         
                     #####################################################################
                     # seq check
-                    fit_seq = dfg_functions.fit_seq(logP_var, A, B)
-                    if fit_seq > 0.0:
-                        cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP,  cost_Variant)
-                        cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM,  cost_Variant)
-                        
-                        cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M,combine_score_values(cost_seq_P,cost_seq_M,cost_Variant,ratio,size_par), fit_seq))
+                    if "seq" in type:
+                        fit_seq = dfg_functions.fit_seq(logP_var, A, B)
+                        if fit_seq > 0.0:
+                            cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP,  cost_Variant)
+                            cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM,  cost_Variant)
+                            
+                            cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M,combine_score_values(cost_seq_P,cost_seq_M,cost_Variant,ratio,size_par), fit_seq))
                     #####################################################################
 
 
@@ -596,8 +623,75 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
             else:
                 cut = ('none', 'none', 'none','none','none', 'none')
 
-        return isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M
+        return isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, possible_partitions
 
+def get_gnn_cut_distance_from_best_cut(best_cut, cuts_gnn):
+    cut_type = best_cut[1]
+    best_gnn_cut_list = []
+    for cut in cuts_gnn:
+        if cut_type in cut[2]:
+            best_gnn_cut_list.append(cut)
+        
+    if len(best_gnn_cut_list) == 0:
+        return 100
+    
+    best_distance = len(best_cut[0][0]) + len(best_cut[0][1])
+    for best_gnn_cut in best_gnn_cut_list:
+        if len(best_cut[0][0]) + len(best_cut[0][1]) != len(best_gnn_cut[0]) + len(best_gnn_cut[1]):
+            best_distance = 101
+            break
+    
+        cur_distance = 0
+        best_cut_parA, best_cut_parB = best_cut[0]
+        best_gnn_cut_parA, best_gnn_cut_parB = best_gnn_cut[0], best_gnn_cut[1]
+        
+        for act in best_cut_parA:
+            if act not in best_gnn_cut_parA:
+                cur_distance += 1
+        for act in best_cut_parB:
+            if act not in best_gnn_cut_parB:
+                cur_distance += 1
+                
+        if cur_distance < best_distance:
+            best_distance = cur_distance
+            
+    return best_distance
+
+import fpdf
+from PIL import Image
+def save_deviating_cuts(filename, log, logM, cut, cut_gnn, solution_distance, sup= None, ratio = None, pruning_threshold = 0, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+    pdf = fpdf.FPDF(format='letter') #pdf format
+    pdf.add_page() #create new page
+    pdf.set_font("Arial", size=8) # font and textsize
+
+    pdf.cell(1000, 4, txt="cut | cut_gnn | solution_distance | sup | ratio | pruning_threshold | cost_Variant | dfgP | dfgM", ln=1, align="L")
+    pdf.cell(1000, 4, txt="", ln=1, align="L")
+    pdf.cell(1000, 4, txt="sup: " + str(sup), ln=1, align="L")
+    pdf.cell(1000, 4, txt="ratio: " + str(ratio), ln=1, align="L")
+    pdf.cell(1000, 4, txt="pruning_threshold: " + str(pruning_threshold), ln=1, align="L")
+    pdf.cell(1000, 4, txt="cost_Variant: " + str(cost_Variant), ln=1, align="L")
+    pdf.cell(1000, 4, txt="", ln=1, align="L")
+    pdf.cell(1000, 4, txt="cut: " + str(cut), ln=1, align="L")
+    pdf.cell(1000, 4, txt="cut_gnn: " + str(cut_gnn), ln=1, align="L")
+    pdf.cell(1000, 4, txt="solution_distance: " + str(solution_distance), ln=1, align="L")
+    pdf.cell(1000, 4, txt="percentage: " + str(solution_distance/(len(cut[0][0]) + len(cut[0][1]))), ln=1, align="L")
+    
+    for log_name, cur_log in zip(["logP_img.png", "logM_img.png"],[log, logM]):
+        save_dfg(cur_log, log_name)
+        img = Image.open(log_name)
+        
+        width,height = img.size
+        
+        # print(width, height)
+        pdf.image(log_name, w=min(70,width/8),h=min(70,height/8))
+        img.close()
+    pdf.output(filename + ".pdf")
+    
+
+    for log_name, cur_log in zip(["logP_img.png", "logM_img.png"],[log, logM]):
+        if os.path.exists(log_name):
+            # Delete the file
+            os.remove(log_name)
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
@@ -663,8 +757,21 @@ class SubtreePlain(object):
                                                     pmutil.xes_constants.DEFAULT_NAME_KEY)
         
         
-        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters)
+        # gnn_cut
+        _, cut_gnn, sorted_cuts_gnn, _, _, _, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = True)
+        
+        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, _ = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters)
         self.detected_cut = detected_cut
+        
+        if isbase == False:
+            if cut_gnn[1] != cut[1]:
+                solution_distance = get_gnn_cut_distance_from_best_cut(cut, possible_partitions)
+                if solution_distance == 0:
+                    freeFileNumber = 1
+                    filename = "Deviations"
+                    while(os.path.isfile(filename + str(freeFileNumber) + ".pdf")):
+                        freeFileNumber += 1
+                    save_deviating_cuts(filename + str(freeFileNumber), self.log, self.logM, cut, cut_gnn, solution_distance, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, cost_Variant = cost_Variant)
 
         if debugCutDetection:
             dfg_temp = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)

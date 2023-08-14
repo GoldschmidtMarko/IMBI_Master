@@ -15,7 +15,6 @@ sys.path.append('c:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master')
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut_with_cut_type
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import artificial_start_end
-from local_pm4py.algo.discovery.dfg import algorithm as dfg_discovery
 from pm4py.statistics.end_activities.log import get as end_activities_get
 from pm4py.statistics.start_activities.log import get as start_activities_get
 from pm4py.algo.discovery.dfg.variants import native as dfg_inst
@@ -28,6 +27,9 @@ from tqdm import tqdm
 import warnings
 from pm4py.objects.log.exporter.xes.variants.etree_xes_exp import Parameters as Export_Parameter
 import psutil
+from GNN_partitioning.GNN_Model_Generation.gnn_models import generate_adjacency_matrix_from_log
+from GNN_partitioning.GNN_Model_Generation.gnn_models import generate_union_adjacency_matrices
+
 
 
 random_seed = 1996
@@ -417,61 +419,7 @@ def generate_log_from_process_tree_for_cut_type(activites_list, process_tree, no
     
   return log
 
-# expands the matrix matrix_P and matrix_M so that the columns/ rows of both matrix have the the same activity
-def generate_union_adjacency_matrices(matrix_P, nodeListP, matrix_M, nodeListM):
-  # Find the common set of labels
-  common_labels = ["start", "end"]
-  common_labels = common_labels + list(set(nodeListP).union(set(nodeListM)) - {"start", "end"})
-  
-  # Create new expanded matrices
-  expanded_matrix1 = np.zeros((len(common_labels), len(common_labels)), dtype=int)
-  expanded_matrix2 = np.zeros((len(common_labels), len(common_labels)), dtype=int)
 
-  # Copy values from original matrices to expanded matrices
-  for i, label in enumerate(common_labels):
-    if label in nodeListP:
-        row_idx = nodeListP.index(label)
-        expanded_matrix1[i, i] = matrix_P[row_idx, row_idx]  # Diagonal element
-        for j, other_label in enumerate(common_labels[i+1:], start=i+1):
-            if other_label in nodeListP:
-                other_row_idx = nodeListP.index(other_label)
-                expanded_matrix1[i, j] = matrix_P[row_idx, other_row_idx]
-                expanded_matrix1[j, i] = matrix_P[other_row_idx, row_idx]
-    if label in nodeListM:
-        row_idx = nodeListM.index(label)
-        expanded_matrix2[i, i] = matrix_M[row_idx, row_idx]  # Diagonal element
-        for j, other_label in enumerate(common_labels[i+1:], start=i+1):
-            if other_label in nodeListM:
-                other_row_idx = nodeListM.index(other_label)
-                expanded_matrix2[i, j] = matrix_M[row_idx, other_row_idx]
-                expanded_matrix2[j, i] = matrix_M[other_row_idx, row_idx]
-
-  return common_labels, expanded_matrix1, expanded_matrix2
-
-def generate_adjacency_matrix_from_log(log):
-  log_art = artificial_start_end(log.__deepcopy__())
-  dfg = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-  
-  
-  unique_nodes = ["start", "end"]
-  unique_nodes = unique_nodes + list(set([node for edge in dfg.keys() for node in edge]) - {"start", "end"})
-  num_nodes = len(unique_nodes)
-  
-  # Initialize an empty adjacency matrix
-  adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
-
-  # Populate the adjacency matrix
-  for edge, count in dfg.items():
-      source_node, target_node = edge
-      source_index = unique_nodes.index(source_node)
-      target_index = unique_nodes.index(target_node)
-      adj_matrix[source_index, target_index] = count
-  
-  # print(unique_nodes)
-  # print(adj_matrix)
-  return unique_nodes, adj_matrix
-
-  
 def get_min_trace_length_from_log(log):
    # Initialize variables for longest and smallest trace length
   smallest_length = float("inf")
@@ -751,8 +699,7 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
     
   # excluded for now: single_activity, none
   # TODO add loop1
-  cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
-  cut_types = ["loop_tau"]
+  cut_types = ["exc", "seq", "par", "loop"]
     
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
   list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index, cut_type)
