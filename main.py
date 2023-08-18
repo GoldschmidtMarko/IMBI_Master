@@ -18,7 +18,7 @@ else:
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
 
 start = time.time()
-net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio,pruning_threshold=pruning_threshold, size_par=len(logP)/len(logM), cost_Variant=cost_Variant)
+net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio,pruning_threshold=pruning_threshold, size_par=len(logP)/len(logM), cost_Variant=cost_Variant, use_gnn=False)
 end = time.time()
 
 parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT:"pdf"}

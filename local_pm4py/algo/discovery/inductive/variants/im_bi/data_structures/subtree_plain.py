@@ -473,7 +473,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 root_file_path = 'IMBI_Master'
                 
                 if useGNN == True:
-                    possible_partition_gnn = get_partitions_from_gnn(root_file_path, gnn_path, log, logM, sup, ratio, 0.5)
+                    possible_partition_gnn = get_partitions_from_gnn(root_file_path, gnn_path, log, logM, sup, ratio, size_par, 0.3)
                     if possible_partition_gnn == None:
                         possible_partitions = dfg_functions.find_possible_partitions(netP)
                     else:
@@ -696,7 +696,7 @@ def save_deviating_cuts(filename, log, logM, cut, cut_gnn, solution_distance, su
 class SubtreePlain(object):
     def __init__(self, logp,logm, dfg, master_dfg, initial_dfg, activities, counts, rec_depth, noise_threshold=0,
                  start_activities=None, end_activities=None, initial_start_activities=None,
-                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+                 initial_end_activities=None, parameters=None, real_init=True, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
 
         if real_init:
             self.master_dfg = copy.copy(master_dfg)
@@ -723,11 +723,11 @@ class SubtreePlain(object):
             self.original_log = logp
             self.activities = None
             
-            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant = cost_Variant)
+            self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant = cost_Variant, use_gnn = use_gnn)
 
 
     def initialize_tree(self, dfg, logp, logm, initial_dfg, activities, second_iteration = False, end_call = True,
-                        parameters = None, sup = None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+                        parameters = None, sup = None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
 
         if activities is None:
             self.activities = get_activities_from_dfg(dfg)
@@ -742,10 +742,10 @@ class SubtreePlain(object):
         self.original_log = logp
         self.parameters = parameters
 
-        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant = cost_Variant)
+        self.detect_cut(second_iteration=False, parameters=parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant = cost_Variant, use_gnn = use_gnn)
         
 
-    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+    def detect_cut(self,second_iteration=False, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
         
         ratio = ratio
         sup = sup
@@ -757,16 +757,24 @@ class SubtreePlain(object):
                                                     pmutil.xes_constants.DEFAULT_NAME_KEY)
         
         
-        # gnn_cut
-        _, cut_gnn, sorted_cuts_gnn, _, _, _, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = True)
+        # gnn_cut 
+        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = use_gnn)
         
-        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, _ = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters)
         self.detected_cut = detected_cut
         
+        show_deviation = False
         if isbase == False:
-            if cut_gnn[1] != cut[1]:
+            if show_deviation:
+                if use_gnn == False:
+                    _, cut_gnn, _, _, _, _, _ = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = True)
+                else:
+                    cut_gnn = cut
+                    _, cut, _, _, _, _, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, pruning_threshold, size_par,cost_Variant,self.detected_cut,self.parameters,use_gnn = False)
+                
                 solution_distance = get_gnn_cut_distance_from_best_cut(cut, possible_partitions)
-                if solution_distance == 0:
+                print("solution_distance: " + str(solution_distance))
+                if cut_gnn[1] != cut[1]:
+                    solution_distance = get_gnn_cut_distance_from_best_cut(cut, possible_partitions)
                     freeFileNumber = 1
                     filename = "Deviations"
                     while(os.path.isfile(filename + str(freeFileNumber) + ".pdf")):
@@ -824,9 +832,6 @@ class SubtreePlain(object):
                                 file.write(str(cut_activity) + " | ")
                             file.write("\n")
                         
-            
-                
-        # print(cut)
 
         if cut[1] == 'par':
             self.detected_cut = 'parallel'
@@ -844,7 +849,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
         elif cut[1] == 'seq':
             self.detected_cut = 'sequential'
   
@@ -865,7 +870,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
         elif (cut[1] == 'exc') or (cut[1] == 'exc_tau'):
             self.detected_cut = 'concurrent'
             LAP,LBP = split.split('exc', [cut[0][0], cut[0][1]], self.log, activity_key)
@@ -892,7 +897,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
 
         elif cut[1] == 'loop':
             self.detected_cut = 'loopCut'
@@ -913,7 +918,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
 
         elif cut[1] == 'loop1':
             self.detected_cut = 'loopCut'
@@ -934,7 +939,7 @@ class SubtreePlain(object):
                                  end_activities=end_activities,
                                  initial_start_activities=self.initial_start_activities,
                                  initial_end_activities=self.initial_end_activities,
-                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                 parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
 
         elif cut[1] == 'strict_loop_tau':
             if cost_Variant != custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
@@ -956,7 +961,7 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
         elif cut[1] == 'loop_tau':
             self.detected_cut = 'loopCut'
             if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
@@ -978,7 +983,7 @@ class SubtreePlain(object):
                                     end_activities=end_activities,
                                     initial_start_activities=self.initial_start_activities,
                                     initial_end_activities=self.initial_end_activities,
-                                    parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                    parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
 
             elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
 
@@ -995,7 +1000,7 @@ class SubtreePlain(object):
                                 end_activities=end_activities,
                                 initial_start_activities=self.initial_start_activities,
                                 initial_end_activities=self.initial_end_activities,
-                                parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant))
+                                parameters=parameters, sup= sup, ratio = input_ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
 
         elif cut[1] == 'none':
             self.detected_cut = 'flower'
@@ -1003,10 +1008,10 @@ class SubtreePlain(object):
 
 
 def make_tree(logp, logm, dfg, master_dfg, initial_dfg, activities, c, recursion_depth, noise_threshold, start_activities,
-              end_activities, initial_start_activities, initial_end_activities, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE):
+              end_activities, initial_start_activities, initial_end_activities, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
 
     tree = SubtreePlain(logp,logm, dfg, master_dfg, initial_dfg, activities, c, recursion_depth, noise_threshold,
                         start_activities,
-                        end_activities, initial_start_activities, initial_end_activities, parameters=parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant)
+                        end_activities, initial_start_activities, initial_end_activities, parameters=parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn)
 
     return tree

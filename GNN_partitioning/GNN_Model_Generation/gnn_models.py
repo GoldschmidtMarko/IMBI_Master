@@ -595,6 +595,91 @@ def generate_Model_V12(node_features, global_features, hidden_dim, output_dim):
     
     return model
 
+# GCN with global variables weight matrix, and 2 graph convolution layers
+def generate_Model_V13(node_features, global_features, hidden_dim, output_dim):
+    class GraphConvolutionLayer(nn.Module):
+        def __init__(self, node_features, global_features, out_features):
+            super(GraphConvolutionLayer, self).__init__()
+            self.linear = nn.Linear(2 * node_features + global_features, out_features)
+
+        def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
+            # First graph convolution
+            output_conv_P = torch.matmul(weight_matrix_1, features_P)
+            
+            # Second graph convolution
+            output_conv_M = torch.matmul(weight_matrix_2, features_M)
+
+            # output = output_conv_P + output_conv_M
+            output = torch.cat((output_conv_P, output_conv_M), dim=1)
+            output = torch.cat((output, global_variables), dim=1)
+            
+            # n x (2*node_features + global variables)
+            output = self.linear(output)
+            
+            return output
+    
+    class SelfAttentionGCNLayer(nn.Module):
+        def __init__(self, in_features, out_features):
+            super(SelfAttentionGCNLayer, self).__init__()
+            self.in_features = in_features
+            self.out_features = out_features
+
+            self.W = nn.Parameter(torch.Tensor(in_features, out_features))
+            self.b = nn.Parameter(torch.Tensor(out_features))
+
+            nn.init.xavier_uniform_(self.W)
+            nn.init.zeros_(self.b)
+
+        def forward(self, node_features, weighted_adjacency_matrix):
+            """
+            node_features: Node feature matrix of shape (num_nodes, in_features)
+            weighted_adjacency_matrix: Weighted adjacency matrix of shape (num_nodes, num_nodes)
+            """
+            # Compute self-attention scores
+            attention_scores = torch.matmul(node_features, self.W) + self.b
+
+            # Compute attention weights using softmax
+            attention_weights = nn.functional.softmax(attention_scores, dim=1)
+
+            # Apply attention weights to input node features
+            updated_features = torch.matmul(weighted_adjacency_matrix, attention_weights)
+
+            return updated_features
+    
+    class GCNClassifier(nn.Module):
+        def __init__(self, node_Features, global_features, hidden_dim, output_dim):
+            super(GCNClassifier, self).__init__()
+            self.gc1 = GraphConvolutionLayer(node_Features, global_features, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim, global_features, hidden_dim)
+            self.attention = SelfAttentionGCNLayer(hidden_dim, hidden_dim)
+            self.gcEnd = GraphConvolutionLayer(hidden_dim, global_features, output_dim)
+            self.global_attention = nn.Linear(hidden_dim, 1)
+            self.final_linear = nn.Linear(hidden_dim + 12, output_dim)
+
+
+        def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
+            hidden1 = F.relu(self.gc1(weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables))
+            hidden1 = F.relu(self.gc2(weight_matrix_1, weight_matrix_2, hidden1, hidden1, global_variables))
+            # hidden1 = F.relu(self.attention(hidden1, weight_matrix_1))
+            # output = self.gcEnd(weight_matrix_1, weight_matrix_2, hidden1, hidden1, global_variables)
+            # output = self.output_layer(hidden1)
+            
+            # Global attention mechanism
+            global_attention_weights = torch.softmax(self.global_attention(hidden1), dim=0)
+            global_embedding = torch.sum(global_attention_weights * hidden1, dim=1)
+
+            global_embedding = global_embedding.unsqueeze(0).repeat(hidden1.shape[0], 1)  # Repeat for all nodes
+
+            combined = torch.cat([hidden1, global_embedding], dim=1)
+            
+            output = self.final_linear(combined)
+            return output
+    
+    # Create the GNN classifier model
+    model = GCNClassifier(node_features, global_features, hidden_dim, output_dim)
+    
+    return model
+
 
 
 def generate_model(model_args):
@@ -629,6 +714,8 @@ def generate_model(model_args):
         return generate_Model_V11(input_dim, hidden_dim, output_dim)
     elif model_number == 12:
         return generate_Model_V12(node_features, global_features, hidden_dim, output_dim)
+    elif model_number == 13:
+        return generate_Model_V13(node_features, global_features, hidden_dim, output_dim)
     
 def generate_model_args(model_args):
     return generate_model(model_args)
@@ -657,11 +744,16 @@ def transform_data_to_model(data):
     feature_node_frequencies_M = torch.from_numpy(data["Activity_count_M"]).unsqueeze(dim=1).to(torch.float32)
       
     # normalization, removed since it could have negative effects
-    torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
-    torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
+    if torch_matrix_P.max() != 0:
+        torch_matrix_P = torch_matrix_P / torch_matrix_P.max()
+    if torch_matrix_M.max() != 0:
+        torch_matrix_M = torch_matrix_M / torch_matrix_M.max()
     
-    feature_node_frequencies_P = feature_node_frequencies_P / feature_node_frequencies_P.max()
-    feature_node_frequencies_M = feature_node_frequencies_M / feature_node_frequencies_M.max()
+    if feature_node_frequencies_P.max() != 0: 
+        feature_node_frequencies_P = feature_node_frequencies_P / feature_node_frequencies_P.max()
+        
+    if feature_node_frequencies_M.max() != 0:
+        feature_node_frequencies_M = feature_node_frequencies_M / feature_node_frequencies_M.max()
     
     # Create the feature matrix
     global_feature = torch.tensor([[data["Support"], data["Ratio"], data["Size_par"]] for _ in range(data["Adjacency_matrix_P"].shape[0])])
@@ -700,8 +792,16 @@ def generate_adjacency_matrix(torch_matrix_P, torch_matrix_M, model_number, numb
 
 def get_node_degree(torch_matrix_P, torch_matrix_M):
     # Calculate the degree for each node
-    node_degree_P = torch.sum(torch_matrix_P > 0, dim=1, dtype=torch.float32, keepdim=True)
-    node_degree_M = torch.sum(torch_matrix_M > 0, dim=1, dtype=torch.float32, keepdim=True)
+    node_out_degree_P = torch.sum(torch_matrix_P > 0, dim=1, dtype=torch.float32, keepdim=True)
+    node_in_degree_P = torch.sum(torch_matrix_P > 0, dim=0, dtype=torch.float32, keepdim=True)
+    node_in_degree_P_T = torch.transpose(node_in_degree_P, 0, 1)
+    node_degree_P = torch.cat((node_out_degree_P, node_in_degree_P_T), dim=1)
+    
+    node_out_degree_M = torch.sum(torch_matrix_M > 0, dim=1, dtype=torch.float32, keepdim=True)
+    node_in_degree_M = torch.sum(torch_matrix_M > 0, dim=0, dtype=torch.float32, keepdim=True)
+    node_in_degree_M_T = torch.transpose(node_in_degree_M, 0, 1)
+    node_degree_M = torch.cat((node_out_degree_M, node_in_degree_M_T), dim=1)
+    
 
     return node_degree_P, node_degree_M
 
@@ -745,6 +845,9 @@ def get_model_outcome(model_number, model, data):
         
         return model(adj_mat_P, adj_mat_M, torch_matrix_P, torch_matrix_M, feature_node_frequencies_P, feature_node_frequencies_M, global_feature)
     elif model_number == 12:
+        node_degree_P, node_degree_M = get_node_degree(torch_matrix_P, torch_matrix_M)
+        return model(torch_matrix_P, torch_matrix_M, node_degree_P, node_degree_M, global_feature)
+    elif model_number == 13:
         node_degree_P, node_degree_M = get_node_degree(torch_matrix_P, torch_matrix_M)
         return model(torch_matrix_P, torch_matrix_M, node_degree_P, node_degree_M, global_feature)
         
@@ -801,7 +904,7 @@ def read_model_parameter(file_name):
 
     return data_settings, model_args
 
-def generate_data_from_log(logP, logM, sup, ratio):
+def generate_data_from_log(logP, logM, sup, ratio, size_par):
     unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
     unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
     unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
@@ -814,7 +917,7 @@ def generate_data_from_log(logP, logM, sup, ratio):
     unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
     unique_activity_count_M = get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
     
-    size_par = len(logP) / len(logM)
+    size_par = 1
     
     data = {"Adjacency_matrix_P": matrix_P,
             "Adjacency_matrix_M": matrix_M,
@@ -899,6 +1002,73 @@ def clean_error_partitions(partitions):
             res_partitions.append(partition)
     return res_partitions
 
+
+def is_possible_partition2(partition, activities, weighted_adjacency_matrix):
+    def dfs(node, visited, partition_index_A_set):
+        visited[node] = True
+        for neighbor in range(len(weighted_adjacency_matrix)):
+            if weighted_adjacency_matrix[node][neighbor] != 0 or weighted_adjacency_matrix[neighbor][node] != 0:
+                if neighbor in partition_index_A_set:
+                    if not visited[neighbor]:
+                        dfs(neighbor, visited, partition_index_A_set)
+
+    def find_indices(names_list, target_names):
+        indices = []
+        for name in target_names:
+            if name in names_list:
+                indices.append(names_list.index(name))
+            else:
+                indices.append(None)  # Name not found in the list
+        return indices
+    
+
+    # Create a dictionary to convert node labels to indices
+    partition_A = partition[0].copy()
+    partition_A.add("start")
+    partition_A_index = find_indices(activities, partition_A)
+
+    # Convert nodes to indices and initialize visited array
+    visited = [False] * len(weighted_adjacency_matrix)
+
+    # Start DFS from the first node in the set
+    dfs(partition_A_index[0], visited, partition_A_index)
+
+    # Check if all nodes in the set were visited
+    return all(visited[index] for index in partition_A_index)
+
+def is_possible_partition(partition, activities, adjacency_matrix):
+    def find_indices(names_list, target_names):
+        indices = []
+        for name in target_names:
+            if name in names_list:
+                indices.append(names_list.index(name))
+            else:
+                indices.append(None)  # Name not found in the list
+        return indices
+    
+    partition_A = partition[0].copy()
+    partition_A.add("start")
+    partition_A_index = find_indices(activities, partition_A)
+    
+    for a in partition[0]:
+        is_connected = False
+        for index in partition_A_index:
+            if index != activities.index(a):
+                if adjacency_matrix[activities.index(a)][index] != 0 or adjacency_matrix[index][activities.index(a)] != 0:
+                    is_connected = True
+                    break
+        if not is_connected:
+            return False
+    
+    return True
+
+def filter_impossible_partitions(partitions, activities, adjacency_matrix):
+    res_partitions = []
+    for partition in partitions:
+        if is_possible_partition2(partition,activities, adjacency_matrix):
+            res_partitions.append(partition)
+    return res_partitions
+
 def get_start_end_activites(activities, adjacency_matrix):
     start_activities = []
     end_activities = []
@@ -947,7 +1117,7 @@ def find_parent_folder(target_name, start_path=os.getcwd()):
     
     return None  # Target folder not found in the hierarchy
 
-def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, ratio, percentage_of_nodes = 0):
+def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, ratio, size_par, percentage_of_nodes = 0):
     model_setting_paths = []
     model_paths = []
     
@@ -971,7 +1141,7 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         data_settings, model_args = read_model_parameter(model_setting_path)
         model_parameters.append((data_settings, model_args))
 
-    data = generate_data_from_log(logP, logM, sup, ratio)
+    data = generate_data_from_log(logP, logM, sup, ratio, size_par)
     
 
     possible_partitions = []
@@ -980,12 +1150,12 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         model_number = int(data_setting["model_number"])
         
         if data["Number_nodes"] > int(model_args["input_dim"]):
-            print("Error: the number of nodes in the genrated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
+            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
             return None
         
         data = pad_data(data, int(model_args["input_dim"]))
         if data["Number_nodes"] != int(model_args["input_dim"]):
-            print("Error: the number of nodes in the genrated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
+            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
             return None
         
         cur_model_path = ""
@@ -1001,8 +1171,16 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         cur_model = generate_model(model_args)
         cur_model.load_state_dict(torch.load(cur_model_path))
         
+        # Freeze the model's parameters
+        for param in cur_model.parameters():
+            param.requires_grad = False
         
         binary_prediction = get_prediction_from_model(model_number, cur_model, data)
+        
+        if torch.any(torch.isnan(binary_prediction)):
+            print("Error: the model returned a nan value.")
+            return None
+        
         binary_prediction_list = binary_prediction.view(-1).tolist()
         binary_prediction_list = [int(element) for element in binary_prediction_list]
         binary_mask = [1 if element != 0 else 0 for element in data["Activity_count_P"] ]
@@ -1025,6 +1203,11 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
 
     possible_local_partitions = get_local_partitions(possible_partitions, percentage_of_nodes)
     possible_local_partitions_cleaned = clean_error_partitions(possible_local_partitions)
+    possible_local_partitions_filtered = filter_impossible_partitions(possible_local_partitions_cleaned, data["Labels"], data["Adjacency_matrix_P"])
+    
+    if len(possible_local_partitions_filtered) == 0:
+        print("Error: no possible partitions found. Filtered out all partitions.")
+        return None
     
     custom_cut_types = generate_custom_cut_type_partitions(data["Labels"],data["Adjacency_matrix_P"])
     

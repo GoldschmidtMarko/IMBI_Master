@@ -29,7 +29,7 @@ import gnn_models
 
 relative_path = "GNN_partitioning/GNN_Data"
 # current max = 6000
-dataSet_numbers = 1000
+dataSet_numbers = 10000
 random_seed = 1996
 show_gradient = False
 use_symmetric = True
@@ -263,7 +263,7 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
 
     # Define the optimizer
     # optimizer = optim.SGD(model.parameters(), lr=0.01, weight_decay=0.01)
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     # scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     
     # Create a data loader with the specified batch size
@@ -528,9 +528,9 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 10 - k dense with adj and weight
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
-    model_number = 9
-    cut_types = ["par", "exc","loop", "seq"]
-    cut_types = ["seq"]
+    model_number = 13
+    # cut_types = ["par", "exc","loop", "seq"]
+    cut_types = ["exc","loop"]
     num_epochs = 30
     batch_size = 10
     
@@ -548,7 +548,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
         # Example usage
         output_dim = 1  # Number of output classes
         global_features = 3
-        node_features = 1
+        node_features = 2
         print("Generating Model: " + str(model_number))
         
         # model_number, input_dim, hidden_dim, output_dim, node_features, global_features
