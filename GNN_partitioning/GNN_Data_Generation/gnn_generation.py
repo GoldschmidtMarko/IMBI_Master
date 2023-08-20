@@ -774,10 +774,15 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, prun
           break
   
   for key, dic_data in result_dic.items():
-    print(key)
-    for key, value in dic_data.items():
-      print("|" + str(key) + ": " + str(value) + "| ", end="")
-    print("")
+    if key != "loop_tau" and key != "exc_tau":
+      print("Cut: " + key)
+      total = 0
+      for key, value in dic_data.items():
+        print("|" + str(key) + ": " + str(value) + "| ", end="")
+        total += value
+      print("")
+      print("Total: " + str(total))
+      print("")
     
    
 def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index):

@@ -530,7 +530,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 12 - conv with node degree as node feature
     model_number = 13
     # cut_types = ["par", "exc","loop", "seq"]
-    cut_types = ["exc","loop"]
+    cut_types = ["seq","loop"]
     num_epochs = 30
     batch_size = 10
     

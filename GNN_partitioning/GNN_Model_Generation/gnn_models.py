@@ -596,7 +596,7 @@ def generate_Model_V12(node_features, global_features, hidden_dim, output_dim):
     return model
 
 # GCN with global variables weight matrix, and 2 graph convolution layers
-def generate_Model_V13(node_features, global_features, hidden_dim, output_dim):
+def generate_Model_V13(input_dim, node_features, global_features, hidden_dim, output_dim):
     class GraphConvolutionLayer(nn.Module):
         def __init__(self, node_features, global_features, out_features):
             super(GraphConvolutionLayer, self).__init__()
@@ -647,36 +647,40 @@ def generate_Model_V13(node_features, global_features, hidden_dim, output_dim):
             return updated_features
     
     class GCNClassifier(nn.Module):
-        def __init__(self, node_Features, global_features, hidden_dim, output_dim):
+        def __init__(self, input_dim,  node_Features, global_features, hidden_dim, output_dim):
             super(GCNClassifier, self).__init__()
             self.gc1 = GraphConvolutionLayer(node_Features, global_features, hidden_dim)
             self.gc2 = GraphConvolutionLayer(hidden_dim, global_features, hidden_dim)
             self.attention = SelfAttentionGCNLayer(hidden_dim, hidden_dim)
             self.gcEnd = GraphConvolutionLayer(hidden_dim, global_features, output_dim)
             self.global_attention = nn.Linear(hidden_dim, 1)
-            self.final_linear = nn.Linear(hidden_dim + 12, output_dim)
+            self.final_linear = nn.Linear(hidden_dim + input_dim, output_dim)
 
 
         def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
-            hidden1 = F.relu(self.gc1(weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables))
-            hidden1 = F.relu(self.gc2(weight_matrix_1, weight_matrix_2, hidden1, hidden1, global_variables))
-            # hidden1 = F.relu(self.attention(hidden1, weight_matrix_1))
-            # output = self.gcEnd(weight_matrix_1, weight_matrix_2, hidden1, hidden1, global_variables)
-            # output = self.output_layer(hidden1)
+            hidden = F.relu(self.gc1(weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables))
+            # splitIndex = int(hidden.shape[1]/2)
+            # hidden_left = hidden[:, :splitIndex]
+            # hidden_right = hidden[:, splitIndex:]
+            hidden = F.relu(self.gc2(weight_matrix_1, weight_matrix_2, hidden, hidden, global_variables))
             
             # Global attention mechanism
-            global_attention_weights = torch.softmax(self.global_attention(hidden1), dim=0)
-            global_embedding = torch.sum(global_attention_weights * hidden1, dim=1)
+            # hidden = (N x hidden_dim)
+            # global_attention_weights = (N x 1)
+            
+            global_attention_weights = torch.softmax(self.global_attention(hidden), dim=0)
+            global_embedding = torch.sum(global_attention_weights * hidden, dim=1)
+            # (N x 1)
 
-            global_embedding = global_embedding.unsqueeze(0).repeat(hidden1.shape[0], 1)  # Repeat for all nodes
+            global_embedding = global_embedding.unsqueeze(0).repeat(hidden.shape[0], 1)  # Repeat for all nodes
 
-            combined = torch.cat([hidden1, global_embedding], dim=1)
+            combined = torch.cat([hidden, global_embedding], dim=1)
             
             output = self.final_linear(combined)
             return output
     
-    # Create the GNN classifier model
-    model = GCNClassifier(node_features, global_features, hidden_dim, output_dim)
+    # Create the GNN classifier model  
+    model = GCNClassifier(input_dim, node_features, global_features, hidden_dim, output_dim)
     
     return model
 
@@ -715,7 +719,7 @@ def generate_model(model_args):
     elif model_number == 12:
         return generate_Model_V12(node_features, global_features, hidden_dim, output_dim)
     elif model_number == 13:
-        return generate_Model_V13(node_features, global_features, hidden_dim, output_dim)
+        return generate_Model_V13(input_dim, node_features, global_features, hidden_dim, output_dim)
     
 def generate_model_args(model_args):
     return generate_model(model_args)
@@ -1209,7 +1213,8 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         print("Error: no possible partitions found. Filtered out all partitions.")
         return None
     
-    custom_cut_types = generate_custom_cut_type_partitions(data["Labels"],data["Adjacency_matrix_P"])
+    # custom_cut_types = generate_custom_cut_type_partitions(data["Labels"],data["Adjacency_matrix_P"])
+    custom_cut_types = []
     
     possible_local_partitions = possible_local_partitions_cleaned + custom_cut_types
 
