@@ -1,0 +1,13 @@
+# Data Settings
+Cut_type: exc
+model_number: 13
+num_epochs: 30
+batch_size: 10
+
+# Model Settings
+model_number: 13
+input_dim: 12
+hidden_dim: 32
+output_dim: 1
+node_features: 2
+global_features: 3
