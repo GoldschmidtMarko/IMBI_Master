@@ -95,4 +95,58 @@ def apply_petri(LPlus, LMinus, net, i_m, i_f):
     return measures
 
 
+def apply_petri_silent(LPlus, LMinus, net, i_m, i_f):
+    measures = {}
+
+    parameter = {alignments.Parameters.SHOW_PROGRESS_BAR: False}
+    alp = alignments.apply_log(LPlus, net, i_m, i_f,parameters=parameter)
+    
+    
+    fp_inf = replay_fitness.evaluate(alp,parameters=parameter, variant=replay_fitness.Variants.ALIGNMENT_BASED)
+    fp = fp_inf['averageFitness']
+    fp_pef = fp_inf['percentage_of_fitting_traces']/100
+    # roc_data = [('p', x['fitness']) for x in alp]
+
+
+    ################################################################################
+    prec_Plus = precision_evaluator.apply(LPlus, net, i_m, i_f,parameters=parameter,
+                                          variant=precision_evaluator.Variants.ALIGN_ETCONFORMANCE)
+    ################################################################################
+
+
+    alm = alignments.apply_log(LMinus, net, i_m, i_f,parameters=parameter)
+    fm_inf = replay_fitness.evaluate(alm,parameters=parameter, variant=replay_fitness.Variants.ALIGNMENT_BASED)
+    fm = fm_inf['averageFitness']
+    fm_pef = fm_inf['percentage_of_fitting_traces']/100
+    # roc_data += [('n', x['fitness']) for x in alm]
+
+
+    measures['acc'] = round(fp - fm,2)
+    measures['F1'] = round(2 * ((fp*(1-fm))/(fp+(1-fm))),2)
+    measures['precision'] = round(prec_Plus,2)
+    measures['fitP'] = round(fp,2)
+    measures['fitM'] = round(fm,2)
+    measures['acc_perf'] = round(fp_pef - fm_pef,2)
+    measures['F1_perf'] = round(2 * ((fp_pef*(1-fm_pef))/(fp_pef+(1-fm_pef))),2)
+
+    TP = fp_pef*len(LPlus)
+    FP = fm_pef*len(LMinus)
+    FN = (1-fp_pef)*len(LPlus)
+    TN = (1-fm_pef)*len(LMinus)
+    measures['acc_ML'] = (TP+TN)/(TP+TN+FP+FN)
+    if (TP + FP) != 0:
+        measures['prc_ML'] = TP / (TP + FP)
+    else:
+        measures['prc_ML'] = 'ignore'
+
+    if (TP + FN) != 0:
+        measures['rec_ML'] = TP / (TP + FN)
+    else:
+        measures['rec_ML'] = 'ignore'
+    # measures['roc_data'] = roc_data
+
+
+    return measures
+
+
 

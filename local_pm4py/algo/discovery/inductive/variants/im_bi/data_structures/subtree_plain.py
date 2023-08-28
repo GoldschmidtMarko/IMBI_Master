@@ -30,7 +30,6 @@ from collections import Counter
 # TODO delete debuging code
 from pm4py import save_vis_dfg
 from pm4py import view_dfg
-debugCutDetection = True
 import os
 from tqdm import tqdm
 
@@ -483,6 +482,9 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                     
                 end_partition = time.time()
                 
+                if len(possible_partitions) >= 1000:
+                    print("Warning: Length of possible partitions is " + str(len(possible_partitions)))
+                
                 partition_time = end_partition - start_partition
                 if show_runtime:
                     print("Finding partition time: " + str(partition_time))
@@ -781,6 +783,7 @@ class SubtreePlain(object):
                         freeFileNumber += 1
                     save_deviating_cuts(filename + str(freeFileNumber), self.log, self.logM, cut, cut_gnn, solution_distance, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, cost_Variant = cost_Variant)
 
+        debugCutDetection = False
         if debugCutDetection:
             dfg_temp = dfg_discovery.apply(self.log_art, variant=dfg_discovery.Variants.FREQUENCY)
             start_act_cur_dfg = start_activities_get.get_start_activities(self.log_art, parameters=parameters)
@@ -831,7 +834,9 @@ class SubtreePlain(object):
                             for cut_activity in cut_activity_sets:
                                 file.write(str(cut_activity) + " | ")
                             file.write("\n")
-                        
+              
+        if self.rec_depth >= 30:
+            print("rec_depth: " + str(self.rec_depth))
 
         if cut[1] == 'par':
             self.detected_cut = 'parallel'
