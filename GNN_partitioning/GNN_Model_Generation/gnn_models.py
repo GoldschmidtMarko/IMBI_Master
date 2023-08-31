@@ -1007,7 +1007,7 @@ def clean_error_partitions(partitions):
     return res_partitions
 
 
-def is_possible_partition2(partition, activities, weighted_adjacency_matrix):
+def is_possible_partition(partition, activities, weighted_adjacency_matrix):
     def dfs(node, visited, partition_index_A_set):
         visited[node] = True
         for neighbor in range(len(weighted_adjacency_matrix)):
@@ -1040,38 +1040,57 @@ def is_possible_partition2(partition, activities, weighted_adjacency_matrix):
     # Check if all nodes in the set were visited
     return all(visited[index] for index in partition_A_index)
 
-def is_possible_partition(partition, activities, adjacency_matrix):
-    def find_indices(names_list, target_names):
-        indices = []
-        for name in target_names:
-            if name in names_list:
-                indices.append(names_list.index(name))
-            else:
-                indices.append(None)  # Name not found in the list
-        return indices
+def is_possible_partition_accurate(partition, activities, weighted_adjacency_matrix):
     
-    partition_A = partition[0].copy()
-    partition_A.add("start")
-    partition_A_index = find_indices(activities, partition_A)
+    cut_type = partition[2]
+    start_act_set = set()
+    end_act_set = set()
+    for index, value in enumerate(weighted_adjacency_matrix[activities.index("start")]):
+        if value != 0:
+            start_act_set.add(activities[index])
+    for index, value in enumerate(weighted_adjacency_matrix[:,activities.index("end")]):
+        if value != 0:
+            end_act_set.add(activities[index])
+            
     
-    for a in partition[0]:
-        is_connected = False
-        for index in partition_A_index:
-            if index != activities.index(a):
-                if adjacency_matrix[activities.index(a)][index] != 0 or adjacency_matrix[index][activities.index(a)] != 0:
-                    is_connected = True
-                    break
-        if not is_connected:
+    
+    if cut_type == "seq":
+        if len(set(partition[0]).intersection(start_act_set)) == 0:
             return False
-    
+        if len(set(partition[1]).intersection(end_act_set)) == 0:
+            return False
+        return True
+    elif cut_type == "par" or cut_type == "exc":
+        if len(set(partition[0]).intersection(start_act_set)) == 0:
+            return False
+        if len(set(partition[1]).intersection(start_act_set)) == 0:
+            return False
+        if len(set(partition[0]).intersection(end_act_set)) == 0:
+            return False
+        if len(set(partition[1]).intersection(end_act_set)) == 0:
+            return False
+        return True
+    elif cut_type == "loop":
+        if len(set(partition[0]).intersection(start_act_set)) == 0:
+            return False
+        if len(set(partition[0]).intersection(end_act_set)) == 0:
+            return False
+        return True
     return True
+    
 
 def filter_impossible_partitions(partitions, activities, adjacency_matrix):
     res_partitions = []
     for partition in partitions:
-        if is_possible_partition2(partition,activities, adjacency_matrix):
+        if is_possible_partition(partition,activities, adjacency_matrix):
             res_partitions.append(partition)
-    return res_partitions
+            
+    res_partitions_accurate = []
+    for partition in res_partitions:
+        if is_possible_partition_accurate(partition,activities, adjacency_matrix):
+            res_partitions_accurate.append(partition)
+        
+    return res_partitions_accurate
 
 def get_start_end_activites(activities, adjacency_matrix):
     start_activities = []

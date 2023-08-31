@@ -14,10 +14,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import fpdf
+import time
 from PIL import Image
 import multiprocessing
 from tqdm import tqdm
+import pm4py
 import os
+from pebble import ProcessPool
+from concurrent.futures import TimeoutError
 
 def visualize_cuts(fileName):
   pdf = fpdf.FPDF(format='letter') #pdf format
@@ -162,20 +166,34 @@ def get_log(file_name):
   return log
 
 def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, pruning_threshold = 0, use_gnn = False):
+  cur_time = time.time()
   logP = get_log(logPathP)
   logM = get_log(logPathM)
+  
+  time_loading = time.time() - cur_time
+  cur_time = time.time()
     
   # imbi_ali
   # print("Running IMbi_ali, GNN: " + str(use_gnn))
+
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, pruning_threshold = pruning_threshold, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
+
+  time_in_bi = time.time() - cur_time
+  cur_time = time.time()
   
   df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio,pruning_threshold = pruning_threshold, use_gnn = use_gnn)
+  
+  
+  time_measurement = time.time() - cur_time
+  cur_time = time.time()
   
   save_cuts = False
   if save_cuts == True:
     fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + logMName[:logMName.rfind(".")]
     visualize_cuts(fileName_cuts_ali)
+  
+  # print("Load: " + str(round(time_loading,2)) + " | Imbi: " + str(round(time_in_bi,2)) + " | Measure: " + str(round(time_measurement,2)))
   
   return df
 
@@ -242,8 +260,9 @@ def create_df():
   df['use_gnn'] = df['use_gnn'].astype(bool)
   return df
 
-def run_evaluation_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False):
-  
+
+def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_category = 1):
+
   def read_data_from_path(file_path):
     data = {}
     if os.path.exists(file_path):
@@ -324,6 +343,16 @@ def run_evaluation_synthetic(df, dataPath, num_data_per_category, using_gnn, max
                     matrix_M_arrayList.append(np_array)
     return data
 
+  def is_string_present(string, list):
+    if list == None:
+      return False
+    if len(list) == 0:
+      return False
+    for item in list:
+      if string in item[0] or string in item[1]:
+        return True
+    return False
+  
   def get_last_number(string_input):
     last_underscore_index = string_input.rfind("_")
     if last_underscore_index != -1:
@@ -351,54 +380,68 @@ def run_evaluation_synthetic(df, dataPath, num_data_per_category, using_gnn, max
             return int(number_part)
     return 101
   
-  def is_string_present(string, list):
-    if list == None:
-      return False
-    if len(list) == 0:
-      return False
-    for item in list:
-      if string in item[0] or string in item[1]:
-        return True
-    return False
-  
-  cut_types = ["par", "exc","loop", "seq"]
-  # cut_types = ["par", "exc", "seq"]
-  pathFiles = {key: [] for key in cut_types}
-  
-  currentPath = dataPath
-  if os.path.exists(dataPath):
-    for cut_type in cut_types:
-      currentPath = os.path.join(dataPath, cut_type)
-      continue_running = True
-      dirs_and_files = []
-      if os.path.exists(currentPath) and continue_running:
-        for root, _ , files in os.walk(currentPath):
-          dirs_and_files.append((root, _, files))
-        
-        for root, _, files in reversed(dirs_and_files):
-          if get_last_Data_number(root) <= max_node_size:
-            for file in files:
-              if not continue_running:
-                break
-              if file.endswith(".xes"):  # Filter for text files
-                found_file = os.path.join(root, file)
-                if "logP" in found_file:
-                  file_M = found_file.replace("logP", "logM")
-                  file_P = found_file
-                else:
-                  file_M = found_file
-                  file_P = found_file.replace("logM", "logP")
+  if use_synthetic:
+    cut_types = ["par", "exc","loop", "seq"]
+    # cut_types = ["par", "exc", "seq"]
+    pathFiles = {key: [] for key in cut_types}
+    currentPath = dataPath
+    if os.path.exists(dataPath):
+      for cut_type in cut_types:
+        currentPath = os.path.join(dataPath, cut_type)
+        continue_running = True
+        dirs_and_files = []
+        if os.path.exists(currentPath) and continue_running:
+          for root, _ , files in os.walk(currentPath):
+            dirs_and_files.append((root, _, files))
+          
+          for root, _, files in reversed(dirs_and_files):
+            if get_last_Data_number(root) <= max_node_size:
+              for file in files:
+                if not continue_running:
+                  break
+                if file.endswith(".xes"):  # Filter for text files
+                  found_file = os.path.join(root, file)
+                  if "logP" in found_file:
+                    file_M = found_file.replace("logP", "logM")
+                    file_P = found_file
+                  else:
+                    file_M = found_file
+                    file_P = found_file.replace("logM", "logP")
+                  
+                  
+                  input_detail_file = os.path.join(root, "Data_" + str(get_last_number(file_P)) + ".txt")
+                  if os.path.exists(input_detail_file):     
+                    if os.path.exists(file_M):
+                      if not is_string_present(file_P, pathFiles[cut_type]) and not is_string_present(file_M, pathFiles[cut_type]):
+                        data = read_data_from_path(input_detail_file)
+                        pathFiles[cut_type].append((file_P, file_M, data["Support"], data["Ratio"]))
+                    if len(pathFiles[cut_type]) >= num_data_per_category:
+                      continue_running = False
+                      break
+
+  else:
+    pathFiles = []
+    currentPath = dataPath
+    if os.path.exists(dataPath):
+      for root, _, files in os.walk(currentPath):
+          for file in files:
+            if file.endswith(".xes"):  # Filter for text files
+              found_file = os.path.join(root, file)
+              if "lp" in found_file:
+                file_M = found_file.replace("lp", "lm")
+                file_P = found_file
+              else:
+                file_M = found_file
+                file_P = found_file.replace("lm", "lp")
                 
-                
-                input_detail_file = os.path.join(root, "Data_" + str(get_last_number(file_P)) + ".txt")
-                if os.path.exists(input_detail_file):     
-                  if os.path.exists(file_M):
-                    if not is_string_present(file_P, pathFiles[cut_type]) and not is_string_present(file_M, pathFiles[cut_type]):
-                      data = read_data_from_path(input_detail_file)
-                      pathFiles[cut_type].append((file_P, file_M, data["Support"], data["Ratio"]))
-                  if len(pathFiles[cut_type]) >= num_data_per_category:
-                    continue_running = False
-                    break
+              if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
+                pathFiles.append((file_P, file_M))
+
+  return pathFiles
+def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False):
+  pathFiles = get_data_paths(True, dataPath, max_node_size, num_data_per_category)
+
+  TIMEOUT_SECONDS = 60
 
   for cut_type, dataList in pathFiles.items():
     print("Running: " + cut_type)
@@ -414,47 +457,118 @@ def run_evaluation_synthetic(df, dataPath, num_data_per_category, using_gnn, max
           df_temp = create_df()
           input_data.append((df_temp, cut_type, [data], [gnn], [0]))
       
-      pool_res = None
-      with multiprocessing.Pool(num_processors) as pool:
-          pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
-          
-          for result in pool_res:
-              # Process individual evaluation result
-              df = pd.concat([df, result])
+      pool_res = []
+      '''
+      pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
+      '''
+      
+      number_timesouts = 0
+      
+      # with multiprocessing.Pool(num_processors) as pool:
+      with ProcessPool(max_workers=num_processors) as pool:
+        
+        futures = [pool.schedule(run_evaluation_category_star, args=(one,), timeout=TIMEOUT_SECONDS) for one in input_data]
+        
+        # Create a tqdm progress bar to track the progress of futures
+        progress_bar = tqdm(total=len(futures), desc="Processing", unit="future")
+
+        
+        for future in futures:
+          try:
+            result = future.result()
+            pool_res.append(result)
+          except TimeoutError:
+            number_timesouts += 1
+            
+          # Update the progress bar
+          progress_bar.update(1)
+
+        # Close the progress bar after the loop finishes
+        progress_bar.close()
+
+        for result in pool_res:
+            # Process individual evaluation result
+            df = pd.concat([df, result])
+            
+      print("Timeout percentage: " + str(number_timesouts/len(input_data)))
     else: 
       df = run_evaluation_category(df, cut_type, dataList, using_gnn, [0])
   
   return df
 
-def run_evaluation_real(df, dataPath, sup_list, ratio_list, using_gnn, parallel = False):
-  pathFiles = []
+def run_evaluation_trace_variants_synthetic(dataPath, num_data_per_category, max_node_size = 100, parallel = False):
+  columns = ["miner","cut_type", "logP_Name", "logM_Name","trace_variants_P","trace_variants_M"]
+  df = pd.DataFrame(data=None, index=None, columns=columns, dtype=None, copy=None)
+  df['trace_variants_P'] = df['trace_variants_P'].astype(float)
+  df['trace_variants_M'] = df['trace_variants_M'].astype(float)
   
-  def is_string_present(string, list):
-    if list == None:
-      return False
-    if len(list) == 0:
-      return False
-    for item in list:
-      if string in item[0] or string in item[1]:
-        return True
-    return False
+  pathFiles = get_data_paths(True, dataPath, max_node_size, num_data_per_category)
   
+  for cut_type, dataList in pathFiles.items():
+    print("Running: " + cut_type)
+    if parallel:
+      num_processors_available = multiprocessing.cpu_count()
+      print("Number of available processors:", num_processors_available)
+      num_processors = max(1,round(num_processors_available/2))
+      print("Number of used processors:", num_processors)
+
+      input_data = []
+      for data in dataList:
+        df_temp = df.copy()
+        input_data.append((df_temp, cut_type, data))
+          
+      pool_res = None
+      with multiprocessing.Pool(num_processors) as pool:
+          pool_res = tqdm(pool.imap(run_evaluation_category_trace_variants_star, input_data),total=len(input_data))
+          
+          for result in pool_res:
+              # Process individual evaluation result
+              df = pd.concat([df, result])
+    else: 
+      for data in dataList:
+        df = run_evaluation_category_trace_variants(df, cut_type, data)
   
-  currentPath = dataPath
-  if os.path.exists(dataPath):
-    for root, _, files in os.walk(currentPath):
-        for file in files:
-          if file.endswith(".xes"):  # Filter for text files
-            found_file = os.path.join(root, file)
-            if "lp" in found_file:
-              file_M = found_file.replace("lp", "lm")
-              file_P = found_file
-            else:
-              file_M = found_file
-              file_P = found_file.replace("lm", "lp")
-              
-            if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
-              pathFiles.append((file_P, file_M))
+  return df
+
+def run_evaluation_trace_variants_real(dataPath, parallel = False):
+  columns = ["miner","cut_type", "logP_Name", "logM_Name","trace_variants_P","trace_variants_M"]
+  df = pd.DataFrame(data=None, index=None, columns=columns, dtype=None, copy=None)
+  df['trace_variants_P'] = df['trace_variants_P'].astype(float)
+  df['trace_variants_M'] = df['trace_variants_M'].astype(float)
+  
+  pathFiles = get_data_paths(False, dataPath)
+  
+  if parallel:
+    num_processors_available = multiprocessing.cpu_count()
+    print("Number of available processors:", num_processors_available)
+    num_processors = max(1,round(num_processors_available/2))
+    print("Number of used processors:", num_processors)
+
+    input_data = []
+    iterator = 0
+    for data in pathFiles:
+      iterator += 1
+      df_temp = df.copy()
+      input_data.append((df_temp, iterator, data))
+        
+    pool_res = None
+    with multiprocessing.Pool(num_processors) as pool:
+        pool_res = tqdm(pool.imap(run_evaluation_category_trace_variants_star, input_data),total=len(input_data))
+        
+        for result in pool_res:
+            # Process individual evaluation result
+            df = pd.concat([df, result])
+  else: 
+    iterator = 0
+    for data in pathFiles:
+      iterator += 1
+      df = run_evaluation_category_trace_variants(df, iterator, data)
+
+  return df
+
+
+def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, parallel = False):
+  pathFiles = get_data_paths(False, dataPath)
 
   enriched_pathFiles = []
   for dataList in pathFiles:
@@ -478,17 +592,45 @@ def run_evaluation_real(df, dataPath, sup_list, ratio_list, using_gnn, parallel 
         input_data.append((df_temp, iterator, [data], [gnn], [0]))
     
     pool_res = None
+    '''
+    pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
+    '''
     with multiprocessing.Pool(num_processors) as pool:
-        pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
-        
-        for result in pool_res:
-            # Process individual evaluation result
-            df = pd.concat([df, result])
+      pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
+
+      for result in pool_res:
+          # Process individual evaluation result
+          df = pd.concat([df, result])
+     
   else: 
-    df = run_evaluation_category(df, df_temp[0], enriched_pathFiles, using_gnn, [0])
+    iterator = 0
+    for data in enriched_pathFiles:
+      iterator += 1
+      df = run_evaluation_category(df, iterator, [data], using_gnn, [0])
 
   return df
 
+def run_evaluation_category_trace_variants_star(args):
+    return run_evaluation_category_trace_variants(*args)    
+
+def run_evaluation_category_trace_variants(df, cut_type, data):
+  logP_path = data[0]
+  logM_path = data[1]
+  logP = get_log(logP_path)
+  logM = get_log(logM_path)
+  variantsP = pm4py.get_variants(logP)
+  variantsM = pm4py.get_variants(logM)
+  
+  df = pd.concat([df, pd.DataFrame.from_records([{
+    "miner" : logP_path,
+    "cut_type" : cut_type,
+    "logP_Name": logP_path[:logP_path.rfind(".")],
+    "logM_Name": logM_path[:logM_path.rfind(".")],
+    "trace_variants_P": len(variantsP),
+    "trace_variants_M": len(variantsM)
+  }])])
+
+  return df
 
 def run_evaluation_category_star(args):
     return run_evaluation_category(*args)    
@@ -548,17 +690,16 @@ def show_duplicates(df):
   print(filtered_rows)  
   print("Number of duplicates: " + str(len(filtered_rows)))  
 
-def visualize_measurement(df_measurement, column_feature, use_synthetic, file_name = None):
+def visualize_measurement(df_measurement, column_feature, use_synthetic, title = "", column_prefix = "", file_name = None):
   y_min = df_measurement[column_feature].min().min()
   y_max = df_measurement[column_feature].max().max()
-
   if use_synthetic:
     df_grouped = df_measurement.groupby("cut_type")
   else:
     df_grouped = df_measurement.groupby("logP_Name")
 
   fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(16, 10))
-  fig.suptitle('Synthetic Data Delta Measurement\nDelta = (No GNN) - (GNN)')
+  fig.suptitle(title)
 
   for i, (cut_type, group) in enumerate(df_grouped):
     ax = axes[i]  # Select the specific axis for this subplot
@@ -576,13 +717,13 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, file_na
       
       # Modify x-axis tick labels
       x_ticks.append(j)
-      x_labels.append("Δ " + col)
+      x_labels.append(column_prefix + col)
       
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, rotation=45)
 
     # TODO MAKE SMALLER AROUND MIN AND MAX
-    y_interval = 0.2
+    y_interval = max(0.2, (y_max - y_min) / 10)
     y_ticks = np.arange(np.floor(y_min / y_interval) * y_interval,
                                 np.ceil(y_max / y_interval) * y_interval + y_interval, y_interval)
     ax.set_yticks(y_ticks)
@@ -605,33 +746,53 @@ def validate_data_results(df, columns_to_check, interval):
           if not (interval[0] <= value <= interval[1]):
               print(f"Row {index}: Value {value} in column '{column}' is not between -1 and 1.")
 
-      
-def get_dataframe(synthetic_path = None, real_path = None):
-  def sanity_check_input(synthetic_path, real_path):
-    if synthetic_path != None and real_path != None:
-      print("Error, only one path can be specified.")
-      return -1
-    if synthetic_path == None and real_path == None:
-      print("Error, no path specified.")
-      return -1
-    if synthetic_path != None and not os.path.exists(synthetic_path):
-      print("Error, synthetic path does not exist.")
-      return -1
-    if real_path != None and not os.path.exists(real_path):
-      print("Error, real path does not exist.")
-      return -1
-    if synthetic_path != None and os.path.isdir(synthetic_path):
-      return 0
-    if real_path != None and os.path.isdir(real_path):
-      return 1
+def sanity_check_input(synthetic_path, real_path):
+  if synthetic_path != None and real_path != None:
+    print("Error, only one path can be specified.")
+    return -1
+  if synthetic_path == None and real_path == None:
+    print("Error, no path specified.")
+    return -1
+  if synthetic_path != None and not os.path.exists(synthetic_path):
+    print("Error, synthetic path does not exist.")
+    return -1
+  if real_path != None and not os.path.exists(real_path):
+    print("Error, real path does not exist.")
+    return -1
+  if synthetic_path != None and os.path.isdir(synthetic_path):
+    return 0
+  if real_path != None and os.path.isdir(real_path):
+    return 1
   
+
+def get_dataframe_trace_Variants(synthetic_path = None, real_path = None):
   progress = sanity_check_input(synthetic_path, real_path)
   if progress == -1:
     sys.exit()
   if progress == 0:
-    csv_filename = "output_synthetic.csv"
+    csv_filename = "output_trace_variant_synthetic.csv"
   else:
-    csv_filename = "output_real.csv"
+    csv_filename = "output_trace_variant_real.csv"
+    
+  if not os.path.exists(csv_filename):
+    if progress == 0:
+      df = run_evaluation_trace_variants_synthetic(synthetic_path, 50, max_node_size=8, parallel = False)
+      df.to_csv(csv_filename, index=False)
+    elif progress == 1:
+      df = run_evaluation_trace_variants_real(real_path, parallel = True)
+      df.to_csv(csv_filename, index=False)
+  else:
+    df = pd.read_csv(csv_filename)
+  return df
+      
+def get_dataframe_delta(synthetic_path = None, real_path = None):
+  progress = sanity_check_input(synthetic_path, real_path)
+  if progress == -1:
+    sys.exit()
+  if progress == 0:
+    csv_filename = "output_delta_synthetic.csv"
+  else:
+    csv_filename = "output_delta_real.csv"
     
   if not os.path.exists(csv_filename):
     df = create_df()
@@ -639,15 +800,15 @@ def get_dataframe(synthetic_path = None, real_path = None):
     if progress == 0:
       using_gnn = [False, True]
       num_data_per_category = 300
-
-      df = run_evaluation_synthetic(df, synthetic_path, num_data_per_category, using_gnn, max_node_size=5, parallel = True)
+      
+      df = run_evaluation_delta_synthetic(df, synthetic_path, num_data_per_category, using_gnn, max_node_size=8, parallel = True)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
     elif progress == 1:
       using_gnn = [False, True]
       sup_list = [0, 0.2, 0.3]
       ratio_list = [0.5, 0.8, 1.0]
-      df = run_evaluation_real(df, real_path, sup_list, ratio_list, using_gnn, parallel = True)
+      df = run_evaluation_delta_real(df, real_path, sup_list, ratio_list, using_gnn, parallel = True)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
       
@@ -661,22 +822,42 @@ def get_dataframe(synthetic_path = None, real_path = None):
       
 if __name__ == '__main__':
   
-  column_feature = ["precision","acc_logs", "fitP", "fitM", "f1_fit_logs"]
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
   synthetic_path = os.path.join("GNN_partitioning", "GNN_Data")
   real_path = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
   
-  use_synthetic = True
-  
-  if use_synthetic:
-    df = get_dataframe(synthetic_path=synthetic_path) 
-    df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
-    visualize_measurement(df_measurement, column_feature, use_synthetic, "df_measurement_synthetic.png")
-  else:
-    df = get_dataframe(real_path=real_path) 
-    df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
-    visualize_measurement(df_measurement, column_feature, use_synthetic, "df_measurement_real.png")
+  delta_measurement = True
+  if delta_measurement:
+    use_synthetic = True
+    column_feature = ["precision","acc_logs", "fitP", "fitM", "f1_fit_logs"]
+    
+    title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
+    column_prefix = "Δ "
+    if use_synthetic:
+      df = get_dataframe_delta(synthetic_path=synthetic_path) 
+      df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
+      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, "df_delta_measurement_synthetic.png")
+    else:
+      df = get_dataframe_delta(real_path=real_path) 
+      df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
+      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, "df_delta_measurement_real.png")
+      
+  trace_variant_measurement = False
+  if trace_variant_measurement:
+    use_synthetic = True
+    column_feature = ["trace_variants_P", "trace_variants_M"]
+    
+    itle = 'Data Trace Variants Measurement'
+    column_prefix = "# "
+    if use_synthetic:
+      df = get_dataframe_trace_Variants(synthetic_path=synthetic_path)
+      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, "df_measurement_trace_variants_synthetic.png")
+    else:
+      df = get_dataframe_trace_Variants(real_path=real_path)
+      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, "df_measurement_trace_variants_real.png")
+
+    
 
   
   
