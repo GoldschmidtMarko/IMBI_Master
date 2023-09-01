@@ -52,7 +52,7 @@ class Parameters(Enum):
     TAU_LOOP_KEY = "tau_loop"
 
 
-def apply(logp,logm, parameters=None,sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
+def apply(logp,logm, parameters=None,sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
     """
     Apply the IM algorithm to a log obtaining a Petri net along with an initial and final marking
 
@@ -79,7 +79,7 @@ def apply(logp,logm, parameters=None,sup= None, ratio = None, pruning_threshold 
         from pm4py.statistics.variants.pandas import get as variants_get
 
 
-    net, initial_marking, final_marking = tree_to_petri.apply(apply_tree(logp,logm, parameters,sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
+    net, initial_marking, final_marking = tree_to_petri.apply(apply_tree(logp,logm, parameters,sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn))
     return net, initial_marking, final_marking
 
 
@@ -110,7 +110,7 @@ def apply_variants(variants, parameters=None):
 
 
 @deprecation.deprecated('2.2.10', '3.0.0', details='use newer IM implementation (IM_CLEAN)')
-def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, pruning_threshold = 0, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
+def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
     """
     Apply the IM algorithm to a log obtaining a process tree
 
@@ -161,7 +161,7 @@ def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, pruning_thre
     recursion_depth = 0
     sub = subtree.make_tree(logp,logm, dfgp, dfgp, dfgp, activitiesp, c, recursion_depth, 0.0, start_activitiesp,
                             end_activitiesp,
-                            start_activitiesp, end_activitiesp, parameters, sup= sup, ratio = ratio, pruning_threshold = pruning_threshold, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn)
+                            start_activitiesp, end_activitiesp, parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn)
 
     process_tree = get_tree_repr_implain.get_repr(sub, 0, contains_empty_traces=contains_empty_traces)
     # Ensures consistency to the parent pointers in the process tree

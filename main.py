@@ -8,7 +8,7 @@ import pm4py
 from pm4py.objects.petri_net.exporter import exporter as pnml_exporter
 import time
 
-support, ratio, pruning_threshold, LPlus_LogFile, LMinus_LogFile, frequency= gui.input()
+support, ratio, LPlus_LogFile, LMinus_LogFile, frequency= gui.input()
 logP = xes_importer.apply(LPlus_LogFile)
 logM = xes_importer.apply(LMinus_LogFile)
 
@@ -18,7 +18,7 @@ else:
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
 
 start = time.time()
-net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio,pruning_threshold=pruning_threshold, size_par=len(logP)/len(logM), cost_Variant=cost_Variant, use_gnn=False)
+net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant, use_gnn=False)
 end = time.time()
 
 parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT:"pdf"}

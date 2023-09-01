@@ -150,12 +150,12 @@ def log_statistic(log_path):
   print("Longest trace length:", longest_length)
   print("Smallest trace length:", smallest_length)
 
-def find_best_cut(lopP, logM, sup, ratio, pruning_threshold):
-  best_cut = get_best_cut(lopP,logM,sup,ratio,pruning_threshold)
+def find_best_cut(lopP, logM, sup, ratio):
+  best_cut = get_best_cut(lopP,logM,sup,ratio)
   return best_cut
 
-def find_best_cut_type(lopP, logM, sup, ratio, pruning_threshold, cut_type):
-  result, best_cut = get_best_cut_with_cut_type(lopP,logM, cut_type, sup,ratio,pruning_threshold)
+def find_best_cut_type(lopP, logM, sup, ratio, cut_type):
+  result, best_cut = get_best_cut_with_cut_type(lopP,logM, cut_type, sup,ratio)
   return result, best_cut
   
 def view_log(log):
@@ -466,9 +466,9 @@ def save_log(log, file_name):
   parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
   apply(log, file_name + ".xes", parameters=parameter)
   
-def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, pruning, datapiece, partitionA, partitionB, score, unique_activity_count_P, unique_activity_count_M, size_par):
+def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, unique_activity_count_M, size_par):
   with open(file_name + ".txt", "w") as file:
-    file.write("# unique_node | unique_activity_count_P | unique_activity_count_M | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | pruning | size_par | dataitem | partitionA | partitionB | score" + "\n")
+    file.write("# unique_node | unique_activity_count_P | unique_activity_count_M | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score" + "\n")
     # unique_node
     outputString = ""
     for value in unique_node:
@@ -504,9 +504,7 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, 
     file.write(str(sup) + "\n")
     # ratio
     file.write(str(ratio) + "\n")
-    # pruning
-    file.write(str(pruning) + "\n")
-    # pruning
+    # size_par
     file.write(str(size_par) + "\n")
     # datapiece
     file.write(str(datapiece) + "\n")
@@ -582,7 +580,7 @@ def get_activity_count_list_from_unique_list(activity_count, unique_node_list):
       res.append(0)
   return res
       
-def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index, cut_type):
+def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ratio, data_piece_index, cut_type):
   if number_of_activites <= 0:
     return
 
@@ -596,7 +594,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       os.makedirs(folder_name, exist_ok=True)
   
   folder_name += "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
 
   
   
@@ -605,7 +603,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       # Create the folder
       os.makedirs(folder_name, exist_ok=True)
      
-  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
+  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
   
   # Check if the folder with param already exists
   if not os.path.exists(folder_name):
@@ -621,43 +619,49 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
         # Delete the file
         os.remove(files)
   
-  activity_list = generate_activity_name_list(number_of_activites,
-                                              random.randint(5,8))
-  
-  process_tree_P = generate_random_process_tree_for_cut_type(activity_list, cut_type)
-  
-  logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
-  
-  percentage_is_subset = 0.8
-  activity_list_near = get_partial_activity_names(activity_list, percentage_is_subset, min_percentage_subset = 0.5)
-  process_tree_M = generate_mutated_process_tree_from_process_tree(activity_list_near, process_tree_P, mutation_rate=0.5)
-
-  logM = generate_log_from_process_tree_for_cut_type(activity_list_near, process_tree_M, 0)
-  
-  result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
-
-  if result == True:
-    # result, cut = find_best_cut_type(logP,logM,support,ratio, pruning_threshold, cut_type)
-    save_log(logP, folder_name + "/logP_" + ending_File_string)
-    save_log(logM, folder_name + "/logM_" + ending_File_string)
-
-    unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
-    unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
-    unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+  amount_tries = 0
+  max_amount_tries = 5
+  while(amount_tries < max_amount_tries):
+    amount_tries += 1
     
-    logP_art = artificial_start_end(logP.__deepcopy__())
-    logM_art = artificial_start_end(logM.__deepcopy__())
+    activity_list = generate_activity_name_list(number_of_activites,
+                                                random.randint(5,8))
     
-    activity_count_P = get_activity_count(logP_art)
-    activity_count_M = get_activity_count(logM_art)
-    unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
-    unique_activity_count_M = get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
+    process_tree_P = generate_random_process_tree_for_cut_type(activity_list, cut_type)
     
-    size_par = len(logP) / len(logM)
+    logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
+    
+    percentage_is_subset = 0.8
+    activity_list_near = get_partial_activity_names(activity_list, percentage_is_subset, min_percentage_subset = 0.5)
+    process_tree_M = generate_mutated_process_tree_from_process_tree(activity_list_near, process_tree_P, mutation_rate=0.5)
 
-    save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,pruning_threshold,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,unique_activity_count_M,size_par)
-    return 1
-  else:
+    logM = generate_log_from_process_tree_for_cut_type(activity_list_near, process_tree_M, 0)
+    
+    result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
+
+    if result == True:
+      # result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
+      save_log(logP, folder_name + "/logP_" + ending_File_string)
+      save_log(logM, folder_name + "/logM_" + ending_File_string)
+
+      unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
+      unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
+      unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+      
+      logP_art = artificial_start_end(logP.__deepcopy__())
+      logM_art = artificial_start_end(logM.__deepcopy__())
+      
+      activity_count_P = get_activity_count(logP_art)
+      activity_count_M = get_activity_count(logM_art)
+      unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
+      unique_activity_count_M = get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
+      
+      size_par = len(logP) / len(logM)
+
+      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,unique_activity_count_M,size_par)
+      return 1
+
+      
     return 0
 
     
@@ -666,7 +670,23 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
 def generate_data_piece_star_function_cut_Type(args):
     return generate_data_piece_for_cut_type(*args)
     
-def generate_data(file_path, sup_step, ratio_step, pruning_threshold, number_data_instances, use_parallel = True):
+    
+def check_if_data_piece_exists(file_path, number_of_activites, support, ratio, data_piece_index, cut_type):
+  folder_name = file_path + "/" + cut_type
+  folder_name += "/Data_" + str(number_of_activites)
+  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
+  
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  
+  test_file = folder_name + "/logP_" + ending_File_string + ".xes"
+  
+  # Check if the folder already exists
+  if os.path.exists(test_file):
+    return True
+  else:
+    return False
+    
+def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new_data_instances_per_category, list_grap_node_sizes, use_parallel = True):
   
   # Delete the folder if it already exists
   # if os.path.exists(file_path):
@@ -679,8 +699,7 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, number_dat
       # Create the folder
       os.makedirs(file_path)
       
-  
-      
+
   num_processors_available = multiprocessing.cpu_count()
   print("Number of available processors:", num_processors_available)
   if num_processors_available > 20:
@@ -688,10 +707,6 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, number_dat
   else:
     num_processors = max(1,round(num_processors_available/2))
   
-  
-  max_number_activites = 8
-  min_number_activites = 2
-  number_of_data_pieces_per_variation = 30
   
   # Setup sup list
   if sup_step == 0:
@@ -706,16 +721,22 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, number_dat
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     
   cut_types = ["exc", "seq", "par", "loop"]
-  
-  
     
-  # def generate_data_piece(file_path, number_of_activites, support, ratio):
-  list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index, cut_type)
-              for number_activ in range(min_number_activites,max_number_activites + 1)
+  list_data_pool = [(file_path, number_activ, sup, ratio, f"{unique_identifier}{data_piece_name}", cut_type)
+              for number_activ in list_grap_node_sizes
               for sup in sup_list
               for ratio in ratio_list
-              for data_piece_index in range(1,number_of_data_pieces_per_variation + 1)
+              for data_piece_name in range(1,number_new_data_instances_per_category + 1)
               for cut_type in cut_types]
+  
+  
+  # Check if the folder already exists
+  if len(list_data_pool) > 0:
+    if check_if_data_piece_exists(file_path, list_data_pool[0][1], list_data_pool[0][2], list_data_pool[0][3], list_data_pool[0][4], list_data_pool[0][5]):
+        # Error
+        print("Error, data already exists for unique identifier: " + str(unique_identifier))
+        sys.exit()
+      
   
   space_Approx = 4000/(5400 * 1000)
   
@@ -740,7 +761,7 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, number_dat
   print("Number of generated data pieces: " + str(sum_results) + " of " + str(len(list_data_pool)))
   print("Percentage of generated data pieces: " + str(sum_results / len(list_data_pool) * 100) + "%")
    
-def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, pruning_threshold):
+def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
   result_dic = dict()
   
   # Setup sup list
@@ -757,6 +778,10 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, prun
     
   cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
     
+  def get_txt_files(directory):
+    txt_files = [file for file in os.listdir(directory) if file.endswith('.txt')]
+    return txt_files
+    
   for cut in cut_types:
     current_path_cut = file_path + "/" + cut
     if os.path.exists(current_path_cut):
@@ -768,18 +793,11 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, prun
             result_dic[cut][integer] = 0
           for sup in sup_list:
             for ratio in ratio_list:
-              sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
+              sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio)
               current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
               if os.path.exists(current_path_variant):
-                for data_integer in range(1,50):
-                  current_path_variant_data = current_path_variant + "/" + "Data_" + str(data_integer) + ".txt"
-                  if os.path.exists(current_path_variant_data):
-                    if integer not in result_dic[cut]:
-                      result_dic[cut][integer] = 1
-                    else:
-                      result_dic[cut][integer] += 1
-        else:
-          break
+                txt_files = get_txt_files(current_path_variant)
+                result_dic[cut][integer] += len(txt_files)
   
   for key, dic_data in result_dic.items():
     if key != "loop_tau" and key != "exc_tau":
@@ -793,14 +811,14 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step, prun
       print("")
     
    
-def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold, data_piece_index):
+def manual_run(file_path, number_of_activites, support, ratio, data_piece_index):
   if number_of_activites <= 0:
     return
 
   warnings.filterwarnings("ignore")
   
   folder_name = file_path + "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
 
   
   
@@ -809,26 +827,45 @@ def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold
       # Create the folder
       os.makedirs(folder_name, exist_ok=True)
      
-  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning_threshold)
+  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
   
   # Check if the folder with param already exists
   if not os.path.exists(folder_name):
       # Create the folder
       os.makedirs(folder_name, exist_ok=True)
       
-  cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio, pruning_threshold)
+  cut = find_best_cut(folder_name + "/logP_" + ending_File_string, folder_name + "/logM_" + ending_File_string,support,ratio)
   
    
   
+def get_input_arguments(list_inputs):
+  if len(list_inputs) != 4:
+    print("Error, wrong number of input arguments, expected 4, got: " + str(len(list_inputs)))
+    print("Expected input: unique_indentifier number_new_data_instances_per_category list_grap_node_sizes")
+    sys.exit()
+  
+  unique_indentifier = list_inputs[1]
+  number_new_data_instances_per_category = int(list_inputs[2])
+  list_grap_node_sizes = map(int, list_inputs[3].strip('[]').split(','))
+  
+  return unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes
+   
    
 if __name__ == '__main__':
   random.seed(random_seed)
-  generate_data(relative_path, 0.2, 0.2, 0, 1000, True)
+  print()
+  
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  generate_data(relative_path, 0.2, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   
   
-  # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0)
+  get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
   
-  # typeName = "Sup_"  + str(1.0) + "_Ratio_" + str(1.0) + "_Pruning_" + str(0)
+  
+  
+  
+  
+  # typeName = "Sup_"  + str(1.0) + "_Ratio_" + str(1.0) 
   # filePath = relative_path + "/" + "seq" + "/Data_" + str(6) + "/" + typeName
   # logPathP = filePath + "/logP_" + str(6) + "_" + typeName + "_Data_" + str(2)
   # logPathM = filePath + "/logM_" + str(6) + "_" + typeName + "_Data_" + str(2)

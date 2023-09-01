@@ -31,8 +31,6 @@ from tqdm import tqdm
 import gnn_models
 
 relative_path = "GNN_partitioning/GNN_Data"
-# current max = 6000
-dataSet_numbers = 10000
 random_seed = 1996
 show_gradient = False
 use_symmetric = True
@@ -120,8 +118,8 @@ def get_log(file_name):
   log = apply(file_name + ".xes", parameters=parameter)
   return log
 
-def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, pruning, datapiece):
-    typeName = "Sup_"  + str(sup) + "_Ratio_" + str(ratio) + "_Pruning_" + str(pruning)
+def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece):
+    typeName = "Sup_"  + str(sup) + "_Ratio_" + str(ratio)
     filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
     logPathP = filePath + "/logP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
     logPathM = filePath + "/logM_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
@@ -209,8 +207,8 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
 
         if detailed:
             
-            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
-            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Pruning"], data["Dataitem"])
+            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"])
+            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"])
             
             
         else:
@@ -406,26 +404,22 @@ def read_data_from_path(file_path):
                     state += 1
                     continue 
                 elif state == 8:
-                    data["Pruning"] = int(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 9:
                     data["Size_par"] = float(line[:-1])
                     state += 1
                     continue 
-                elif state == 10:
-                    data["Dataitem"] = int(line[:-1])
+                elif state == 9:
+                    data["Dataitem"] = line[:-1]
                     state += 1
                     continue 
-                elif state == 11:
+                elif state == 10:
                     data["PartitionA"] = line.split(" ")[:-1]
                     state += 1
                     continue 
-                elif state == 12:
+                elif state == 11:
                     data["PartitionB"] = line.split(" ")[:-1]
                     state += 1
                     continue 
-                elif state == 13:
+                elif state == 12:
                     data["Score"] = float(line[:-1])
                     state += 1
                     continue 
@@ -480,7 +474,7 @@ def get_data_length_from_dic(data_dic):
         length += len(data_dic[key])
     return length
 
-def read_all_data_for_cut_Type(file_path, cut_type):
+def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
     data_dic = dict()
     max_node_size_in_dataset = 0
     currentPath = file_path
@@ -499,7 +493,7 @@ def read_all_data_for_cut_Type(file_path, cut_type):
     pathFiles = sorted(pathFiles, reverse=True)
     # random.shuffle(pathFiles)
     for pathFile in pathFiles:
-        if get_data_length_from_dic(data_dic) > dataSet_numbers:
+        if get_data_length_from_dic(data_dic) > max_dataSet_numbers:
             break
         data = read_data_from_path(pathFile)
         max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
@@ -539,11 +533,12 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     cut_types = ["seq","loop"]
     num_epochs = 30
     batch_size = 10
+    max_dataSet_numbers = 100000
     
     for cut_type in cut_types:
         print("Cut type: " + cut_type)
         print("Reading Data")
-        data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type)
+        data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type, max_dataSet_numbers)
 
         data_settings = {"Cut_type" : cut_type,
                         "model_number" : model_number,

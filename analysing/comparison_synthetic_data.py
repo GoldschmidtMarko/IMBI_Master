@@ -117,7 +117,7 @@ def visualize_All_petriNet(df, miner):
   for logPName, logMName in zip(df_temp.logP_Name, df_temp.logM_Name):
     visualize_petriNet(df,miner,logPName,logMName)
 
-def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, pruning_threshold = 0, use_gnn = False):
+def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
   mes = Optimzation_Goals.apply_petri_silent(log,logM,net,im,fm)
 
   df = pd.concat([df, pd.DataFrame.from_records([{
@@ -129,7 +129,6 @@ def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "
     "hm_depen_thr" : hm_dependency_threshold,
     "im_bi_sup" : im_bi_sup,
     "im_bi_ratio" : im_bi_ratio,
-    "pruning_threshold" : pruning_threshold,
     "use_gnn" : use_gnn,
     "acc_logs": mes['acc'],
     "fitP" : mes['fitP'],
@@ -142,17 +141,16 @@ def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "
   }])])
   return df
 
-def add_Model_To_Database(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, pruning_threshold = 0, use_gnn = False):
-  df = runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName,logMName, imf_noiseThreshold, hm_dependency_threshold,im_bi_sup, im_bi_ratio, pruning_threshold, use_gnn=use_gnn)
+def add_Model_To_Database(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
+  df = runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName,logMName, imf_noiseThreshold, hm_dependency_threshold,im_bi_sup, im_bi_ratio, use_gnn=use_gnn)
   return df
 
-def getF1Value(df, miner, logPName, logMName, support, ratio, pruning_threshold, use_gnn):
+def getF1Value(df, miner, logPName, logMName, support, ratio, use_gnn):
   dftemp = df[df["miner"] == miner]
   dftemp = dftemp[dftemp["logP_Name"] == logPName[:logPName.rfind(".")]]
   dftemp = dftemp[dftemp["logM_Name"] == logMName[:logPName.rfind(".")]]
   dftemp = dftemp[dftemp["im_bi_sup"] == support]
   dftemp = dftemp[dftemp["im_bi_ratio"] == ratio]
-  dftemp = dftemp[dftemp["pruning_threshold"] == pruning_threshold]
   dftemp = dftemp[dftemp["use_gnn"] == use_gnn]
   if len(dftemp.index) > 1:
     raise Exception("Error, too many rows.")
@@ -165,7 +163,7 @@ def get_log(file_name):
   log = apply_import_xes(file_name, parameters=parameter)
   return log
 
-def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, pruning_threshold = 0, use_gnn = False):
+def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
   cur_time = time.time()
   logP = get_log(logPathP)
   logM = get_log(logPathM)
@@ -177,12 +175,12 @@ def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = 
   # print("Running IMbi_ali, GNN: " + str(use_gnn))
 
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
-  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, pruning_threshold = pruning_threshold, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
+  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
 
   time_in_bi = time.time() - cur_time
   cur_time = time.time()
   
-  df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio,pruning_threshold = pruning_threshold, use_gnn = use_gnn)
+  df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
   
   
   time_measurement = time.time() - cur_time
@@ -207,7 +205,7 @@ def setupYTickList(minValue, step):
   return res
     
 def displayDoubleLog(df, saveFig = False):
-  df_grouped = df.groupby(by=["logP_Name",	"logM_Name", "im_bi_sup", "im_bi_ratio", "pruning_threshold"], group_keys=True).apply(lambda x : x)
+  df_grouped = df.groupby(by=["logP_Name",	"logM_Name", "im_bi_sup", "im_bi_ratio"], group_keys=True).apply(lambda x : x)
   numberOfPlotPerRow = 4
   rows = math.ceil(float(len(df_grouped.index.unique()))/numberOfPlotPerRow)
   cols = min(len(df_grouped.index.unique()),numberOfPlotPerRow)
@@ -220,7 +218,7 @@ def displayDoubleLog(df, saveFig = False):
   for logGroup in df_grouped.index.unique():
     df_log_grouped = df_grouped.loc[logGroup]
 
-    axs[cur_Row,cur_Col].set_title("LogP: " + logGroup[0] + " LogM: " + logGroup[1] + "\n" + "Sup: " + str(df_log_grouped.im_bi_sup[0]) + " ratio: " + str(df_log_grouped.im_bi_ratio[0]) + " Pruning: " + str(df_log_grouped.pruning_threshold[0]))
+    axs[cur_Row,cur_Col].set_title("LogP: " + logGroup[0] + " LogM: " + logGroup[1] + "\n" + "Sup: " + str(df_log_grouped.im_bi_sup[0]) + " ratio: " + str(df_log_grouped.im_bi_ratio[0]) )
     axs[cur_Row,cur_Col].set_xlabel("Miners")
     j = 0
     xTickLabel = []
@@ -254,7 +252,7 @@ def displayDoubleLog(df, saveFig = False):
     fig.savefig("plot" + ".pdf")
     
 def create_df():
-  columns = ["miner", "logP_Name", "logM_Name","imf_noise_thr","hm_depen_thr","im_bi_sup","im_bi_ratio", "pruning_threshold", "use_gnn","acc_logs", "fitP", "fitM", "f1_fit_logs", "precision", "net", "im", "fm"]
+  columns = ["miner", "logP_Name", "logM_Name","imf_noise_thr","hm_depen_thr","im_bi_sup","im_bi_ratio", "use_gnn","acc_logs", "fitP", "fitM", "f1_fit_logs", "precision", "net", "im", "fm"]
 
   df = pd.DataFrame(data=None, index=None, columns=columns, dtype=None, copy=None)
   df['use_gnn'] = df['use_gnn'].astype(bool)
@@ -458,7 +456,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
       for data in dataList:
         for gnn in using_gnn:
           df_temp = create_df()
-          input_data.append((df_temp, cut_type, [data], [gnn], [0]))
+          input_data.append((df_temp, cut_type, [data], [gnn]))
       
       pool_res = []
       '''
@@ -495,7 +493,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
             
       print("Timeout percentage: " + str(number_timesouts/len(input_data)))
     else: 
-      df = run_evaluation_category(df, cut_type, dataList, using_gnn, [0])
+      df = run_evaluation_category(df, cut_type, dataList, using_gnn)
   
   return df
 
@@ -601,7 +599,7 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, par
       iterator += 1
       for gnn in using_gnn:
         df_temp = create_df()
-        input_data.append((df_temp, iterator, [data], [gnn], [0]))
+        input_data.append((df_temp, iterator, [data], [gnn]))
     
     pool_res = None
     '''
@@ -618,7 +616,7 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, par
     iterator = 0
     for data in enriched_pathFiles:
       iterator += 1
-      df = run_evaluation_category(df, iterator, [data], using_gnn, [0])
+      df = run_evaluation_category(df, iterator, [data], using_gnn)
 
   return df
 
@@ -647,15 +645,14 @@ def run_evaluation_category_trace_variants(df, cut_type, data):
 def run_evaluation_category_star(args):
     return run_evaluation_category(*args)    
 
-def run_evaluation_category(df, cut_type, dataList, using_gnn, pruning_thresholds):
+def run_evaluation_category(df, cut_type, dataList, using_gnn):
   for data in dataList:
     support = data[2]
     ratio = data[3]
-    for pruning_threshold in pruning_thresholds:
-      for use_gnn in using_gnn:
-        # print("Running: " + str(runs) + "/" + str(totalRuns))
-        # print("Ratio: " + str(ratio) + " sup: " + str(support) + " pruning: " + str(pruning_threshold) + " gnn: " + str(use_gnn))
-        df = applyMinerToLogForGNN(df, cut_type, data[0], data[1], data[0], data[1], 0.2, 0.99, support, ratio, pruning_threshold,use_gnn)
+    for use_gnn in using_gnn:
+      # print("Running: " + str(runs) + "/" + str(totalRuns))
+      # print("Ratio: " + str(ratio) + " sup: " + str(support) + " gnn: " + str(use_gnn))
+      df = applyMinerToLogForGNN(df, cut_type, data[0], data[1], data[0], data[1], 0.2, 0.99, support, ratio,use_gnn)
   return df
 
 # Define a custom aggregation function
@@ -841,7 +838,7 @@ if __name__ == '__main__':
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = True
+    use_synthetic = False
     column_feature = ["precision","acc_logs", "fitP", "fitM", "f1_fit_logs"]
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
