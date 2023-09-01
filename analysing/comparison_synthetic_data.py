@@ -448,7 +448,10 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
     if parallel:
       num_processors_available = multiprocessing.cpu_count()
       print("Number of available processors:", num_processors_available)
-      num_processors = max(1,round(num_processors_available/2))
+      if num_processors_available > 20:
+        num_processors = max(1,round(num_processors_available))
+      else:
+        num_processors = max(1,round(num_processors_available/2))
       print("Number of used processors:", num_processors)
 
       input_data = []
@@ -509,7 +512,10 @@ def run_evaluation_trace_variants_synthetic(dataPath, num_data_per_category, max
     if parallel:
       num_processors_available = multiprocessing.cpu_count()
       print("Number of available processors:", num_processors_available)
-      num_processors = max(1,round(num_processors_available/2))
+      if num_processors_available > 20:
+        num_processors = max(1,round(num_processors_available))
+      else:
+        num_processors = max(1,round(num_processors_available/2))
       print("Number of used processors:", num_processors)
 
       input_data = []
@@ -541,7 +547,10 @@ def run_evaluation_trace_variants_real(dataPath, parallel = False):
   if parallel:
     num_processors_available = multiprocessing.cpu_count()
     print("Number of available processors:", num_processors_available)
-    num_processors = max(1,round(num_processors_available/2))
+    if num_processors_available > 20:
+      num_processors = max(1,round(num_processors_available))
+    else:
+      num_processors = max(1,round(num_processors_available/2))
     print("Number of used processors:", num_processors)
 
     input_data = []
@@ -580,7 +589,10 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, par
   if parallel:
     num_processors_available = multiprocessing.cpu_count()
     print("Number of available processors:", num_processors_available)
-    num_processors = max(1,round(num_processors_available/2))
+    if num_processors_available > 20:
+      num_processors = max(1,round(num_processors_available))
+    else:
+      num_processors = max(1,round(num_processors_available/2))
     print("Number of used processors:", num_processors)
 
     input_data = []

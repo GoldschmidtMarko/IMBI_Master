@@ -11,7 +11,10 @@ from pm4py.objects.log.obj import Trace
 import pm4py
 from pm4py.objects.log.importer.xes import importer as xes_importer
 import sys
-sys.path.append('c:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master')
+
+root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+sys.path.append(root_path)
+
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut_with_cut_type
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import artificial_start_end
@@ -42,7 +45,7 @@ number_avg_trace_length_deviation = 2
 number_avg_traces = 10
 number_avg_traces_deviation = 2
 
-relative_path = "GNN_partitioning/GNN_Data"
+relative_path = root_path + "/GNN_partitioning/GNN_Data"
 
 
 
@@ -663,11 +666,13 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
 def generate_data_piece_star_function_cut_Type(args):
     return generate_data_piece_for_cut_type(*args)
     
-def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parallel = True):
+def generate_data(file_path, sup_step, ratio_step, pruning_threshold, number_data_instances, use_parallel = True):
   
   # Delete the folder if it already exists
   # if os.path.exists(file_path):
   #   shutil.rmtree(file_path)
+  
+  print("Generating GNN Data in: " + file_path)
   
   # Check if the folder already exists
   if not os.path.exists(file_path):
@@ -678,11 +683,14 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
       
   num_processors_available = multiprocessing.cpu_count()
   print("Number of available processors:", num_processors_available)
-  num_processors = max(1,round(num_processors_available/2))
+  if num_processors_available > 20:
+    num_processors = max(1,round(num_processors_available))
+  else:
+    num_processors = max(1,round(num_processors_available/2))
   
   
   max_number_activites = 8
-  min_number_activites = 6
+  min_number_activites = 2
   number_of_data_pieces_per_variation = 30
   
   # Setup sup list
@@ -697,9 +705,9 @@ def generate_data(file_path, sup_step, ratio_step, pruning_threshold, use_parall
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     
-  # excluded for now: single_activity, none
-  # TODO add loop1
   cut_types = ["exc", "seq", "par", "loop"]
+  
+  
     
   # def generate_data_piece(file_path, number_of_activites, support, ratio):
   list_data_pool = [(file_path, number_activ, sup, ratio, pruning_threshold, data_piece_index, cut_type)
@@ -815,8 +823,7 @@ def manual_run(file_path, number_of_activites, support, ratio, pruning_threshold
    
 if __name__ == '__main__':
   random.seed(random_seed)
-  
-  generate_data(relative_path,0.2,0.2,0,False)
+  generate_data(relative_path, 0.2, 0.2, 0, 1000, True)
   
   
   # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2,0)

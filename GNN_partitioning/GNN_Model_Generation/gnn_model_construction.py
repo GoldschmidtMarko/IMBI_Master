@@ -15,7 +15,10 @@ import torch.optim.lr_scheduler as lr_scheduler
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
 from pm4py.objects.log.importer.xes.importer import apply
 import sys
-sys.path.append('c:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master')
+
+desired_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+sys.path.append(desired_path)
+
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_score_for_cut_type
 import random
 # Import libraries
@@ -238,9 +241,12 @@ def evaluate_model(model_number, model_params, test_dict, model_args, detailed =
     if detailed:
         num_processors_available = multiprocessing.cpu_count()
         print("Number of available processors:", num_processors_available)
-        num_processors = max(1,round(num_processors_available/2))
-        
+        if num_processors_available > 20:
+            num_processors = max(1,round(num_processors_available))
+        else:
+            num_processors = max(1,round(num_processors_available/2))
         print("Number of used processors:", num_processors)
+        
         pool_res = None
         with multiprocessing.Pool(num_processors) as pool:
             pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
