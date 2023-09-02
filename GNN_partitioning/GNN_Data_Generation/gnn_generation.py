@@ -844,7 +844,7 @@ def get_input_arguments(list_inputs):
     print("Expected input: unique_indentifier number_new_data_instances_per_category list_grap_node_sizes")
     sys.exit()
   
-  unique_indentifier = list_inputs[1]
+  unique_indentifier = list_inputs[1] + "_"
   number_new_data_instances_per_category = int(list_inputs[2])
   list_grap_node_sizes = map(int, list_inputs[3].strip('[]').split(','))
   
@@ -859,7 +859,7 @@ if __name__ == '__main__':
   generate_data(relative_path, 0.2, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   
   
-  get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
+  # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
   
   
   
