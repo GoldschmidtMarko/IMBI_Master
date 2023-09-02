@@ -10,7 +10,9 @@ from pm4py.objects.log.obj import EventLog
 from pm4py.objects.log.obj import Trace
 import pm4py
 from pm4py.objects.log.importer.xes import importer as xes_importer
+from pm4py.objects.process_tree.exporter import exporter as tree_exporter
 import sys
+import time
 
 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 sys.path.append(root_path)
@@ -198,7 +200,11 @@ def combine_process_trees_from_list(process_tree_list, operator = None):
   else:
     new_operator = operator
   
-  process_tree_list.append(ProcessTree(children=[processTree1, processTree2],operator=new_operator))
+  new_tree_node = ProcessTree(children=[processTree1, processTree2],operator=new_operator)
+  processTree1.parent = new_tree_node
+  processTree2.parent = new_tree_node
+  
+  process_tree_list.append(new_tree_node)
   
   return process_tree_list
 
@@ -228,11 +234,16 @@ def add_label_to_process_trees(process_tree, input_label, operator = None):
   random_leaf.operator = new_operator
   
   if random.random() < 0.5:
-    random_leaf.children.append(ProcessTree(label=cur_label))
-    random_leaf.children.append(ProcessTree(label=input_label))
+    child_tree_1 = ProcessTree(label=cur_label)
+    child_tree_2 = ProcessTree(label=input_label)
   else:
-    random_leaf.children.append(ProcessTree(label=input_label))
-    random_leaf.children.append(ProcessTree(label=cur_label))
+    child_tree_1 = ProcessTree(label=input_label)
+    child_tree_2 = ProcessTree(label=cur_label)
+    
+  random_leaf.children.append(child_tree_1)
+  random_leaf.children.append(child_tree_2)
+  child_tree_1.parent = random_leaf
+  child_tree_2.parent = random_leaf
   
   return process_tree
 
@@ -281,7 +292,11 @@ def generate_random_process_tree_for_cut_type(activites_list, cut_type):
     # add tauTree to operant
     tauTree = ProcessTree(label=None)
     
-    return ProcessTree(children=[generated_ProcessTrees[0] , tauTree],operator=new_operator)
+    root_tree = ProcessTree(children=[generated_ProcessTrees[0] , tauTree],operator=new_operator)
+    tauTree.parent = root_tree
+    generated_ProcessTrees[0].parent = root_tree
+    
+    return root_tree
       
   else:
     # combine 2 random process Trees and add the father back to the list, until only 1 remains
@@ -356,6 +371,7 @@ def generate_mutated_process_tree_from_process_tree(activites_list, process_tree
     for child in tree.children:
         new_child = copy_process_tree(child)
         new_tree.children.append(new_child)
+        new_child.parent = new_tree
 
     return new_tree
 
@@ -461,14 +477,15 @@ def get_avg_trace_length_from_log(log):
   average_trace_length = total_trace_length / total_traces
   return average_trace_length
 
-def save_log(log, file_name):
+def save_tree(tree, file_name):
   # Export the event log to a XES file
-  parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
-  apply(log, file_name + ".xes", parameters=parameter)
+  # parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
+  # apply(log, file_name + ".xes", parameters=parameter)
+  tree_exporter.apply(tree, file_name + ".pmt")
   
-def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, unique_activity_count_M, size_par):
+def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, unique_activity_count_M, size_par,random_seed_P,random_seed_M):
   with open(file_name + ".txt", "w") as file:
-    file.write("# unique_node | unique_activity_count_P | unique_activity_count_M | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score" + "\n")
+    file.write("# unique_node | unique_activity_count_P | unique_activity_count_M | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score | random_seed_P | random_seed_M " + "\n")
     # unique_node
     outputString = ""
     for value in unique_node:
@@ -520,6 +537,10 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, 
     file.write(outputString + "\n")
     # score
     file.write(str(score) + "\n")
+    # random_seed_P
+    file.write(str(random_seed_P) + "\n")
+    # random_seed_M
+    file.write(str(random_seed_M) + "\n")
   
 def get_available_disk_space(path):
     disk_usage = psutil.disk_usage(path)
@@ -579,7 +600,20 @@ def get_activity_count_list_from_unique_list(activity_count, unique_node_list):
     else:
       res.append(0)
   return res
-      
+  
+def is_log_consistent(log1, log2):
+  variants1 = pm4py.get_variants(log1)
+  variants2 = pm4py.get_variants(log2)
+  
+  if len(variants1) != len(variants2):
+    return False
+  if len(log1) != len(log2):
+    return False
+  for variant in variants1:
+    if variant not in variants2:
+      return False
+  return True
+        
 def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ratio, data_piece_index, cut_type):
   if number_of_activites <= 0:
     return
@@ -611,8 +645,8 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       os.makedirs(folder_name, exist_ok=True)
       
   # Check if files already exist
-  checking_files_names = [folder_name + "/logP_" + ending_File_string,
-                          folder_name + "/logM_" + ending_File_string,
+  checking_files_names = [folder_name + "/treeP_" + ending_File_string,
+                          folder_name + "/treeM_" + ending_File_string,
                           folder_name + "/Cut_" + ending_File_string]
   for files in checking_files_names:
     if os.path.exists(files):
@@ -629,20 +663,30 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
     
     process_tree_P = generate_random_process_tree_for_cut_type(activity_list, cut_type)
     
+    random_seed_P = random.randint(100000, 999999)
+    random.seed(random_seed_P)
     logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
+    
+    # random.seed(random_seed_P)
+    # logP_ = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
+    
+    # if not is_log_consistent(logP, logP_):
+    #   print("Inconsistent logP")
     
     percentage_is_subset = 0.8
     activity_list_near = get_partial_activity_names(activity_list, percentage_is_subset, min_percentage_subset = 0.5)
     process_tree_M = generate_mutated_process_tree_from_process_tree(activity_list_near, process_tree_P, mutation_rate=0.5)
 
+    random_seed_M = random.randint(100000, 999999)
+    random.seed(random_seed_M)
     logM = generate_log_from_process_tree_for_cut_type(activity_list_near, process_tree_M, 0)
     
-    result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
+    result, cut = find_best_cut_type(logP, logM, support, ratio, cut_type)
 
     if result == True:
       # result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
-      save_log(logP, folder_name + "/logP_" + ending_File_string)
-      save_log(logM, folder_name + "/logM_" + ending_File_string)
+      save_tree(process_tree_P, folder_name + "/treeP_" + ending_File_string)
+      save_tree(process_tree_M, folder_name + "/treeM_" + ending_File_string)
 
       unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
       unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
@@ -658,7 +702,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       
       size_par = len(logP) / len(logM)
 
-      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,unique_activity_count_M,size_par)
+      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,unique_activity_count_M,size_par,random_seed_P,random_seed_M)
       return 1
 
       
@@ -678,7 +722,7 @@ def check_if_data_piece_exists(file_path, number_of_activites, support, ratio, d
   
   ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
   
-  test_file = folder_name + "/logP_" + ending_File_string + ".xes"
+  test_file = folder_name + "/treeP_" + ending_File_string + ".pmt"
   
   # Check if the folder already exists
   if os.path.exists(test_file):
@@ -759,7 +803,7 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
       sum_results += generate_data_piece_star_function_cut_Type(it)
 
   print("Number of generated data pieces: " + str(sum_results) + " of " + str(len(list_data_pool)))
-  print("Percentage of generated data pieces: " + str(sum_results / len(list_data_pool) * 100) + "%")
+  print("Percentage of generated data pieces: " + str(round((sum_results / len(list_data_pool) * 100),2)) + "%")
    
 def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
   result_dic = dict()
@@ -860,9 +904,6 @@ if __name__ == '__main__':
   
   
   # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
-  
-  
-  
   
   
   # typeName = "Sup_"  + str(1.0) + "_Ratio_" + str(1.0) 

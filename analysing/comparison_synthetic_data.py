@@ -399,12 +399,12 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
                   break
                 if file.endswith(".xes"):  # Filter for text files
                   found_file = os.path.join(root, file)
-                  if "logP" in found_file:
-                    file_M = found_file.replace("logP", "logM")
+                  if "treeP" in found_file:
+                    file_M = found_file.replace("treeP", "treeM")
                     file_P = found_file
                   else:
                     file_M = found_file
-                    file_P = found_file.replace("logM", "logP")
+                    file_P = found_file.replace("treeM", "treeP")
                   
                   
                   input_detail_file = os.path.join(root, "Data_" + str(get_last_number(file_P)) + ".txt")

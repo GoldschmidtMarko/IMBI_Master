@@ -7,14 +7,13 @@ import numpy as np
 import time
 import multiprocessing
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
+from pm4py import play_out
 import pandas as pd
-from torch.utils.data import DataLoader
-import torch.optim.lr_scheduler as lr_scheduler
 # from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Import_Parameter
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
 from pm4py.objects.log.importer.xes.importer import apply
 import sys
+from pm4py.objects.process_tree.importer import importer as tree_importer
 
 desired_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 sys.path.append(desired_path)
@@ -24,8 +23,6 @@ import random
 # Import libraries
 from matplotlib import pyplot as plt
 import warnings
-from GNN_partitioning.GNN_Data_Generation.gnn_generation import find_best_cut_type
-import math
 from tqdm import tqdm
 
 import gnn_models
@@ -118,16 +115,21 @@ def get_log(file_name):
   log = apply(file_name + ".xes", parameters=parameter)
   return log
 
-def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece):
+def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece, random_seed_P, random_seed_M):
     typeName = "Sup_"  + str(sup) + "_Ratio_" + str(ratio)
     filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    logPathP = filePath + "/logP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
-    logPathM = filePath + "/logM_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    path_tree_M = filePath + "/treeM_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
     
-    logP = get_log(logPathP)
-    logM = get_log(logPathM)
+    treeP = tree_importer.apply(path_tree_P)
+    treeM = tree_importer.apply(path_tree_M)
     
     
+    random.seed(random_seed_P)
+    logP = play_out(treeP)
+    random.seed(random_seed_M)
+    logM = play_out(treeM)
+
     score = get_score_for_cut_type(logP, logM, A, B, cut_type, sup, ratio)
     return score
     
@@ -207,8 +209,8 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
 
         if detailed:
             
-            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"])
-            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"])
+            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data["random_seed_M"])
+            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data["random_seed_M"])
             
             
         else:
@@ -421,6 +423,14 @@ def read_data_from_path(file_path):
                     continue 
                 elif state == 12:
                     data["Score"] = float(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 13:
+                    data["random_seed_P"] = int(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 14:
+                    data["random_seed_M"] = int(line[:-1])
                     state += 1
                     continue 
                 
