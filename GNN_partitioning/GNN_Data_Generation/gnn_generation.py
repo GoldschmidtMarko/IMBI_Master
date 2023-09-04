@@ -215,8 +215,8 @@ def add_label_to_process_trees(process_tree, input_label, operator = None):
     if len(tree.children) == 0:
         leaf_nodes.append(tree)
     else:
-        for child in tree.children:
-            leaf_nodes.extend(get_all_leaf_nodes(child))
+      for child in tree.children:
+        leaf_nodes.extend(get_all_leaf_nodes(child))
 
     return leaf_nodes
   
@@ -269,6 +269,7 @@ def generate_random_process_tree_for_cut_type(activites_list, cut_type):
     # combine 2 random process Trees and add the father back to the list, until only 2 remains
     while(len(generated_ProcessTrees) > 2):
       generated_ProcessTrees = combine_process_trees_from_list(generated_ProcessTrees)
+      
     if cut_type == "seq":
       new_operator = Operator.SEQUENCE
     elif cut_type == "par":
@@ -685,8 +686,24 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
 
     if result == True:
       # result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
-      save_tree(process_tree_P, folder_name + "/treeP_" + ending_File_string)
-      save_tree(process_tree_M, folder_name + "/treeM_" + ending_File_string)
+      try:
+        save_tree(process_tree_P, folder_name + "/treeP_" + ending_File_string)
+      except:
+        print("Error saving treeP:")
+        print(process_tree_P)
+        continue
+        
+      try:
+        save_tree(process_tree_M, folder_name + "/treeM_" + ending_File_string)
+      except:
+        
+        if os.path.exists(folder_name + "/treeP_" + ending_File_string + ".pmt"):
+          # Delete the process_tree_P
+          os.remove(folder_name + "/treeP_" + ending_File_string + ".pmt")
+          
+        print("Error saving treeM:")
+        print(process_tree_M)
+        continue
 
       unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
       unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
@@ -806,6 +823,7 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
   print("Percentage of generated data pieces: " + str(round((sum_results / len(list_data_pool) * 100),2)) + "%")
    
 def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
+  print("Getting labeled data cut type distribution in: " + file_path)
   result_dic = dict()
   
   # Setup sup list
