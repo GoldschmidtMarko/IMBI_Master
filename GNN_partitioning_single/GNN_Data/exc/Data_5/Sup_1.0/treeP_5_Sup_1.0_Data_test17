@@ -1,0 +1,82 @@
+{
+    "label": null,
+    "operand": "X",
+    "children": [
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "rbfjzn",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "JrjBJb",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "+",
+                            "children": [
+                                {
+                                    "label": null,
+                                    "operand": "X",
+                                    "children": [
+                                        {
+                                            "label": "uTMMoa",
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": "cQbttr",
+                                            "operand": "None",
+                                            "children": []
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": "FEaOGX",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}

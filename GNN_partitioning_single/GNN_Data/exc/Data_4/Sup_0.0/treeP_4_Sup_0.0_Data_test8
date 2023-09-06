@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "X",
+    "children": [
+        {
+            "label": "KUPHuW",
+            "operand": "None",
+            "children": []
+        },
+        {
+            "label": null,
+            "operand": "X",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": "RlYrAE",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "*",
+                            "children": [
+                                {
+                                    "label": null,
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": null,
+                                    "operand": "*",
+                                    "children": [
+                                        {
+                                            "label": null,
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": null,
+                                            "operand": "+",
+                                            "children": [
+                                                {
+                                                    "label": "UIEwlt",
+                                                    "operand": "None",
+                                                    "children": []
+                                                },
+                                                {
+                                                    "label": null,
+                                                    "operand": "None",
+                                                    "children": []
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "kSEHPo",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}

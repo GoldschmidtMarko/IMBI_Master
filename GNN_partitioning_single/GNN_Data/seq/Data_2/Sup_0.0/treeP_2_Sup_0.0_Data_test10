@@ -1,0 +1,16 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": "FEoNQ",
+            "operand": "None",
+            "children": []
+        },
+        {
+            "label": "TukNe",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

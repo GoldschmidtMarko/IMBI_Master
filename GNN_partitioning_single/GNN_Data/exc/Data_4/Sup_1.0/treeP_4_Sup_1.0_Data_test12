@@ -1,0 +1,49 @@
+{
+    "label": null,
+    "operand": "X",
+    "children": [
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "X",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "->",
+                            "children": [
+                                {
+                                    "label": "NMJoBvl",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": "rYoIsOt",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "LysDfjg",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": "HBeUrwL",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

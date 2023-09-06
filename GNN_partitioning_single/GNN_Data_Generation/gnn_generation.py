@@ -34,10 +34,11 @@ from pm4py.objects.log.exporter.xes.variants.etree_xes_exp import Parameters as 
 import psutil
 from GNN_partitioning_single.GNN_Model_Generation.gnn_models import generate_adjacency_matrix_from_log
 from GNN_partitioning_single.GNN_Model_Generation.gnn_models import generate_union_adjacency_matrices
+import json
 
 
 
-random_seed = 1996
+random_start_seed = 1996
 
 number_activities = 6
 
@@ -480,10 +481,27 @@ def get_avg_trace_length_from_log(log):
   return average_trace_length
 
 def save_tree(tree, file_name):
+  def serialize_tree(node):
+        if node is None:
+            return None
+        serialized_node = {
+            "label": node.label,
+            "operand": str(node.operator),
+            "children": [serialize_tree(child) for child in node.children],
+        }
+        return serialized_node
+
+  serialized_tree = serialize_tree(tree)
+
+  with open(file_name, "w") as file:
+      json.dump(serialized_tree, file, indent=4)
+  
+  
   # Export the event log to a XES file
   # parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
   # apply(log, file_name + ".xes", parameters=parameter)
-  tree_exporter.apply(tree, file_name + ".pmt")
+  # tree_exporter.apply(tree, file_name + ".ptml")
+
   
 def save_log(log, file_name):
   # Export the event log to a XES file
@@ -491,9 +509,9 @@ def save_log(log, file_name):
   apply(log, file_name + ".xes", parameters=parameter)
 
   
-def save_data(file_name, adj_matrix_P, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, size_par,random_seed_P):
+def save_data(file_name, adj_matrix_P, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, size_par, seed_P, tree):
   with open(file_name + ".txt", "w") as file:
-    file.write("# unique_node | unique_activity_count_P | adj_matrix_P | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score | random_seed_P " + "\n")
+    file.write("# unique_node | unique_activity_count_P | adj_matrix_P | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score | random_seed_P | tree " + "\n")
     # unique_node
     outputString = ""
     for value in unique_node:
@@ -534,7 +552,9 @@ def save_data(file_name, adj_matrix_P, unique_node,cut_type, sup, ratio, datapie
     # score
     file.write(str(score) + "\n")
     # random_seed_P
-    file.write(str(random_seed_P) + "\n")
+    file.write(str(seed_P) + "\n")
+    # tree
+    file.write(str(tree) + "\n")
   
 def get_available_disk_space(path):
     disk_usage = psutil.disk_usage(path)
@@ -658,12 +678,6 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, da
     
     random_seed_P = random.randint(100000, 999999)
     logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, random_seed_P, 0)
-    
-    # random.seed(random_seed_P)
-    # logP_ = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
-    
-    # if not is_log_consistent(logP, logP_):
-    #   print("Inconsistent logP")
 
     logM = logP.__deepcopy__()
     
@@ -678,19 +692,18 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, da
         print(process_tree_P)
         continue
 
-      save_log(logP, folder_name + "/logP_" + ending_File_string)
+      # save_log(logP, folder_name + "/logP_" + ending_File_string)
 
       unique_nodeList, matrix_P = generate_adjacency_matrix_from_log(logP)
       
       logP_art = artificial_start_end(logP.__deepcopy__())
-      logM_art = artificial_start_end(logM.__deepcopy__())
       
       activity_count_P = get_activity_count(logP_art)
       unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
       
       size_par = len(logP) / len(logM)
 
-      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P,unique_nodeList,cut_type,support, 1,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,size_par,random_seed_P)
+      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P,unique_nodeList,cut_type,support, 0,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,size_par, random_seed_P, process_tree_P)
       return 1
 
       
@@ -749,7 +762,7 @@ def generate_data(file_path, sup_step, unique_identifier, number_new_data_instan
     
 
   cut_types = ["exc", "seq", "par", "loop"]
-  cut_types = ["seq"]
+  # cut_types = ["seq"]
     
   list_data_pool = [(file_path, number_activ, sup, f"{unique_identifier}{data_piece_name}", cut_type)
               for number_activ in list_grap_node_sizes
@@ -881,11 +894,11 @@ def get_input_arguments(list_inputs):
    
    
 if __name__ == '__main__':
-  random.seed(random_seed)
+  random.seed(random_start_seed)
   print()
   
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 5, [4,5,6]
-  generate_data(relative_path, 1, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, False)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [2,3,4,5,6,7]
+  generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   
 

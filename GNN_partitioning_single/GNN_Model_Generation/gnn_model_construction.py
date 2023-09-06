@@ -9,6 +9,7 @@ import multiprocessing
 from sklearn.model_selection import train_test_split
 from pm4py import play_out
 import pandas as pd
+from pm4py.objects.process_tree.obj import ProcessTree, Operator
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
 from pm4py.objects.log.importer.xes.importer import apply
 import sys
@@ -24,6 +25,7 @@ from matplotlib import pyplot as plt
 import warnings
 from tqdm import tqdm
 import gnn_models
+import json
 
 relative_path = "GNN_partitioning_single/GNN_Data"
 random_seed = 1996
@@ -131,10 +133,9 @@ def show_dfg(log):
 def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece, random_seed_P):
     typeName = "Sup_"  + str(sup)
     filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece) + ".pmt"
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
     
-    treeP = tree_importer.apply(path_tree_P)
-    
+    treeP = load_tree(path_tree_P)
     
     random.seed(random_seed_P)
     logP = play_out(treeP)
@@ -163,6 +164,33 @@ def partition_names(predictions, names, mask):
 
     return names_partitionA, names_partitionB
        
+def get_Operator_from_string(operator_string):
+    if operator_string == "->":
+        return Operator.SEQUENCE
+    elif operator_string == "X":
+        return Operator.XOR
+    elif operator_string == "+":
+        return Operator.PARALLEL
+    elif operator_string == "*":
+        return Operator.LOOP
+    return None
+       
+def load_tree(file_name):
+    def deserialize_tree(serialized_node):
+        if serialized_node is None:
+            return None
+        
+        node = ProcessTree()
+        node.label = serialized_node["label"]
+        node.operator = get_Operator_from_string(serialized_node["operand"])
+        node.children = [deserialize_tree(child) for child in serialized_node["children"]]
+        return node
+
+    with open(file_name, "r") as file:
+        serialized_tree = json.load(file)
+
+    return deserialize_tree(serialized_tree)
+       
 def combine_dataframes(current_df, results):
     # Combine the list of DataFrames into a single DataFrame
     combined_df = pd.concat([current_df, results])
@@ -190,9 +218,14 @@ def check_process_tree_for_consistency(data):
     
     typeName = "Sup_"  + str(support)
     filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece) + ".pmt"
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
     
-    treeP = tree_importer.apply(path_tree_P)
+    treeP = load_tree(path_tree_P)
+ 
+    if data["tree"] != str(treeP):
+        print(data["tree"])
+        print(str(treeP))
+        print("tree not equal")
     
     random.seed(seed_P)
     logP = play_out(treeP)
@@ -201,11 +234,11 @@ def check_process_tree_for_consistency(data):
     
     if not are_logs_equal(logP, logP_):
         print("logs dont match...")
-        a = 3
     
     from GNN_partitioning_single.GNN_Model_Generation.gnn_models import generate_data_from_log
     
     data_t = generate_data_from_log(logP, support, 0, 1)
+    data_t = setup_data(data_t,data["Number_nodes"])
     
     def remap_matrix(list_order, matrix, index_matrix):
         # Create a mapping from activity names to matrix indices
@@ -215,13 +248,21 @@ def check_process_tree_for_consistency(data):
         rearranged_mat = matrix[order_indices][:, order_indices]
         return rearranged_mat
     
+    if len(data["Labels"]) != len(data_t["Labels"]):
+        print("Labels not equal")
+    
     remap_data_t_matrix = remap_matrix(data["Labels"], data_t["Adjacency_matrix_P"], data_t["Labels"])
+
+    diff_size = data["Number_nodes"] - remap_data_t_matrix.shape[0]
+    # Pad the adjacency matrix with zeros
+    remap_data_t_matrix = np.pad(remap_data_t_matrix, ((0, diff_size), (0, diff_size)), mode='constant')
+
     data_matrix = data["Adjacency_matrix_P"]
     
     if not np.array_equal(data_matrix, remap_data_t_matrix):
         print("Adjacency_matrix_P not equal")
-        a = 3
-  
+    
+    print("All checked")
    
     
 def evaluate_model_helper(model_number, model_params, data, model_args, detailed = False):
@@ -275,9 +316,6 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
         partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
 
         if detailed:       
-            
-            check_process_tree_for_consistency(data)     
-            
             actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"])
             predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"])
             
@@ -490,6 +528,10 @@ def read_data_from_path(file_path):
                     data["random_seed_P"] = int(line[:-1])
                     state += 1
                     continue 
+                elif state == 12:
+                    data["tree"] = str(line[:-1])
+                    state += 1
+                    continue 
                 
                 if state == 2:
                     lineList = line.split(" ")[:-1]
@@ -512,21 +554,26 @@ def generate_ground_truth(data):
             
     return truthList
 
+
+def setup_data(data, max_node_size_in_dataset):
+    data["Truth"] = generate_ground_truth(data)
+    # Calculate the difference in size
+    diff_size = max_node_size_in_dataset - data["Adjacency_matrix_P"].shape[0]
+    # Pad the adjacency matrix with zeros
+    data["Adjacency_matrix_P"] = np.pad(data["Adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
+    
+    data["Activity_count_P"] = np.pad(data["Activity_count_P"], (0, diff_size), mode='constant')
+    
+    data["Truth"] = data["Truth"] + [-1 for _ in range(max_node_size_in_dataset - len(data["Truth"]))]
+    data["Number_nodes"] = max_node_size_in_dataset
+    
+    return data
+    
 def setup_dataSet(data_dic, max_node_size_in_dataset):
     for dataList in data_dic.values():
         for data in dataList:
-            data["Truth"] = generate_ground_truth(data)
-            # Calculate the difference in size
-            diff_size = max_node_size_in_dataset - data["Adjacency_matrix_P"].shape[0]
-            # Pad the adjacency matrix with zeros
-            data["Adjacency_matrix_P"] = np.pad(data["Adjacency_matrix_P"], ((0, diff_size), (0, diff_size)), mode='constant')
-            
-            data["Activity_count_P"] = np.pad(data["Activity_count_P"], (0, diff_size), mode='constant')
-            
-            data["Truth"] = data["Truth"] + [-1 for _ in range(max_node_size_in_dataset - len(data["Truth"]))]
-            data["Number_nodes"] = max_node_size_in_dataset
+            data = setup_data(data, max_node_size_in_dataset)
         
-            
     return data_dic
 
 def get_data_length_from_dic(data_dic):
@@ -590,9 +637,9 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
     model_number = 13
-    # cut_types = ["par", "exc","loop", "seq"]
-    cut_types = ["seq"]
-    num_epochs = 3
+    cut_types = ["par", "exc","loop", "seq"]
+    # cut_types = ["seq"]
+    num_epochs = 30
     batch_size = 10
     max_dataSet_numbers = 100000
     
@@ -657,10 +704,17 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
 
 
 
-
+def test_trees():
+    data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, "seq", 100000)
+    for key, value in data_dic.items():
+        for item in value:
+            check_process_tree_for_consistency(item)
 
 if __name__ == '__main__':
     random.seed(random_seed)
+    
+    # test_trees()
+    
     generate_Models("GNN_partitioning_single/GNN_Model", True, "GNN_partitioning_single/GNN_Accuracy_Results")
 
 

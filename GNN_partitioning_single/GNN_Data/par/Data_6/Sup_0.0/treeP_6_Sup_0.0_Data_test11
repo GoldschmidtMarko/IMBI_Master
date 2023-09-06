@@ -1,0 +1,60 @@
+{
+    "label": null,
+    "operand": "+",
+    "children": [
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": "yJxmocKE",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "uOrVBSfT",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "mKKhhppY",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "RjFqpAck",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": "odppNTBJ",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "OQgKVTZa",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}

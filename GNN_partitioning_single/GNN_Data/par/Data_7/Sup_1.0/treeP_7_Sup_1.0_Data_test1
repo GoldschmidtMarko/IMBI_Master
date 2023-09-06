@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "+",
+    "children": [
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "X",
+                            "children": [
+                                {
+                                    "label": "AcFGTo",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": "ULwwbq",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        },
+                        {
+                            "label": null,
+                            "operand": "->",
+                            "children": [
+                                {
+                                    "label": "mTNWfp",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": "lQnOZe",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "FJYdyQ",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": null,
+            "operand": "->",
+            "children": [
+                {
+                    "label": "HUfSZs",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "eGEsHj",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}
