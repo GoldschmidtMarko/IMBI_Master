@@ -19,8 +19,8 @@ import networkx as nx
 from pm4py.algo.filtering.log.start_activities import start_activities_filter
 from pm4py.algo.filtering.log.end_activities import end_activities_filter
 from pm4py.algo.discovery.dfg.utils.dfg_utils import get_activities_from_dfg
-from GNN_partitioning.GNN_Model_Generation.gnn_models import get_partitions_from_gnn
-import logging
+from GNN_partitioning_single.GNN_Model_Generation.gnn_models import get_partitions_from_gnn
+import logging 
 
 from local_pm4py.algo.analysis import dfg_functions
 from local_pm4py.algo.analysis import custom_enum
@@ -317,6 +317,7 @@ def get_score_for_cut_type(log, logM, A, B, cut_Type, sup, ratio, cost_Variant =
     
     if cut_Type == "seq":
         costP = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP,  cost_Variant)
+
         costM = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM,  cost_Variant)
         return combine_score_values(costP,costM,cost_Variant,ratio,size_par)
     elif cut_Type == "exc":
@@ -466,7 +467,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
 
                 start_partition = time.time()
                 
-                gnn_path = 'GNN_partitioning\\GNN_Model'
+                gnn_path = 'GNN_partitioning_single\\GNN_Model'
                 root_file_path = 'IMBI_Master'
                 
                 if useGNN == True:
@@ -557,7 +558,9 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                     if "seq" in type:
                         fit_seq = dfg_functions.fit_seq(logP_var, A, B)
                         if fit_seq > 0.0:
+ 
                             cost_seq_P = dfg_functions.cost_seq(netP, A, B, start_B_P, end_A_P, sup, fP, feat_scores, dic_indirect_follow_logP,  cost_Variant)
+
                             cost_seq_M = dfg_functions.cost_seq(netM, A.intersection(activitiesM), B.intersection(activitiesM), start_B_M.intersection(activitiesM), end_A_M.intersection(activitiesM), sup, fM, feat_scores_togg, dic_indirect_follow_logM,  cost_Variant)
                             
                             cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M,combine_score_values(cost_seq_P,cost_seq_M,cost_Variant,ratio,size_par), fit_seq))

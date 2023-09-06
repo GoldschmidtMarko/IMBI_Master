@@ -32,8 +32,8 @@ from tqdm import tqdm
 import warnings
 from pm4py.objects.log.exporter.xes.variants.etree_xes_exp import Parameters as Export_Parameter
 import psutil
-from GNN_partitioning.GNN_Model_Generation.gnn_models import generate_adjacency_matrix_from_log
-from GNN_partitioning.GNN_Model_Generation.gnn_models import generate_union_adjacency_matrices
+from GNN_partitioning_single.GNN_Model_Generation.gnn_models import generate_adjacency_matrix_from_log
+from GNN_partitioning_single.GNN_Model_Generation.gnn_models import generate_union_adjacency_matrices
 
 
 
@@ -47,7 +47,7 @@ number_avg_trace_length_deviation = 2
 number_avg_traces = 10
 number_avg_traces_deviation = 2
 
-relative_path = root_path + "/GNN_partitioning/GNN_Data"
+relative_path = root_path + "/GNN_partitioning_single/GNN_Data"
 
 
 
@@ -485,9 +485,15 @@ def save_tree(tree, file_name):
   # apply(log, file_name + ".xes", parameters=parameter)
   tree_exporter.apply(tree, file_name + ".pmt")
   
-def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, unique_activity_count_M, size_par,random_seed_P,random_seed_M):
+def save_log(log, file_name):
+  # Export the event log to a XES file
+  parameter = {Export_Parameter.SHOW_PROGRESS_BAR: False}
+  apply(log, file_name + ".xes", parameters=parameter)
+
+  
+def save_data(file_name, adj_matrix_P, unique_node,cut_type, sup, ratio, datapiece, partitionA, partitionB, score, unique_activity_count_P, size_par,random_seed_P):
   with open(file_name + ".txt", "w") as file:
-    file.write("# unique_node | unique_activity_count_P | unique_activity_count_M | adj_matrix_P | adj_matrix_M | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score | random_seed_P | random_seed_M " + "\n")
+    file.write("# unique_node | unique_activity_count_P | adj_matrix_P | cut_type | sup | ratio | size_par | dataitem | partitionA | partitionB | score | random_seed_P " + "\n")
     # unique_node
     outputString = ""
     for value in unique_node:
@@ -498,20 +504,8 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, 
     for value in unique_activity_count_P:
       outputString += str(value) + " "
     file.write(outputString + "\n")
-    # unique_activity_count_M
-    outputString = ""
-    for value in unique_activity_count_M:
-      outputString += str(value) + " "
-    file.write(outputString + "\n")
     # adj_matrix_P
     for row in adj_matrix_P:
-      outputString = ""
-      for value in row:
-        outputString += str(value) + " "
-      file.write(outputString + "\n")
-    file.write("\n")
-    # adj_matrix_M
-    for row in adj_matrix_M:
       outputString = ""
       for value in row:
         outputString += str(value) + " "
@@ -541,8 +535,6 @@ def save_data(file_name, adj_matrix_P, adj_matrix_M, unique_node,cut_type, sup, 
     file.write(str(score) + "\n")
     # random_seed_P
     file.write(str(random_seed_P) + "\n")
-    # random_seed_M
-    file.write(str(random_seed_M) + "\n")
   
 def get_available_disk_space(path):
     disk_usage = psutil.disk_usage(path)
@@ -616,7 +608,7 @@ def is_log_consistent(log1, log2):
       return False
   return True
         
-def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ratio, data_piece_index, cut_type):
+def generate_data_piece_for_cut_type(file_path, number_of_activites, support, data_piece_index, cut_type):
   if number_of_activites <= 0:
     return
 
@@ -630,7 +622,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       os.makedirs(folder_name, exist_ok=True)
   
   folder_name += "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Data_" + str(data_piece_index)
 
   
   
@@ -639,7 +631,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       # Create the folder
       os.makedirs(folder_name, exist_ok=True)
      
-  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
+  folder_name += "/Sup_" + str(support)
   
   # Check if the folder with param already exists
   if not os.path.exists(folder_name):
@@ -648,7 +640,6 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       
   # Check if files already exist
   checking_files_names = [folder_name + "/treeP_" + ending_File_string,
-                          folder_name + "/treeM_" + ending_File_string,
                           folder_name + "/Cut_" + ending_File_string]
   for files in checking_files_names:
     if os.path.exists(files):
@@ -666,24 +657,17 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
     process_tree_P = generate_random_process_tree_for_cut_type(activity_list, cut_type)
     
     random_seed_P = random.randint(100000, 999999)
-    random.seed(random_seed_M)
-    logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
+    logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, random_seed_P, 0)
     
     # random.seed(random_seed_P)
     # logP_ = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, 0)
     
     # if not is_log_consistent(logP, logP_):
     #   print("Inconsistent logP")
-    
-    percentage_is_subset = 0.8
-    activity_list_near = get_partial_activity_names(activity_list, percentage_is_subset, min_percentage_subset = 0.5)
-    process_tree_M = generate_mutated_process_tree_from_process_tree(activity_list_near, process_tree_P, mutation_rate=0.5)
 
-    random_seed_M = random.randint(100000, 999999)
-    random.seed(random_seed_M)
-    logM = generate_log_from_process_tree_for_cut_type(activity_list_near, process_tree_M, 0)
+    logM = logP.__deepcopy__()
     
-    result, cut = find_best_cut_type(logP, logM, support, ratio, cut_type)
+    result, cut = find_best_cut_type(logP, logM, support, 0, cut_type)
 
     if result == True:
       # result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
@@ -693,34 +677,20 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
         print("Error saving treeP:")
         print(process_tree_P)
         continue
-        
-      try:
-        save_tree(process_tree_M, folder_name + "/treeM_" + ending_File_string)
-      except:
-        
-        if os.path.exists(folder_name + "/treeP_" + ending_File_string + ".pmt"):
-          # Delete the process_tree_P
-          os.remove(folder_name + "/treeP_" + ending_File_string + ".pmt")
-          
-        print("Error saving treeM:")
-        print(process_tree_M)
-        continue
 
-      unique_node_P, adj_matrix_P = generate_adjacency_matrix_from_log(logP)
-      unique_node_M, adj_matrix_M = generate_adjacency_matrix_from_log(logM)
-      unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+      save_log(logP, folder_name + "/logP_" + ending_File_string)
+
+      unique_nodeList, matrix_P = generate_adjacency_matrix_from_log(logP)
       
       logP_art = artificial_start_end(logP.__deepcopy__())
       logM_art = artificial_start_end(logM.__deepcopy__())
       
       activity_count_P = get_activity_count(logP_art)
-      activity_count_M = get_activity_count(logM_art)
       unique_activity_count_P = get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
-      unique_activity_count_M = get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
       
       size_par = len(logP) / len(logM)
 
-      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P, matrix_M,unique_nodeList,cut_type,support,ratio,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,unique_activity_count_M,size_par,random_seed_P,random_seed_M)
+      save_data(folder_name + "/Data_" + str(data_piece_index), matrix_P,unique_nodeList,cut_type,support, 1,data_piece_index,cut[0][0],cut[0][1], cut[4],unique_activity_count_P,size_par,random_seed_P)
       return 1
 
       
@@ -733,12 +703,12 @@ def generate_data_piece_star_function_cut_Type(args):
     return generate_data_piece_for_cut_type(*args)
     
     
-def check_if_data_piece_exists(file_path, number_of_activites, support, ratio, data_piece_index, cut_type):
+def check_if_data_piece_exists(file_path, number_of_activites, support, data_piece_index, cut_type):
   folder_name = file_path + "/" + cut_type
   folder_name += "/Data_" + str(number_of_activites)
-  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
+  folder_name += "/Sup_" + str(support)
   
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Data_" + str(data_piece_index)
   
   test_file = folder_name + "/treeP_" + ending_File_string + ".pmt"
   
@@ -748,7 +718,7 @@ def check_if_data_piece_exists(file_path, number_of_activites, support, ratio, d
   else:
     return False
     
-def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new_data_instances_per_category, list_grap_node_sizes, use_parallel = True):
+def generate_data(file_path, sup_step, unique_identifier, number_new_data_instances_per_category, list_grap_node_sizes, use_parallel = True):
   
   # Delete the folder if it already exists
   # if os.path.exists(file_path):
@@ -774,27 +744,23 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
   if sup_step == 0:
     sup_list = [0]
   else:
-    sup_list = np.round(np.arange(0,1 + sup_step,sup_step),1)
+    sup_list_temp = np.round(np.arange(0,1 + sup_step,sup_step),1)
+    sup_list = [float(x) for x in sup_list_temp]
     
-  # Setup ratio list
-  if ratio_step == 0:
-    ratio_list = [0]
-  else:
-    ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
-    
+
   cut_types = ["exc", "seq", "par", "loop"]
+  cut_types = ["seq"]
     
-  list_data_pool = [(file_path, number_activ, sup, ratio, f"{unique_identifier}{data_piece_name}", cut_type)
+  list_data_pool = [(file_path, number_activ, sup, f"{unique_identifier}{data_piece_name}", cut_type)
               for number_activ in list_grap_node_sizes
               for sup in sup_list
-              for ratio in ratio_list
               for data_piece_name in range(1,number_new_data_instances_per_category + 1)
               for cut_type in cut_types]
   
   
   # Check if the folder already exists
   if len(list_data_pool) > 0:
-    if check_if_data_piece_exists(file_path, list_data_pool[0][1], list_data_pool[0][2], list_data_pool[0][3], list_data_pool[0][4], list_data_pool[0][5]):
+    if check_if_data_piece_exists(file_path, list_data_pool[0][1], list_data_pool[0][2], list_data_pool[0][3], list_data_pool[0][4]):
         # Error
         print("Error, data already exists for unique identifier: " + str(unique_identifier))
         sys.exit()
@@ -918,21 +884,8 @@ if __name__ == '__main__':
   random.seed(random_seed)
   print()
   
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  generate_data(relative_path, 0.2, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 5, [4,5,6]
+  generate_data(relative_path, 1, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, False)
   
-  
-  # get_labeled_data_cut_type_distribution(relative_path,0.2,0.2)
-  
-  
-  # typeName = "Sup_"  + str(1.0) + "_Ratio_" + str(1.0) 
-  # filePath = relative_path + "/" + "seq" + "/Data_" + str(6) + "/" + typeName
-  # logPathP = filePath + "/logP_" + str(6) + "_" + typeName + "_Data_" + str(2)
-  # logPathM = filePath + "/logM_" + str(6) + "_" + typeName + "_Data_" + str(2)
-  # view_log(get_log(logPathP))
-  # view_log(get_log(logPathM))
-  
-  # manual_run('GNN_partitioning/GNN_Data', 4, 0.2, 0.6, 0, 5)
-
-  # log_statistic(relative_path + "data1")
 
