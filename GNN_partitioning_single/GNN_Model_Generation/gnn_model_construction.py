@@ -34,15 +34,17 @@ show_gradient = False
 use_symmetric = True
 
 def analyse_dataframe_result(df, data_settings = None, detailed = False, file_path = ""):
-    accuracy = df["Accuracy"].mean()
-    full_accuracy_number = 0
-    for index, row in df.iterrows():
-        if row['Right_Prediction'] == row['Nodes']:
-            full_accuracy_number += 1
-    if full_accuracy_number == 0:
-        full_accuracy = 0
-    else:
-        full_accuracy = full_accuracy_number / len(df)
+    sum_Right_prediction = df['Right_Prediction'].sum()
+    sum_wrong_prediction = df['Wrong_Prediction'].sum()
+    sum_amount_full_accuracy = df['Amount_full_accuracy'].sum()
+    sum_number_data = df['Number_Data_instances'].sum()
+    
+    # Calculate accuracy
+    accuracy = sum_Right_prediction / (sum_Right_prediction + sum_wrong_prediction)
+    
+    # Calculate full accuracy
+    full_accuracy = sum_amount_full_accuracy / sum_number_data
+    
     print("Accuracy: " + str(accuracy))
     print("Full Accuracy: " + str(full_accuracy))
     
@@ -267,11 +269,8 @@ def check_process_tree_for_consistency(data):
    
     
 def evaluate_model_helper(model_number, model_params, data_list, model_args, data_path, detailed = False):
-    time_cur = time.time()
     model = gnn_models.generate_model_args(model_args)
     model.load_state_dict(model_params)
-    print("Model worker loaded time: " + str(time.time() - time_cur))
-    time_cur = time.time()
     
     # 2. Set the Model to Evaluation Mode
     model.eval()
@@ -316,39 +315,101 @@ def evaluate_model_helper(model_number, model_params, data_list, model_args, dat
         masked_ground_truth_labels = masked_ground_truth_labels.bool()
         masked_predicted_labels = masked_logits.bool()
         
-        right_prediction = torch.sum(masked_ground_truth_labels == masked_predicted_labels).item()
-        wrong_prediction = torch.sum(masked_ground_truth_labels != masked_predicted_labels).item()
-        accuracy = (masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
-        if use_symmetric:
-            right_prediction_inverse = torch.sum(~masked_ground_truth_labels == masked_predicted_labels).item()
-            right_prediction = max(right_prediction, right_prediction_inverse)
-            wrong_prediction_inverse = torch.sum(~masked_ground_truth_labels != masked_predicted_labels).item()
-            wrong_prediction = min(wrong_prediction, wrong_prediction_inverse)
-            accuracy_inverse = (~masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
-            accuracy = max(accuracy, accuracy_inverse)
-        
-        print("Evaluation worker time: " + str(time.time() - time_cur))
+        res_data_dic = dict()
+        # Iterate over data_list
+        offset = 0
+        for data in data_list:
+            length = len(data["PartitionA"]) + len(data["PartitionB"])
+            ground_truth_nodes = masked_ground_truth_labels[offset:offset + length]
+            predicted_nodes = masked_predicted_labels[offset:offset + length]
+            amount_full_accuracy = 0
+            right_predictions = 0
+            wrong_predictions = 0
+            
+            right_predictions = torch.sum(ground_truth_nodes == predicted_nodes).item()
+            wrong_predictions = torch.sum(ground_truth_nodes != predicted_nodes).item()
+            if use_symmetric:
+                right_prediction_inverse = torch.sum(~ground_truth_nodes == predicted_nodes).item()
+                right_predictions = max(right_predictions, right_prediction_inverse)
+                wrong_prediction_inverse = torch.sum(~ground_truth_nodes != predicted_nodes).item()
+                wrong_predictions = min(wrong_predictions, wrong_prediction_inverse)
+                
+                if torch.all(ground_truth_nodes == predicted_nodes) or torch.all(~ground_truth_nodes == predicted_nodes):
+                    amount_full_accuracy = 1
+            else:
+                # Check if all nodes in the current segment are equal
+                if torch.all(ground_truth_nodes == predicted_nodes):
+                    amount_full_accuracy = 1
+                    
+            if detailed == False:
+                if length not in res_data_dic:
+                    res_data_dic[length] = {
+                        "right_prediction" : right_predictions,
+                        "wrong_prediction" : wrong_predictions,
+                        "amount_full_accuracy" : amount_full_accuracy,
+                        "number_instances" : 1,
+                        "predicted_score" : 0,
+                        "actual_score" : 0
+                    }
+                else:
+                    res_data_dic[length]["right_prediction"] += right_predictions
+                    res_data_dic[length]["wrong_prediction"] += wrong_predictions
+                    res_data_dic[length]["amount_full_accuracy"] += amount_full_accuracy
+                    res_data_dic[length]["number_instances"] += 1
+            else:
+                actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
+            
+                partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
+            
+                predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
+                
+                
+                if length not in res_data_dic:
+                    res_data_dic[length] = [{
+                        "right_prediction" : right_predictions,
+                        "wrong_prediction" : wrong_predictions,
+                        "amount_full_accuracy" : amount_full_accuracy,
+                        "number_instances" : 1,
+                        "predicted_score" : predicted_score,
+                        "actual_score" : actual_score
+                    }]
+                else:
+                    res_data_dic[length].append({
+                        "right_prediction" : right_predictions,
+                        "wrong_prediction" : wrong_predictions,
+                        "amount_full_accuracy" : amount_full_accuracy,
+                        "number_instances" : 1,
+                        "predicted_score" : predicted_score,
+                        "actual_score" : actual_score
+                    })
+                
+            # Update the offset for the next iteration
+            offset += length
 
-        if detailed:       
-            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
-            
-            partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
-            
-            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
-            
-            
-        else:
-            actual_score = None
-            predicted_score = None
-
-        df_res = pd.concat([df_res, pd.DataFrame.from_records([{
-            "Nodes" : len(masked_predicted_labels),
-            "Right_Prediction": right_prediction,
-            "Wrong_Prediction": wrong_prediction,
-            "Accuracy" : accuracy,
-            "Predicted_Score" : predicted_score,
-            "Actual_Score" : actual_score
-        }])])
+        df_res = None
+        for key, value in res_data_dic.items():
+            if detailed == False:
+                df_res = pd.concat([df_res, pd.DataFrame.from_records([{
+                    "Nodes" : key,
+                    "Number_Data_instances" : value["number_instances"],
+                    "Right_Prediction": value["right_prediction"],
+                    "Wrong_Prediction": value["wrong_prediction"],
+                    "Amount_full_accuracy" : value["amount_full_accuracy"],
+                    "Predicted_Score" : value["predicted_score"],
+                    "Actual_Score" : value["actual_score"]
+                }])])
+            else:
+                for i, data in enumerate(value):
+                    df_res = pd.concat([df_res, pd.DataFrame.from_records([{
+                        "Nodes" : key,
+                        "Number_Data_instances" : data["number_instances"],
+                        "Right_Prediction": data["right_prediction"],
+                        "Wrong_Prediction": data["wrong_prediction"],
+                        "Amount_full_accuracy" : data["amount_full_accuracy"],
+                        "Predicted_Score" : data["predicted_score"],
+                        "Actual_Score" : data["actual_score"],
+                        "Accuracy" : data["right_prediction"] / (data["right_prediction"] + data["wrong_prediction"])
+                    }])])
     return df_res
     
 def evaluate_model_helper_star(args):
@@ -356,11 +417,11 @@ def evaluate_model_helper_star(args):
    
 def evaluate_model(model_number, model_params, test_dict, model_args, data_path, parallel = True, detailed = False):
     time_cur = time.time()
-    combined_df = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
+    combined_df = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction"])
 
     all_train_items = [value for values in test_dict.values() for value in values]
     
-    print("Model data setup time: " + str(time.time() - time_cur))
+    # print("Model data setup time: " + str(time.time() - time_cur))
     
     if parallel:
         num_processors_available = multiprocessing.cpu_count()
@@ -373,22 +434,24 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
         
         batch_size = math.ceil(len(all_train_items) / num_processors)
         list_data_pool = []
-        for i in range(0, len(all_train_items), batch_size):
-            batch_data = all_train_items[i:i + batch_size]
+        offset = 0
+        for i in range(num_processors):
+            batch_data = all_train_items[offset:offset + batch_size]
             batch = (model_number, model_params, batch_data, model_args, data_path, detailed)
             list_data_pool.append(batch)
-        
+            offset += batch_size
+
         pool_res = None
         with multiprocessing.Pool(num_processors) as pool:
-            # pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
-            pool_res = pool.imap(evaluate_model_helper_star, list_data_pool)
+            pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
+            # pool_res = pool.imap(evaluate_model_helper_star, list_data_pool)
             
             for result in pool_res:
                 # Process individual evaluation result
                 combined_df = pd.concat([combined_df, result])
     else:
         for data in all_train_items:
-            df_res = evaluate_model_helper(model_number, model_params, [data], model_args, detailed)
+            df_res = evaluate_model_helper(model_number, model_params, [data], model_args, data_path, detailed)
             combined_df = combine_dataframes(combined_df, df_res)
     
             
@@ -739,7 +802,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
 
         print()
         print("INITIAL STATISTIC")
-        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, relative_path_data)
+        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, relative_path_data, detailed=True)
         analyse_dataframe_result(df_res)
 
         print()
