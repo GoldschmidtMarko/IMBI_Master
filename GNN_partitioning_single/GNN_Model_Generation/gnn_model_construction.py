@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import os
 import numpy as np
+import math
 import time
 import multiprocessing
 from sklearn.model_selection import train_test_split
@@ -265,9 +266,12 @@ def check_process_tree_for_consistency(data):
     print("All checked")
    
     
-def evaluate_model_helper(model_number, model_params, data, model_args, data_path, detailed = False):
+def evaluate_model_helper(model_number, model_params, data_list, model_args, data_path, detailed = False):
+    time_cur = time.time()
     model = gnn_models.generate_model_args(model_args)
     model.load_state_dict(model_params)
+    print("Model worker loaded time: " + str(time.time() - time_cur))
+    time_cur = time.time()
     
     # 2. Set the Model to Evaluation Mode
     model.eval()
@@ -276,27 +280,37 @@ def evaluate_model_helper(model_number, model_params, data, model_args, data_pat
     
     # 3. Forward Pass
     with torch.no_grad():
-        predictions = gnn_models.get_model_outcome(model_number, model, data)
         
-        # Apply softmax to obtain probability distributions over classes
-        probs = F.sigmoid(predictions)
+        predictions_list = []
+        mask_list = []
+        batch_labels = []
+        for data in data_list:
+            predictions = gnn_models.get_model_outcome(model_number, model, data)
+            # Apply softmax to obtain probability distributions over classes
+            probs = F.sigmoid(predictions)
+            binary_predictions = torch.round(probs)
+            predictions_list.append(binary_predictions)
+            
+            
+        for data in data_list:
+            # Assuming you have a tensor `mask` that indicates which nodes to ignore
+            mask = get_ignore_mask(data)
+            mask = torch.unsqueeze(mask, dim=1)
+            boolean_mask = (mask == 1)
+            mask_list.append(boolean_mask)
+            
+            target_tensor = torch.tensor(data["Truth"],dtype=torch.float32)
+            target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
+            batch_labels.append(target_tensor_transposed)
         
-        binary_predictions = torch.round(probs)
-        
-        # Assuming you have a tensor `mask` that indicates which nodes to ignore
-        mask = get_ignore_mask(data)
-        mask = torch.unsqueeze(mask, dim=1)
-        
-        # Convert the mask to a boolean mask
-        boolean_mask = (mask == 1)
-        
-        target_tensor = torch.tensor(data["Truth"])
-        
-        target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
-        
+
+        batch_labels = torch.cat(batch_labels, dim=0)
+        mask_list = torch.cat(mask_list, dim=0)
+        predictions_list = torch.cat(predictions_list, dim=0)
+
         # Apply the mask to the ground truth labels and logits tensors 
-        masked_ground_truth_labels = target_tensor_transposed[boolean_mask]
-        masked_logits = binary_predictions[boolean_mask]
+        masked_ground_truth_labels = batch_labels * mask_list
+        masked_logits = predictions_list * mask_list
         
         # Apply the mask to the ground truth labels and logits tensors
         masked_ground_truth_labels = masked_ground_truth_labels.bool()
@@ -313,7 +327,7 @@ def evaluate_model_helper(model_number, model_params, data, model_args, data_pat
             accuracy_inverse = (~masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
             accuracy = max(accuracy, accuracy_inverse)
         
-        
+        print("Evaluation worker time: " + str(time.time() - time_cur))
 
         if detailed:       
             actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
@@ -341,12 +355,12 @@ def evaluate_model_helper_star(args):
     return evaluate_model_helper(*args)    
    
 def evaluate_model(model_number, model_params, test_dict, model_args, data_path, parallel = True, detailed = False):
-
+    time_cur = time.time()
     combined_df = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
 
     all_train_items = [value for values in test_dict.values() for value in values]
     
-    list_data_pool = [(model_number, model_params, data, model_args, data_path, detailed) for data in all_train_items]
+    print("Model data setup time: " + str(time.time() - time_cur))
     
     if parallel:
         num_processors_available = multiprocessing.cpu_count()
@@ -354,7 +368,15 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
             num_processors = max(1,round(num_processors_available))
         else:
             num_processors = max(1,round(num_processors_available/2))
+            
         print("Running parallel evaluation with " + str(num_processors) + "/" + str(num_processors_available) + " processors")
+        
+        batch_size = math.ceil(len(all_train_items) / num_processors)
+        list_data_pool = []
+        for i in range(0, len(all_train_items), batch_size):
+            batch_data = all_train_items[i:i + batch_size]
+            batch = (model_number, model_params, batch_data, model_args, data_path, detailed)
+            list_data_pool.append(batch)
         
         pool_res = None
         with multiprocessing.Pool(num_processors) as pool:
@@ -366,7 +388,7 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
                 combined_df = pd.concat([combined_df, result])
     else:
         for data in all_train_items:
-            df_res = evaluate_model_helper(model_number, model_params, data, model_args, detailed)
+            df_res = evaluate_model_helper(model_number, model_params, [data], model_args, detailed)
             combined_df = combine_dataframes(combined_df, df_res)
     
             
