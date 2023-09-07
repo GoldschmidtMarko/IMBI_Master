@@ -13,6 +13,7 @@ from pm4py.objects.log.importer.xes import importer as xes_importer
 from pm4py.objects.process_tree.exporter import exporter as tree_exporter
 import sys
 import time
+import datetime
 
 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 sys.path.append(root_path)
@@ -738,6 +739,7 @@ def generate_data(file_path, sup_step, unique_identifier, number_new_data_instan
   #   shutil.rmtree(file_path)
   
   print("Generating GNN Data in: " + file_path)
+  print("Current time: " + str(datetime.datetime.now()))
   
   # Check if the folder already exists
   if not os.path.exists(file_path):
@@ -802,7 +804,7 @@ def generate_data(file_path, sup_step, unique_identifier, number_new_data_instan
   print("Number of generated data pieces: " + str(sum_results) + " of " + str(len(list_data_pool)))
   print("Percentage of generated data pieces: " + str(round((sum_results / len(list_data_pool) * 100),2)) + "%")
    
-def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
+def get_labeled_data_cut_type_distribution(file_path, sup_step):
   print("Getting labeled data cut type distribution in: " + file_path)
   result_dic = dict()
   
@@ -811,12 +813,6 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
     sup_list = [0]
   else:
     sup_list = np.round(np.arange(0,1 + sup_step,sup_step),1)
-    
-  # Setup ratio list
-  if ratio_step == 0:
-    ratio_list = [0]
-  else:
-    ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     
   cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
     
@@ -834,12 +830,11 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step):
           if integer not in result_dic[cut]:
             result_dic[cut][integer] = 0
           for sup in sup_list:
-            for ratio in ratio_list:
-              sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio)
-              current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
-              if os.path.exists(current_path_variant):
-                txt_files = get_txt_files(current_path_variant)
-                result_dic[cut][integer] += len(txt_files)
+            sup_ratio_string = "Sup_" + str(sup)
+            current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
+            if os.path.exists(current_path_variant):
+              txt_files = get_txt_files(current_path_variant)
+              result_dic[cut][integer] += len(txt_files)
   
   for key, dic_data in result_dic.items():
     if key != "loop_tau" and key != "exc_tau":
@@ -900,5 +895,6 @@ if __name__ == '__main__':
   unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
   # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [2,3,4,5,6,7]
   generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+  # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   
 

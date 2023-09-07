@@ -14,9 +14,10 @@ from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Expo
 from pm4py.objects.log.importer.xes.importer import apply
 import sys
 from pm4py.objects.process_tree.importer import importer as tree_importer
+import datetime
 
-desired_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
-sys.path.append(desired_path)
+root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+sys.path.append(root_path)
 
 from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_score_for_cut_type
 import random
@@ -27,7 +28,6 @@ from tqdm import tqdm
 import gnn_models
 import json
 
-relative_path = "GNN_partitioning_single/GNN_Data"
 random_seed = 1996
 show_gradient = False
 use_symmetric = True
@@ -130,9 +130,9 @@ def show_dfg(log):
     cur_dfg = dfg_inst.apply(log, parameters=parameters)
     view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
 
-def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece, random_seed_P):
+def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece, random_seed_P, data_path):
     typeName = "Sup_"  + str(sup)
-    filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
+    filePath = data_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
     path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
     
     treeP = load_tree(path_tree_P)
@@ -265,7 +265,7 @@ def check_process_tree_for_consistency(data):
     print("All checked")
    
     
-def evaluate_model_helper(model_number, model_params, data, model_args, detailed = False):
+def evaluate_model_helper(model_number, model_params, data, model_args, data_path, detailed = False):
     model = gnn_models.generate_model_args(model_args)
     model.load_state_dict(model_params)
     
@@ -313,11 +313,14 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
             accuracy_inverse = (~masked_ground_truth_labels == masked_predicted_labels).float().mean().item()
             accuracy = max(accuracy, accuracy_inverse)
         
-        partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
+        
 
         if detailed:       
-            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"])
-            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"])
+            actual_score = get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
+            
+            partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
+            
+            predicted_score = get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
             
             
         else:
@@ -337,26 +340,26 @@ def evaluate_model_helper(model_number, model_params, data, model_args, detailed
 def evaluate_model_helper_star(args):
     return evaluate_model_helper(*args)    
    
-def evaluate_model(model_number, model_params, test_dict, model_args, detailed = False):
+def evaluate_model(model_number, model_params, test_dict, model_args, data_path, parallel = True, detailed = False):
 
     combined_df = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
 
     all_train_items = [value for values in test_dict.values() for value in values]
     
-    list_data_pool = [(model_number, model_params, data, model_args, detailed) for data in all_train_items]
+    list_data_pool = [(model_number, model_params, data, model_args, data_path, detailed) for data in all_train_items]
     
-    if detailed and False:
+    if parallel:
         num_processors_available = multiprocessing.cpu_count()
-        print("Number of available processors:", num_processors_available)
         if num_processors_available > 20:
             num_processors = max(1,round(num_processors_available))
         else:
             num_processors = max(1,round(num_processors_available/2))
-        print("Number of used processors:", num_processors)
+        print("Running parallel evaluation with " + str(num_processors) + "/" + str(num_processors_available) + " processors")
         
         pool_res = None
         with multiprocessing.Pool(num_processors) as pool:
-            pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
+            # pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
+            pool_res = pool.imap(evaluate_model_helper_star, list_data_pool)
             
             for result in pool_res:
                 # Process individual evaluation result
@@ -370,7 +373,7 @@ def evaluate_model(model_number, model_params, test_dict, model_args, detailed =
 
     return combined_df
 
-def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args, data_settings):
+def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args, data_settings, data_path):
     # Define the loss function
     criterion = nn.BCEWithLogitsLoss()
 
@@ -387,11 +390,12 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
     
     # Compute the total number of batches
     num_batches = len(all_train_items) // batch_size
-    
+
     # Set model to training mode
     model.train()
     
     for epoch in range(num_epochs):
+        time_start = time.time()
         # Shuffle the training data for each epoch
         random.shuffle(all_train_items)
         loss = None
@@ -450,13 +454,16 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
             
         # Adjust the learning rate
         # scheduler.step()
-
+        time_diff = time.time() - time_start
+        time_start = time.time()
         # Print the loss for monitoring
         print()
         if loss is not None:
-            print(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item()}")
-        df_res = evaluate_model(model_number, model.state_dict(), training_dic, model_args)
+            print(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item()} | Time: {time_diff}")
+        df_res = evaluate_model(model_number, model.state_dict(), training_dic, model_args, data_path)
         analyse_dataframe_result(df_res)
+        time_diff = time.time() - time_start
+        print("Time for evaluation: " + str(time_diff))
         
         # Check gradients
         for name, param in model.named_parameters():
@@ -582,6 +589,22 @@ def get_data_length_from_dic(data_dic):
         length += len(data_dic[key])
     return length
 
+def does_tree_exist(data, data_path):
+    support = data["Support"]
+    dataSet_numbers = len(data["PartitionA"]) + len(data["PartitionB"])
+    datapiece = data["Dataitem"]
+    cut_type = data["Cut_type"]
+    
+    typeName = "Sup_"  + str(support)
+    filePath = data_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    
+    if os.path.exists(path_tree_P):
+        return True
+    else:
+        return False
+    
+
 def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
     data_dic = dict()
     max_node_size_in_dataset = 0
@@ -604,12 +627,13 @@ def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
         if get_data_length_from_dic(data_dic) > max_dataSet_numbers:
             break
         data = read_data_from_path(pathFile)
-        max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
-        nodeSize = len(data["PartitionA"]) + len(data["PartitionB"])
-        if nodeSize in data_dic:
-            data_dic[nodeSize].append(data)
-        else:
-            data_dic[nodeSize] = [data]
+        if does_tree_exist(data, file_path):
+            max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
+            nodeSize = len(data["PartitionA"]) + len(data["PartitionB"])
+            if nodeSize in data_dic:
+                data_dic[nodeSize].append(data)
+            else:
+                data_dic[nodeSize] = [data]
 
                         
     data_dic = setup_dataSet(data_dic,max_node_size_in_dataset)
@@ -626,9 +650,15 @@ def save_model_parameter(file_name, data_settings, model_args):
             file.write(key + ': ' + str(value) + '\n')
             
                     
-def generate_Models(file_path_models, save_results = False, file_path_results = ""):
+def generate_Models(file_path_models, save_results = False, file_path_results = "", relative_path_data = ""):
+    
+    print("Running model generation")
+    print("Relative path for models: " + file_path_models)
+    print("Relative path for results: " + file_path_results)
+    print("Relative path for data: " + relative_path_data)
+    print("Current time: " + str(datetime.datetime.now()))
+    
     time_start = time.time()
-
     hidden_dim = 32
     # best models:
     # 8 - conv
@@ -646,7 +676,11 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     for cut_type in cut_types:
         print("Cut type: " + cut_type)
         print("Reading Data")
-        data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, cut_type, max_dataSet_numbers)
+        data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path_data, cut_type, max_dataSet_numbers)
+        
+        if len(data_dic) == 0:
+            print("No data found for cut type: " + cut_type)
+            continue
 
         data_settings = {"Cut_type" : cut_type,
                         "model_number" : model_number,
@@ -683,18 +717,20 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
 
         print()
         print("INITIAL STATISTIC")
-        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args)
+        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, relative_path_data)
         analyse_dataframe_result(df_res)
 
         print()
         print("Training Model")
-        train_model(model_number,model, num_epochs, batch_size, train_dict ,model_args, data_settings)
+        train_model(model_number,model, num_epochs, batch_size, train_dict ,model_args, data_settings, relative_path_data)
 
         print()
         print("FINAL STATISTIC")
         print("Evaluating Model")
-        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, detailed=save_results)
+        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args,relative_path_data, detailed=save_results)
         analyse_dataframe_result(df_res, data_settings, detailed=save_results, file_path=file_path_results)
+        if not os.path.exists(file_path_models):
+            os.makedirs(file_path_models)
         torch.save(model.state_dict(), file_path_models + '/gnn_model_' + cut_type + ".pt")
         save_model_parameter(file_path_models + '/gnn_model_' + cut_type + ".txt", data_settings, model_args)
     
@@ -704,8 +740,8 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
 
 
 
-def test_trees():
-    data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path, "seq", 100000)
+def test_trees(relative_path_data):
+    data_dic, max_node_size_in_dataset = read_all_data_for_cut_Type(relative_path_data, "seq", 100000)
     for key, value in data_dic.items():
         for item in value:
             check_process_tree_for_consistency(item)
@@ -713,9 +749,13 @@ def test_trees():
 if __name__ == '__main__':
     random.seed(random_seed)
     
-    # test_trees()
+    # test_trees(relative_path_data)
     
-    generate_Models("GNN_partitioning_single/GNN_Model", True, "GNN_partitioning_single/GNN_Accuracy_Results")
+    relative_path_model = root_path + "/GNN_partitioning_single/GNN_Model"
+    relative_path_results = root_path + "/GNN_partitioning_single/GNN_Accuracy_results"
+    relative_path_data = root_path + "/GNN_partitioning_single/GNN_Data"
+    
+    generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
 
 
 
