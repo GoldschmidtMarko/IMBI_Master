@@ -687,7 +687,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, da
     if result == True:
       # result, cut = find_best_cut_type(logP,logM,support,ratio, cut_type)
       try:
-        save_tree(process_tree_P, folder_name + "/treeP_" + ending_File_string)
+        save_tree(process_tree_P, folder_name + "/treeP_" + ending_File_string + ".json")
       except:
         print("Error saving treeP:")
         print(process_tree_P)
@@ -893,7 +893,7 @@ if __name__ == '__main__':
   print()
   
   unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [2,3,4,5,6,7]
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [2,3,4,5]
   generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   

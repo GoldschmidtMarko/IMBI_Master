@@ -138,7 +138,7 @@ def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, 
     filePath = data_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
     path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
     
-    treeP = load_tree(path_tree_P)
+    treeP = load_tree(path_tree_P + ".json")
     
     random.seed(random_seed_P)
     logP = play_out(treeP)

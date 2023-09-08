@@ -1,17 +1,22 @@
 import sys
+import os
 # caution: path[0] is reserved for script path (or '' in REPL)
 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 sys.path.append(root_path)
 
+import random
 from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
 import warnings
+import json
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
 from pm4py.objects.log.importer.xes.importer import apply as apply_import_xes
 from local_pm4py.algo.analysis import custom_enum
 from pm4py import view_petri_net
 from pm4py import save_vis_petri_net
+from pm4py import play_out
 import pandas as pd
 from local_pm4py.algo.analysis import Optimzation_Goals
+from pm4py.objects.process_tree.obj import ProcessTree, Operator
 import matplotlib.pyplot as plt
 import numpy as np
 import math
@@ -21,7 +26,6 @@ from PIL import Image
 import multiprocessing
 from tqdm import tqdm
 import pm4py
-import os
 from pebble import ProcessPool
 from concurrent.futures import TimeoutError
 
@@ -120,22 +124,23 @@ def visualize_All_petriNet(df, miner):
     visualize_petriNet(df,miner,logPName,logMName)
 
 def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
+  
   mes = Optimzation_Goals.apply_petri_silent(log,logM,net,im,fm)
 
   df = pd.concat([df, pd.DataFrame.from_records([{
     "miner" : name,
     "cut_type" : cut_Type,
     "logP_Name": logPName[:logPName.rfind(".")],
-    "logM_Name": logMName[:logMName.rfind(".")],
+    "logM_Name": "",
     "imf_noise_thr" : imf_noiseThreshold,
     "hm_depen_thr" : hm_dependency_threshold,
     "im_bi_sup" : im_bi_sup,
     "im_bi_ratio" : im_bi_ratio,
     "use_gnn" : use_gnn,
-    "acc_logs": mes['acc'],
+    # "acc_logs": mes['acc'],
     "fitP" : mes['fitP'],
-    "fitM" : mes['fitM'],
-    "f1_fit_logs": mes['F1'],
+    # "fitM" : mes['fitM'],
+    # "f1_fit_logs": mes['F1'],
     "precision" : mes['precision'],
     "net": net,
     "im" : im,
@@ -165,10 +170,10 @@ def get_log(file_name):
   log = apply_import_xes(file_name, parameters=parameter)
   return log
 
-def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
+def applyMinerToLogForGNN(df, cut_Type, logP, logPName, noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
   cur_time = time.time()
-  logP = get_log(logPathP)
-  logM = get_log(logPathM)
+  
+  logM = logP.__deepcopy__()
   
   time_loading = time.time() - cur_time
   cur_time = time.time()
@@ -182,7 +187,7 @@ def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = 
   time_in_bi = time.time() - cur_time
   cur_time = time.time()
   
-  df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName="",im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
   
   
   time_measurement = time.time() - cur_time
@@ -190,7 +195,7 @@ def applyMinerToLogForGNN(df, cut_Type, logPathP, logPathM,logPName, logMName = 
   
   save_cuts = False
   if save_cuts == True:
-    fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + logMName[:logMName.rfind(".")]
+    fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + ""
     visualize_cuts(fileName_cuts_ali)
   
   # print("Load: " + str(round(time_loading,2)) + " | Imbi: " + str(round(time_in_bi,2)) + " | Measure: " + str(round(time_measurement,2)))
@@ -270,7 +275,6 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
         with open(file_path, 'r') as file:
             # Iterate over each line in the file
             matrix_P_arrayList = []
-            matrix_M_arrayList = []
             state = -1
             for line in file:
                 if state == -1:
@@ -284,63 +288,55 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
                     data["Activity_count_P"] = np.array(line.split(" ")[:-1]).astype(int)
                     state += 1
                     continue
-                elif state == 2:
-                    data["Activity_count_M"] = np.array(line.split(" ")[:-1]).astype(int)
-                    state += 1
-                    continue
-                elif state == 3 and line == "\n":
+                elif state == 2 and line == "\n":
                     data["Adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
                     state += 1
                     continue
-                elif state == 4 and line == "\n":
-                    data["Adjacency_matrix_M"] = np.vstack(matrix_M_arrayList)
-                    state += 1
-                    continue   
-                elif state == 5:
+                elif state == 3:
                     data["Cut_type"] = line[:-1]
                     state += 1
                     continue 
-                elif state == 6:
+                elif state == 4:
                     data["Support"] = float(line[:-1])
                     state += 1
                     continue 
-                elif state == 7:
+                elif state == 5:
                     data["Ratio"] = float(line[:-1])
                     state += 1
                     continue 
-                elif state == 8:
-                    data["Pruning"] = int(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 9:
+                elif state == 6:
                     data["Size_par"] = float(line[:-1])
                     state += 1
                     continue 
-                elif state == 10:
-                    data["Dataitem"] = int(line[:-1])
+                elif state == 7:
+                    data["Dataitem"] = line[:-1]
                     state += 1
                     continue 
-                elif state == 11:
+                elif state == 8:
                     data["PartitionA"] = line.split(" ")[:-1]
                     state += 1
                     continue 
-                elif state == 12:
+                elif state == 9:
                     data["PartitionB"] = line.split(" ")[:-1]
                     state += 1
                     continue 
-                elif state == 13:
+                elif state == 10:
                     data["Score"] = float(line[:-1])
                     state += 1
                     continue 
+                elif state == 11:
+                    data["random_seed_P"] = int(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 12:
+                    data["tree"] = str(line[:-1])
+                    state += 1
+                    continue 
                 
-                if state == 3:
+                if state == 2:
                     lineList = line.split(" ")[:-1]
                     np_array = np.array(lineList, dtype=int)
                     matrix_P_arrayList.append(np_array)
-                if state == 4:
-                    lineList = line.split(" ")[:-1]
-                    np_array = np.array(lineList, dtype=int)
-                    matrix_M_arrayList.append(np_array)
     return data
 
   def is_string_present(string, list):
@@ -353,24 +349,6 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
         return True
     return False
   
-  def get_last_number(string_input):
-    last_underscore_index = string_input.rfind("_")
-    if last_underscore_index != -1:
-      substring_after_underscore = string_input[last_underscore_index + 1:]
-      # Find the index of the first non-digit character in the substring
-      index_of_non_digit = next((i for i, c in enumerate(substring_after_underscore) if not c.isdigit()), None)
-
-      if index_of_non_digit is not None:
-        # Extract the numbers before the non-digit character
-        extracted_number = int(substring_after_underscore[:index_of_non_digit])
-        return extracted_number
-      else:
-        print("Error, No numbers found after the last underscore.")
-        return -1
-    else:
-      print("Error, No underscores found in the file name.")
-      return -1
-  
   def get_last_Data_number(string):
     parts = string.split('Data_')
     if len(parts) > 1:
@@ -380,9 +358,24 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
             return int(number_part)
     return 101
   
+  def convert_to_output(input_str):
+    # Split the input string on "tree"
+    parts1 = input_str.split("tree")
+    
+    # Get the part after "tree" and split it on the last underscore
+    parts2 = parts1[1].rsplit('_', 1)
+    
+    # Extract the numeric part
+    numeric_part = parts2[1].split('.')[0]
+    
+    # Construct the output string
+    output_str = parts1[0] + "Data_" + numeric_part + ".txt"
+    
+    return output_str
+  
   if use_synthetic:
     cut_types = ["par", "exc","loop", "seq"]
-    # cut_types = ["par", "exc", "seq"]
+    # cut_types = ["seq"]
     pathFiles = {key: [] for key in cut_types}
     currentPath = dataPath
     if os.path.exists(dataPath):
@@ -399,25 +392,16 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
               for file in files:
                 if not continue_running:
                   break
-                if file.endswith(".xes"):  # Filter for text files
-                  found_file = os.path.join(root, file)
-                  if "treeP" in found_file:
-                    file_M = found_file.replace("treeP", "treeM")
-                    file_P = found_file
-                  else:
-                    file_M = found_file
-                    file_P = found_file.replace("treeM", "treeP")
-                  
-                  
-                  input_detail_file = os.path.join(root, "Data_" + str(get_last_number(file_P)) + ".txt")
-                  if os.path.exists(input_detail_file):     
-                    if os.path.exists(file_M):
-                      if not is_string_present(file_P, pathFiles[cut_type]) and not is_string_present(file_M, pathFiles[cut_type]):
-                        data = read_data_from_path(input_detail_file)
-                        pathFiles[cut_type].append((file_P, file_M, data["Support"], data["Ratio"]))
-                    if len(pathFiles[cut_type]) >= num_data_per_category:
-                      continue_running = False
-                      break
+                
+                if file.endswith(".json"):
+                  tree_file = os.path.join(root, file)
+                  data_txt_file = convert_to_output(tree_file)
+                  if os.path.exists(data_txt_file):     
+                    data = read_data_from_path(data_txt_file)
+                    pathFiles[cut_type].append((tree_file, data))
+                  if len(pathFiles[cut_type]) >= num_data_per_category:
+                    continue_running = False
+                    break
 
   else:
     pathFiles = []
@@ -441,7 +425,7 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
 def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False):
   pathFiles = get_data_paths(True, dataPath, max_node_size, num_data_per_category)
 
-  TIMEOUT_SECONDS = 60
+  
 
   for cut_type, dataList in pathFiles.items():
     print("Running: " + cut_type)
@@ -454,11 +438,16 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
         num_processors = max(1,round(num_processors_available/2))
       print("Number of used processors:", num_processors)
 
+      batch_size = math.ceil(len(dataList) / num_processors)
       input_data = []
-      for data in dataList:
-        for gnn in using_gnn:
-          df_temp = create_df()
-          input_data.append((df_temp, cut_type, [data], [gnn]))
+      offset = 0
+      for i in range(num_processors):
+          batch_data = dataList[offset:offset + batch_size]
+          df_temp = df.copy()
+          input_data.append((df_temp, cut_type, batch_data, [False, True]))
+          offset += batch_size
+          
+      TIMEOUT_SECONDS = 60 * batch_size
       
       pool_res = []
       '''
@@ -517,11 +506,15 @@ def run_evaluation_trace_variants_synthetic(dataPath, num_data_per_category, max
         num_processors = max(1,round(num_processors_available/2))
       print("Number of used processors:", num_processors)
 
+      batch_size = math.ceil(len(dataList) / num_processors)
       input_data = []
-      for data in dataList:
-        df_temp = df.copy()
-        input_data.append((df_temp, cut_type, data))
-          
+      offset = 0
+      for i in range(num_processors):
+          batch_data = dataList[offset:offset + batch_size]
+          df_temp = df.copy()
+          input_data.append((df_temp, cut_type, batch_data))
+          offset += batch_size
+ 
       pool_res = None
       with multiprocessing.Pool(num_processors) as pool:
           pool_res = tqdm(pool.imap(run_evaluation_category_trace_variants_star, input_data),total=len(input_data))
@@ -646,31 +639,50 @@ def run_evaluation_category_trace_variants(df, cut_type, data):
 def run_evaluation_category_star(args):
     return run_evaluation_category(*args)    
 
+def get_log_from_tree(tree, seed):
+  random.seed(seed)
+  logP = play_out(tree)
+  return logP
+
+def load_tree(file_name):
+  def get_Operator_from_string(operator_string):
+    if operator_string == "->":
+        return Operator.SEQUENCE
+    elif operator_string == "X":
+        return Operator.XOR
+    elif operator_string == "+":
+        return Operator.PARALLEL
+    elif operator_string == "*":
+        return Operator.LOOP
+    return None
+ 
+  def deserialize_tree(serialized_node):
+      if serialized_node is None:
+          return None
+      
+      node = ProcessTree()
+      node.label = serialized_node["label"]
+      node.operator = get_Operator_from_string(serialized_node["operand"])
+      node.children = [deserialize_tree(child) for child in serialized_node["children"]]
+      return node
+
+  with open(file_name, "r") as file:
+      serialized_tree = json.load(file)
+
+  return deserialize_tree(serialized_tree)
+  
 def run_evaluation_category(df, cut_type, dataList, using_gnn):
   for data in dataList:
-    support = data[2]
-    ratio = data[3]
+    support = data[1]["Support"]
+    ratio = data[1]["Ratio"]
+    
+    tree_path = data[0]
+    treeP = load_tree(tree_path)
+    logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
+    
     for use_gnn in using_gnn:
-      df = applyMinerToLogForGNN(df, cut_type, data[0], data[1], data[0], data[1], 0.2, 0.99, support, ratio,use_gnn)
+      df = applyMinerToLogForGNN(df, cut_type, logP, tree_path, 0.2, 0.99, support, ratio,use_gnn)
   return df
-
-# Define a custom aggregation function
-def custom_agg(group):
-  if len(group) > 2:
-    print(f"Aggregating {len(group)} rows for group: {group.iloc[0]}")
-
-  use_gnn_sum = group.loc[group['use_gnn']]
-  not_use_gnn_sum = group.loc[~group['use_gnn']]
-  
-  result = {
-      'precision': not_use_gnn_sum['precision'].sum() - use_gnn_sum['precision'].sum(),
-      'fitP': not_use_gnn_sum['fitP'].sum() - use_gnn_sum['fitP'].sum(),
-      'fitM': not_use_gnn_sum['fitM'].sum() - use_gnn_sum['fitM'].sum(),
-      'f1_fit_logs': not_use_gnn_sum['f1_fit_logs'].sum() - use_gnn_sum['f1_fit_logs'].sum(),
-      'acc_logs': not_use_gnn_sum['acc_logs'].sum() - use_gnn_sum['acc_logs'].sum()
-  }
-  
-  return pd.Series(result)
 
 def get_measurement_delta(df, columnList, column_feature):
   
@@ -678,11 +690,26 @@ def get_measurement_delta(df, columnList, column_feature):
 
   # Trim the DataFrame to include only specific columns
   df = df[columns_to_keep]
+  df = df.fillna("")
+  # common_prefix = "C:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master\\GNN_partitioning_single\\GNN_Data"
+  # df['logP_Name'] = df['logP_Name'].str.replace(common_prefix, '', regex=False)
   
-  # pd.set_option("display.max_colwidth", 10)
+  # pd.set_option("display.max_colwidth", 200)
   # print(df.head(10))
   # print(columnList)
+  
+  def custom_agg(group):
+    precision_diff = group.loc[group['use_gnn'] == False, 'precision'].mean() - \
+                    group.loc[group['use_gnn'] == True, 'precision'].mean()
+
+    fitP_diff = group.loc[group['use_gnn'] == False, 'fitP'].mean() - \
+                group.loc[group['use_gnn'] == True, 'fitP'].mean()
+
+    return pd.Series({'precision': precision_diff, 'fitP': fitP_diff})
+
+  # Apply the custom aggregation function and reset the index
   df_measurement = df.groupby(columnList).apply(custom_agg).reset_index()
+  
   # print()
   # pd.set_option("display.max_colwidth", 10)
   # print(df_measurement.head(10))
@@ -807,7 +834,7 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
     
     if progress == 0:
       using_gnn = [False, True]
-      num_data_per_category = 300
+      num_data_per_category = 50
       
       df = run_evaluation_delta_synthetic(df, synthetic_path, num_data_per_category, using_gnn, max_node_size=8, parallel = True)
       # Save the DataFrame to a CSV file
@@ -841,8 +868,8 @@ if __name__ == '__main__':
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = False
-    column_feature = ["precision","acc_logs", "fitP", "fitM", "f1_fit_logs"]
+    use_synthetic = True
+    column_feature = ["precision","fitP"]
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
     column_prefix = "Δ "
