@@ -443,8 +443,8 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
 
         pool_res = None
         with multiprocessing.Pool(num_processors) as pool:
-            pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
-            # pool_res = pool.imap(evaluate_model_helper_star, list_data_pool)
+            # pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
+            pool_res = pool.imap(evaluate_model_helper_star, list_data_pool)
             
             for result in pool_res:
                 # Process individual evaluation result
@@ -802,7 +802,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
 
         print()
         print("INITIAL STATISTIC")
-        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, relative_path_data, detailed=True)
+        df_res = evaluate_model(model_number,model.state_dict(), test_dict, model_args, relative_path_data)
         analyse_dataframe_result(df_res)
 
         print()

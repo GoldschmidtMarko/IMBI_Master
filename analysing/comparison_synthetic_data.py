@@ -1,6 +1,8 @@
 import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
-sys.path.insert(1, 'C:/Users/Marko/Desktop/GIt/IMBI_Master')
+root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+sys.path.append(root_path)
+
 from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
 import warnings
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
@@ -774,14 +776,14 @@ def sanity_check_input(synthetic_path, real_path):
     return 1
   
 
-def get_dataframe_trace_Variants(synthetic_path = None, real_path = None):
+def get_dataframe_trace_Variants(data_path_csv, synthetic_path = None, real_path = None):
   progress = sanity_check_input(synthetic_path, real_path)
   if progress == -1:
     sys.exit()
   if progress == 0:
-    csv_filename = "output_trace_variant_synthetic.csv"
+    csv_filename = os.path.join(data_path_csv, "output_trace_variant_synthetic.csv")
   else:
-    csv_filename = "output_trace_variant_real.csv"
+    csv_filename = os.path.join(data_path_csv, "output_trace_variant_real.csv")
     
   if not os.path.exists(csv_filename):
     if progress == 0:
@@ -794,14 +796,14 @@ def get_dataframe_trace_Variants(synthetic_path = None, real_path = None):
     df = pd.read_csv(csv_filename)
   return df
       
-def get_dataframe_delta(synthetic_path = None, real_path = None):
+def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
   progress = sanity_check_input(synthetic_path, real_path)
   if progress == -1:
     sys.exit()
   if progress == 0:
-    csv_filename = "output_delta_synthetic.csv"
+    csv_filename = os.path.join(data_path_csv, "output_delta_synthetic.csv")
   else:
-    csv_filename = "output_delta_real.csv"
+    csv_filename = os.path.join(data_path_csv, "output_delta_real.csv")
     
   if not os.path.exists(csv_filename):
     df = create_df()
@@ -833,8 +835,9 @@ if __name__ == '__main__':
   
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
-  synthetic_path = os.path.join("GNN_partitioning", "GNN_Data")
-  real_path = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
+  data_path_csv = os.path.join(root_path, "GNN_partitioning_single")
   
   delta_measurement = True
   if delta_measurement:
@@ -844,13 +847,17 @@ if __name__ == '__main__':
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
     column_prefix = "Δ "
     if use_synthetic:
-      df = get_dataframe_delta(synthetic_path=synthetic_path) 
+      df = get_dataframe_delta(data_path_csv, synthetic_path=data_path_synthetic) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
-      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, "df_delta_measurement_synthetic.png")
+      
+      output_path = os.path.join(root_path, "GNN_partitioning_single", "df_delta_measurement_synthetic.png")
+      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, output_path)
     else:
-      df = get_dataframe_delta(real_path=real_path) 
+      df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
-      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, "df_delta_measurement_real.png")
+      
+      output_path = os.path.join(root_path, "GNN_partitioning_single", "df_delta_measurement_real.png")
+      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, output_path)
       
   trace_variant_measurement = False
   if trace_variant_measurement:
@@ -860,11 +867,15 @@ if __name__ == '__main__':
     itle = 'Data Trace Variants Measurement'
     column_prefix = "# "
     if use_synthetic:
-      df = get_dataframe_trace_Variants(synthetic_path=synthetic_path)
-      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, "df_measurement_trace_variants_synthetic.png")
+      df = get_dataframe_trace_Variants(data_path_csv, synthetic_path=data_path_synthetic)
+      
+      output_path = os.path.join(root_path, "GNN_partitioning_single", "df_measurement_trace_variants_synthetic.png")
+      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, output_path)
     else:
-      df = get_dataframe_trace_Variants(real_path=real_path)
-      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, "df_measurement_trace_variants_real.png")
+      df = get_dataframe_trace_Variants(data_path_csv, real_path=data_path_real)
+      
+      output_path = os.path.join(root_path, "GNN_partitioning_single", "df_measurement_trace_variants_real.png")
+      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, output_path)
 
     
 
