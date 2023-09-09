@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "+",
+    "children": [
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "X",
+                    "children": [
+                        {
+                            "label": "QypBsfvk",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "GkPKoGnx",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "->",
+                            "children": [
+                                {
+                                    "label": "zvYQmJaY",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": "lhZiZObc",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        },
+                        {
+                            "label": null,
+                            "operand": "->",
+                            "children": [
+                                {
+                                    "label": "FAlTukmY",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": "BtqMClqh",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "ArCxuZzC",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

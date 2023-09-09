@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "*",
+    "children": [
+        {
+            "label": null,
+            "operand": "X",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "yYFLW",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "HfMkY",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "ATuJF",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "YqmdN",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "fBOgF",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "UXqxn",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": "pgRDR",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}

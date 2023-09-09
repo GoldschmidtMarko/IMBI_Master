@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "X",
+    "children": [
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": "MumsV",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "X",
+                            "children": [
+                                {
+                                    "label": null,
+                                    "operand": "->",
+                                    "children": [
+                                        {
+                                            "label": "AFKtg",
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": "lxeaS",
+                                            "operand": "None",
+                                            "children": []
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": null,
+                                    "operand": "*",
+                                    "children": [
+                                        {
+                                            "label": "umSaR",
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": "algjk",
+                                            "operand": "None",
+                                            "children": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "occDc",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": "sQQDB",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

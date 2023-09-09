@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "+",
+    "children": [
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": "rUCxqg",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "*",
+                            "children": [
+                                {
+                                    "label": "aXXyth",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": "pCjsIB",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "qzjkFk",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "RbKWnZ",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": null,
+            "operand": "->",
+            "children": [
+                {
+                    "label": "MfNFnH",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "qQzoos",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}

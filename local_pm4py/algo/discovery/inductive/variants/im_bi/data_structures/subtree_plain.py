@@ -1,8 +1,13 @@
 import collections
 from copy import copy
 import time
-from pm4py.algo.discovery.dfg.utils.dfg_utils import infer_start_activities, infer_end_activities
+import sys
+import os
 
+root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+sys.path.append(root_path)
+
+from pm4py.algo.discovery.dfg.utils.dfg_utils import infer_start_activities, infer_end_activities
 from pm4py.algo.discovery.dfg.variants import native as dfg_inst
 from pm4py import util as pmutil
 from local_pm4py.algo.discovery.inductive.variants.im_bi.util import splitting as split
@@ -30,7 +35,6 @@ from collections import Counter
 # TODO delete debuging code
 from pm4py import save_vis_dfg
 from pm4py import view_dfg
-import os
 from tqdm import tqdm
 
 def get_cutted_edges(cut_Partitions, cost_Variant, netP, netM):
@@ -467,11 +471,12 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
 
                 start_partition = time.time()
                 
-                gnn_path = 'GNN_partitioning_single\\GNN_Model'
-                root_file_path = 'IMBI_Master'
-                
+
+                gnn_path = os.path.join("GNN_partitioning_single", "GNN_Model")
+                root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+
                 if useGNN == True:
-                    possible_partition_gnn = get_partitions_from_gnn(root_file_path, gnn_path, log, logM, sup, ratio, size_par, 0.3)
+                    possible_partition_gnn = get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.3)
                     if possible_partition_gnn == None:
                         possible_partitions = dfg_functions.find_possible_partitions(netP)
                     else:

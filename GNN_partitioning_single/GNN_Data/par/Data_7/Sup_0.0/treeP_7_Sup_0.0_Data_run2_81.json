@@ -1,0 +1,82 @@
+{
+    "label": null,
+    "operand": "+",
+    "children": [
+        {
+            "label": null,
+            "operand": "X",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "*",
+                            "children": [
+                                {
+                                    "label": "MARYxGW",
+                                    "operand": "None",
+                                    "children": []
+                                },
+                                {
+                                    "label": null,
+                                    "operand": "X",
+                                    "children": [
+                                        {
+                                            "label": "sjGNqip",
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": "oZzSivi",
+                                            "operand": "None",
+                                            "children": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "label": null,
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "MhBTrss",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "irVkFqH",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": "VQtIVCD",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "eQrzxCl",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}

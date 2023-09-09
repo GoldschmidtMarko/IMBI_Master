@@ -6,6 +6,8 @@ sys.path.append(root_path)
 
 import random
 from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import threading
 import warnings
 import json
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
@@ -363,19 +365,19 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
     parts1 = input_str.split("tree")
     
     # Get the part after "tree" and split it on the last underscore
-    parts2 = parts1[1].rsplit('_', 1)
+    
+    parts3 = parts1[1].rsplit('_', 2)
     
     # Extract the numeric part
-    numeric_part = parts2[1].split('.')[0]
+    numeric_part = parts3[2].split('.')[0]
     
     # Construct the output string
-    output_str = parts1[0] + "Data_" + numeric_part + ".txt"
-    
+    output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
     return output_str
   
   if use_synthetic:
     cut_types = ["par", "exc","loop", "seq"]
-    # cut_types = ["seq"]
+    cut_types = ["par", "exc", "seq"]
     pathFiles = {key: [] for key in cut_types}
     currentPath = dataPath
     if os.path.exists(dataPath):
@@ -388,7 +390,7 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
             dirs_and_files.append((root, _, files))
           
           for root, _, files in reversed(dirs_and_files):
-            if get_last_Data_number(root) <= max_node_size:
+            if get_last_Data_number(root) <= max_node_size or True:
               for file in files:
                 if not continue_running:
                   break
@@ -396,6 +398,7 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
                 if file.endswith(".json"):
                   tree_file = os.path.join(root, file)
                   data_txt_file = convert_to_output(tree_file)
+                  
                   if os.path.exists(data_txt_file):     
                     data = read_data_from_path(data_txt_file)
                     pathFiles[cut_type].append((tree_file, data))
@@ -421,11 +424,13 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
               if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
                 pathFiles.append((file_P, file_M))
 
+  for cut_type, dataList in pathFiles.items():
+    print("Data")
+    print("Cut type: " + cut_type + " Number of files: " + str(len(dataList)))
+
   return pathFiles
 def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False):
   pathFiles = get_data_paths(True, dataPath, max_node_size, num_data_per_category)
-
-  
 
   for cut_type, dataList in pathFiles.items():
     print("Running: " + cut_type)
@@ -438,7 +443,9 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
         num_processors = max(1,round(num_processors_available/2))
       print("Number of used processors:", num_processors)
 
+
       batch_size = math.ceil(len(dataList) / num_processors)
+      # batch_size = 1
       input_data = []
       offset = 0
       for i in range(num_processors):
@@ -447,7 +454,9 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
           input_data.append((df_temp, cut_type, batch_data, [False, True]))
           offset += batch_size
           
-      TIMEOUT_SECONDS = 60 * batch_size
+      TIMEOUT_SECONDS = 60 * 5 * batch_size
+      # TIMEOUT_SECONDS = 60 * 10
+      print("Timeout: " + str(TIMEOUT_SECONDS))
       
       pool_res = []
       '''
@@ -455,10 +464,11 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
       '''
       number_timesouts = 0
       
-      # with multiprocessing.Pool(num_processors) as pool:
+      # with ThreadPoolExecutor(max_workers=num_processors) as executor:
       with ProcessPool(max_workers=num_processors) as pool:
         
         futures = [pool.schedule(run_evaluation_category_star, args=(one,), timeout=TIMEOUT_SECONDS) for one in input_data]
+        # futures = [executor.submit(run_with_timeout, run_evaluation_category_star, (one,), TIMEOUT_SECONDS) for one in input_data]
         
         # Create a tqdm progress bar to track the progress of futures
         progress_bar = tqdm(total=len(futures), desc="Processing", unit="future")
@@ -469,6 +479,9 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
             result = future.result()
             pool_res.append(result)
           except TimeoutError:
+            number_timesouts += 1
+          except Exception as exc:
+            print('%r generated an exception: %s' % (future, exc))
             number_timesouts += 1
             
           # Update the progress bar
@@ -636,8 +649,31 @@ def run_evaluation_category_trace_variants(df, cut_type, data):
 
   return df
 
+def run_with_timeout(func, args, timeout):
+  result = None
+  exception = None
+
+  def worker():
+      nonlocal result, exception
+      try:
+          result = func(*args)
+      except Exception as e:
+          exception = e
+
+  thread = threading.Thread(target=worker)
+  thread.start()
+  thread.join(timeout)
+
+  if thread.is_alive():
+      thread.join()  # Ensure the thread terminates
+      raise TimeoutError
+  elif exception is not None:
+      raise exception
+  else:
+      return result
+  
 def run_evaluation_category_star(args):
-    return run_evaluation_category(*args)    
+  return run_evaluation_category(*args)    
 
 def get_log_from_tree(tree, seed):
   random.seed(seed)
@@ -835,7 +871,6 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
     if progress == 0:
       using_gnn = [False, True]
       num_data_per_category = 50
-      
       df = run_evaluation_delta_synthetic(df, synthetic_path, num_data_per_category, using_gnn, max_node_size=8, parallel = True)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
@@ -856,6 +891,7 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
   return df
       
 if __name__ == '__main__':
+  time_start = time.time()
   
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
@@ -903,6 +939,8 @@ if __name__ == '__main__':
       
       output_path = os.path.join(data_path_csv, "df_measurement_trace_variants_real.png")
       visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, output_path)
+      
+  print("Time elapsed: " + str(time.time() - time_start) + " seconds")
 
     
 

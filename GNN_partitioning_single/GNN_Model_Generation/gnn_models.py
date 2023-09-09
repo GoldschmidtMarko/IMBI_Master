@@ -1054,8 +1054,7 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
     model_setting_paths = []
     model_paths = []
     
-    result = find_parent_folder(root_file_path)
-    gnn_file_path = os.path.join(result, gnn_file_path)
+    gnn_file_path = os.path.join(root_file_path, gnn_file_path)
     
     
     if os.path.exists(gnn_file_path):
