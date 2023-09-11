@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import threading
 import warnings
 import json
+import datetime
 from pm4py.objects.log.importer.xes.variants.iterparse import Parameters as Export_Parameter
 from pm4py.objects.log.importer.xes.importer import apply as apply_import_xes
 from local_pm4py.algo.analysis import custom_enum
@@ -126,6 +127,8 @@ def visualize_All_petriNet(df, miner):
     visualize_petriNet(df,miner,logPName,logMName)
 
 def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
+  common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
+  print("Process: " + str(os.getpid()) + " - Running MES, GNN: " + str(use_gnn) + " - LogP: " + logPName[len(common_prefix):])
   
   mes = Optimzation_Goals.apply_petri_silent(log,logM,net,im,fm)
 
@@ -177,19 +180,20 @@ def applyMinerToLogForGNN(df, cut_Type, logP, logPName, noiseThreshold = 0.0, de
   
   logM = logP.__deepcopy__()
   
-  time_loading = time.time() - cur_time
   cur_time = time.time()
     
   # imbi_ali
-  # print("Running IMbi_ali, GNN: " + str(use_gnn))
+  common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
+  print("Process: " + str(os.getpid()) + " - Running IMbi_ali, GNN: " + str(use_gnn) + " - LogP: " + logPName[len(common_prefix):])
 
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
 
-  time_in_bi = time.time() - cur_time
-  cur_time = time.time()
   
   df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName="",im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  time_in_bi = time.time() - cur_time
+  
+  print("Process: " + str(os.getpid()) + " - Done MES: " + str(use_gnn) + " - Time: " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " Runtime: " + str(time_in_bi))
   
   
   time_measurement = time.time() - cur_time
@@ -267,79 +271,94 @@ def create_df():
   df['use_gnn'] = df['use_gnn'].astype(bool)
   return df
 
+def convert_tree_path_to_text_path(input_str):
+  # Split the input string on "tree"
+  parts1 = input_str.split("tree")
+  
+  # Get the part after "tree" and split it on the last underscore
+  
+  parts3 = parts1[1].rsplit('_', 2)
+  
+  # Extract the numeric part
+  numeric_part = parts3[2].split('.')[0]
+  
+  # Construct the output string
+  output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
+  return output_str
+
+def read_data_from_text_path(file_path):
+  data = {}
+  if os.path.exists(file_path):
+      # Open the text file in read mode
+      with open(file_path, 'r') as file:
+          # Iterate over each line in the file
+          matrix_P_arrayList = []
+          state = -1
+          for line in file:
+              if state == -1:
+                  state += 1
+                  continue
+              elif state == 0 :
+                  data["Labels"] = line.split(" ")[:-1]
+                  state += 1
+                  continue
+              elif state == 1:
+                  data["Activity_count_P"] = np.array(line.split(" ")[:-1]).astype(int)
+                  state += 1
+                  continue
+              elif state == 2 and line == "\n":
+                  data["Adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
+                  state += 1
+                  continue
+              elif state == 3:
+                  data["Cut_type"] = line[:-1]
+                  state += 1
+                  continue 
+              elif state == 4:
+                  data["Support"] = float(line[:-1])
+                  state += 1
+                  continue 
+              elif state == 5:
+                  data["Ratio"] = float(line[:-1])
+                  state += 1
+                  continue 
+              elif state == 6:
+                  data["Size_par"] = float(line[:-1])
+                  state += 1
+                  continue 
+              elif state == 7:
+                  data["Dataitem"] = line[:-1]
+                  state += 1
+                  continue 
+              elif state == 8:
+                  data["PartitionA"] = line.split(" ")[:-1]
+                  state += 1
+                  continue 
+              elif state == 9:
+                  data["PartitionB"] = line.split(" ")[:-1]
+                  state += 1
+                  continue 
+              elif state == 10:
+                  data["Score"] = float(line[:-1])
+                  state += 1
+                  continue 
+              elif state == 11:
+                  data["random_seed_P"] = int(line[:-1])
+                  state += 1
+                  continue 
+              elif state == 12:
+                  data["tree"] = str(line[:-1])
+                  state += 1
+                  continue 
+              
+              if state == 2:
+                  lineList = line.split(" ")[:-1]
+                  np_array = np.array(lineList, dtype=int)
+                  matrix_P_arrayList.append(np_array)
+  return data
+
 
 def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_category = 1):
-
-  def read_data_from_path(file_path):
-    data = {}
-    if os.path.exists(file_path):
-        # Open the text file in read mode
-        with open(file_path, 'r') as file:
-            # Iterate over each line in the file
-            matrix_P_arrayList = []
-            state = -1
-            for line in file:
-                if state == -1:
-                    state += 1
-                    continue
-                elif state == 0 :
-                    data["Labels"] = line.split(" ")[:-1]
-                    state += 1
-                    continue
-                elif state == 1:
-                    data["Activity_count_P"] = np.array(line.split(" ")[:-1]).astype(int)
-                    state += 1
-                    continue
-                elif state == 2 and line == "\n":
-                    data["Adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
-                    state += 1
-                    continue
-                elif state == 3:
-                    data["Cut_type"] = line[:-1]
-                    state += 1
-                    continue 
-                elif state == 4:
-                    data["Support"] = float(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 5:
-                    data["Ratio"] = float(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 6:
-                    data["Size_par"] = float(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 7:
-                    data["Dataitem"] = line[:-1]
-                    state += 1
-                    continue 
-                elif state == 8:
-                    data["PartitionA"] = line.split(" ")[:-1]
-                    state += 1
-                    continue 
-                elif state == 9:
-                    data["PartitionB"] = line.split(" ")[:-1]
-                    state += 1
-                    continue 
-                elif state == 10:
-                    data["Score"] = float(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 11:
-                    data["random_seed_P"] = int(line[:-1])
-                    state += 1
-                    continue 
-                elif state == 12:
-                    data["tree"] = str(line[:-1])
-                    state += 1
-                    continue 
-                
-                if state == 2:
-                    lineList = line.split(" ")[:-1]
-                    np_array = np.array(lineList, dtype=int)
-                    matrix_P_arrayList.append(np_array)
-    return data
 
   def is_string_present(string, list):
     if list == None:
@@ -355,29 +374,14 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
     parts = string.split('Data_')
     if len(parts) > 1:
         rest = parts[-1]
-        number_part = rest.split('\\')[0]
+        number_part = rest.split('/')[0]
         if number_part.isdigit():
             return int(number_part)
     return 101
   
-  def convert_to_output(input_str):
-    # Split the input string on "tree"
-    parts1 = input_str.split("tree")
-    
-    # Get the part after "tree" and split it on the last underscore
-    
-    parts3 = parts1[1].rsplit('_', 2)
-    
-    # Extract the numeric part
-    numeric_part = parts3[2].split('.')[0]
-    
-    # Construct the output string
-    output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
-    return output_str
-  
   if use_synthetic:
     cut_types = ["par", "exc","loop", "seq"]
-    cut_types = ["par", "exc", "seq"]
+    # cut_types = ["loop", "exc","par", "seq"]
     pathFiles = {key: [] for key in cut_types}
     currentPath = dataPath
     if os.path.exists(dataPath):
@@ -389,18 +393,19 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
           for root, _ , files in os.walk(currentPath):
             dirs_and_files.append((root, _, files))
           
-          for root, _, files in reversed(dirs_and_files):
-            if get_last_Data_number(root) <= max_node_size or True:
+          dirs_and_files.sort(reverse=True)
+          for root, _, files in dirs_and_files:
+            if get_last_Data_number(root) <= max_node_size:
               for file in files:
                 if not continue_running:
                   break
                 
                 if file.endswith(".json"):
                   tree_file = os.path.join(root, file)
-                  data_txt_file = convert_to_output(tree_file)
+                  data_txt_file = convert_tree_path_to_text_path(tree_file)
                   
                   if os.path.exists(data_txt_file):     
-                    data = read_data_from_path(data_txt_file)
+                    data = read_data_from_text_path(data_txt_file)
                     pathFiles[cut_type].append((tree_file, data))
                   if len(pathFiles[cut_type]) >= num_data_per_category:
                     continue_running = False
@@ -423,6 +428,9 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
                 
               if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
                 pathFiles.append((file_P, file_M))
+
+  for key in pathFiles:
+    pathFiles[key] = sorted(pathFiles[key], key=lambda x: x[0], reverse=True)
 
   for cut_type, dataList in pathFiles.items():
     print("Data")
@@ -450,7 +458,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
       offset = 0
       for i in range(num_processors):
           batch_data = dataList[offset:offset + batch_size]
-          df_temp = df.copy()
+          df_temp = create_df()
           input_data.append((df_temp, cut_type, batch_data, [False, True]))
           offset += batch_size
           
@@ -463,6 +471,8 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
       pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
       '''
       number_timesouts = 0
+      futures = []
+      progress_bar = None
       
       # with ThreadPoolExecutor(max_workers=num_processors) as executor:
       with ProcessPool(max_workers=num_processors) as pool:
@@ -474,25 +484,25 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
         progress_bar = tqdm(total=len(futures), desc="Processing", unit="future")
 
         
-        for future in futures:
-          try:
-            result = future.result()
-            pool_res.append(result)
-          except TimeoutError:
-            number_timesouts += 1
-          except Exception as exc:
-            print('%r generated an exception: %s' % (future, exc))
-            number_timesouts += 1
-            
-          # Update the progress bar
-          progress_bar.update(1)
+      for future in futures:
+        try:
+          result = future.result()
+          pool_res.append(result)
+        except TimeoutError:
+          number_timesouts += 1
+        except Exception as exc:
+          import traceback
+          traceback.print_exc()  # Print the full traceback
+          print('%r generated an exception: %s' % (future, exc))
+          number_timesouts += 1
+        progress_bar.update(1)
 
-        # Close the progress bar after the loop finishes
-        progress_bar.close()
+      # Close the progress bar after the loop finishes
+      progress_bar.close()
 
-        for result in pool_res:
-            # Process individual evaluation result
-            df = pd.concat([df, result])
+      for result in pool_res:
+          # Process individual evaluation result
+          df = pd.concat([df, result])
             
       print("Timeout percentage: " + str(number_timesouts/len(input_data)))
     else: 
@@ -524,7 +534,7 @@ def run_evaluation_trace_variants_synthetic(dataPath, num_data_per_category, max
       offset = 0
       for i in range(num_processors):
           batch_data = dataList[offset:offset + batch_size]
-          df_temp = df.copy()
+          df_temp = create_df()
           input_data.append((df_temp, cut_type, batch_data))
           offset += batch_size
  
@@ -562,7 +572,7 @@ def run_evaluation_trace_variants_real(dataPath, parallel = False):
     iterator = 0
     for data in pathFiles:
       iterator += 1
-      df_temp = df.copy()
+      df_temp = create_df()
       input_data.append((df_temp, iterator, data))
         
     pool_res = None
@@ -717,7 +727,12 @@ def run_evaluation_category(df, cut_type, dataList, using_gnn):
     logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
     
     for use_gnn in using_gnn:
-      df = applyMinerToLogForGNN(df, cut_type, logP, tree_path, 0.2, 0.99, support, ratio,use_gnn)
+      try:
+        df = applyMinerToLogForGNN(df, cut_type, logP, tree_path, 0.2, 0.99, support, ratio,use_gnn)
+      except Exception as exc:
+        import traceback
+        traceback.print_exc()  # Print the full traceback
+        print('%r generated an exception: %s' % (exc))
   return df
 
 def get_measurement_delta(df, columnList, column_feature):
@@ -889,8 +904,8 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
     df = pd.read_csv(csv_filename)
     
   return df
-      
-if __name__ == '__main__':
+    
+def run_comparison():
   time_start = time.time()
   
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
@@ -941,10 +956,213 @@ if __name__ == '__main__':
       visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, output_path)
       
   print("Time elapsed: " + str(time.time() - time_start) + " seconds")
+  
+  
+def manual_run():
+  df = create_df()
+  
+  found_problem_path = "/loop/Data_6/Sup_0.6/treeP_6_Sup_0.6_Data_run1_79.json"
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
+  pathFiles = get_data_paths(True, data_path_synthetic, 1000, 100)
+  
+  
+  data = None
+  for file in pathFiles["loop"]:
+    if found_problem_path in file[0]:
+      data = file
+      break
+
+  if data == None:
+    print("Error, tree path not found.")
+    return
+  
+  treeP = load_tree(data[0])
+  print(treeP)
+  logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
+  df = applyMinerToLogForGNN(df, "loop", logP, data[0], 0.2, 0.99, 0.6, 0,True)
+  print(df)
+  
+def get_data_from_logName(tree_path):
+  if os.path.exists(tree_path):
+    data_txt_file = convert_tree_path_to_text_path(tree_path)
+    if os.path.exists(data_txt_file):     
+      data = read_data_from_text_path(data_txt_file)
+      return (tree_path, data)
+    else:
+      print("Error, data path does not exist.")
+      print(data_txt_file)
+  else:
+    print("Error, tree path does not exist.")
+    print(tree_path)
+  return None
+  
+  
+def run_show_data():
+  os.system('clear')
+  input_synthetic = input("Enter Datatype (1 - synthethic, 2 -  real): ")
+  os.system('clear')
+  if input_synthetic == "1":
+    use_synthetic = True
+  elif input_synthetic == "2":
+    use_synthetic = False
+  else:
+    print("Error, invalid input.")
+    return
+  
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
+  data_path_csv = os.path.join(root_path, "GNN_partitioning_single", "GNN_Analysing", "Results")
+  
+  if use_synthetic:
+    df = get_dataframe_delta(data_path_csv, synthetic_path=data_path_synthetic) 
+  else:
+    df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
+    
+  print("Dataframe loaded.")
+  while(True):
+    input_synthetic = input("Options: \n 1 - exit \n 2 - get random data \n 3 - get specific data (TODO)\n")
+    os.system('clear')
+    if input_synthetic == "1":
+      return
+    if input_synthetic == "2":
+      random_row = df.sample()
+      while(True):
+        common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
+        print("Current Data:")
+        print("LogName: " + random_row["logP_Name"].values[0][len(common_prefix):])
+        print("Cut type: " + random_row["cut_type"].values[0])
+        data_txt_file = convert_tree_path_to_text_path(random_row["logP_Name"].values[0])
+        data = None
+        if os.path.exists(data_txt_file):     
+          data = read_data_from_text_path(data_txt_file)
+    
+        print("Support: " + str(data["Support"]))
+        print("Data_node_size: " + str(len(data["PartitionA"]) + len(data["PartitionB"])))
+        print()
+        input_option = input("Options: \n 1 - back \n 2 - show petrinets \n 3 - show processtree \n 4 - show dfg\n")
+        os.system('clear')
+        if input_option == "1":
+          break
+        elif input_option == "2":
+          use_gnn_reverse = random_row["use_gnn"].values[0]
+          random_row_inverse = df[(df["logP_Name"] == random_row["logP_Name"].values[0]) & (df["cut_type"] == random_row["cut_type"].values[0]) & (df["use_gnn"] == use_gnn_reverse)]
+          if len(random_row_inverse) != 1:
+            print("Error, no inverse found.")
+            continue
+          net = random_row["net"].values[0]
+          im = random_row["im"].values[0]
+          fm = random_row["fm"].values[0]
+          
+          save_vis_petri_net(net,im,fm,file_path = "test.png")
+          
+          print(net)
+          
+          
+        elif input_option == "3":
+          import networkx as nx
+          def create_graph_from_json(data):
+            G = nx.DiGraph()
+            
+            def add_nodes_and_edges(node_data, parent=None):
+              G.add_node(node_data, label=node_data.label)
+              if parent is not None:
+                  G.add_edge(parent, node_data)
+              
+              children = node_data.children
+              for child_data in children:
+                  add_nodes_and_edges(child_data, node_data)
+            
+            add_nodes_and_edges(data)
+            
+            return G
+          
+          data = get_data_from_logName(random_row["logP_Name"].values[0] + ".json")
+          tree_path = data[0]
+          tree = load_tree(tree_path)
+          # Create a NetworkX graph from the JSON data
+          graph = create_graph_from_json(tree)
+
+          # Define the layout (optional)
+          layout = nx.spring_layout(graph)
+          
+          def custom_layout(G):
+            pos = {}
+            level_height = 1.0  # Vertical distance between levels
+            sibling_distance = 5.0  # Horizontal distance between siblings
+
+            def position_tree(node, x, y, dx):
+                children = list(G.successors(node))
+                if len(children) > 0:
+                    dx /= len(children)
+                    next_x = x - (len(children) - 1) * dx / 2
+                    for child in children:
+                        pos[child] = (next_x, y - level_height)
+                        next_x += dx
+                        position_tree(child, pos[child][0], pos[child][1], dx)
+
+            # Set the root node position
+            root = [node for node, in_degree in G.in_degree() if in_degree == 0][0]
+            pos[root] = (0, 0)
+
+            # Recursively calculate positions for the rest of the nodes
+            position_tree(root, 0, 0, sibling_distance)
+
+            return pos
+          
+          
+          # Use the "dot" layout from Graphviz
+          pos = custom_layout(graph)
+          
+          # Create a plot of the graph with labels
+          plt.figure(figsize=(8, 6))
+          nx.draw_networkx_nodes(graph, pos, node_size=500, node_color='skyblue')
+          # Draw edges
+          nx.draw_networkx_edges(graph, pos, edge_color='gray')
+          
+          node_labels = {node: node.label if node.label is not None else node.operator for node in graph.nodes()}
+          nx.draw_networkx_labels(graph, pos, labels=node_labels, font_size=10, font_color='black', verticalalignment='bottom')
+
+
+
+
+          # Save the graph as an image (e.g., PNG)
+          plt.savefig(os.path.join(data_path_csv, "file.png"))
+          
+          
+          print("Saved processTree.\n")
+          
+        elif input_option == "4":
+          def save_dfg(log, file_name):
+            from pm4py.statistics.end_activities.log import get as end_activities_get
+            from pm4py.statistics.start_activities.log import get as start_activities_get
+            from pm4py.algo.discovery.dfg.variants import native as dfg_inst
+            from pm4py import save_vis_dfg
+            parameters = {}
+            start_act_cur_dfg = start_activities_get.get_start_activities(log, parameters=parameters)
+            end_act_cur_dfg = end_activities_get.get_end_activities(log, parameters=parameters)
+            cur_dfg = dfg_inst.apply(log, parameters=parameters)
+            save_vis_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg, file_name + ".png")
+          
+          data = get_data_from_logName(random_row["logP_Name"].values[0] + ".json")
+          
+          tree_path = data[0]
+          tree = load_tree(tree_path)
+          log = get_log_from_tree(tree, data[1]["random_seed_P"])
+          save_dfg(log,os.path.join(data_path_csv, "file"))
+          print("Saved dfg.\n")
+        
+          
+  
+if __name__ == '__main__':
+  # run_comparison()
+  run_show_data()
+  # manual_run()
+  
 
     
 
   
+
   
 
   

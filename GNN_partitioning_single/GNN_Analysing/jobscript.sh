@@ -2,7 +2,7 @@
 
 ### Ask for 10 GB memory
 #SBATCH --mem=10G
-#SBATCH --time=8:00:00
+#SBATCH --time=3:00:00
 
 ### Name the job
 #SBATCH --job-name=GNN-Data-Generation
