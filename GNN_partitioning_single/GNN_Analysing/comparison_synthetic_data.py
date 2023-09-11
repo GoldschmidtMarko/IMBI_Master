@@ -358,7 +358,7 @@ def read_data_from_text_path(file_path):
   return data
 
 
-def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_category = 1):
+def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_category = 1, min_number_node_size = 0):
 
   def is_string_present(string, list):
     if list == None:
@@ -395,7 +395,7 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
           
           dirs_and_files.sort(reverse=True)
           for root, _, files in dirs_and_files:
-            if get_last_Data_number(root) <= max_node_size:
+            if min_number_node_size <= get_last_Data_number(root) <= max_node_size:
               for file in files:
                 if not continue_running:
                   break
@@ -998,40 +998,39 @@ def get_data_from_logName(tree_path):
   
   
 def run_show_data():
-  os.system('clear')
-  input_synthetic = input("Enter Datatype (1 - synthethic, 2 -  real): ")
-  os.system('clear')
-  if input_synthetic == "1":
-    use_synthetic = True
-  elif input_synthetic == "2":
-    use_synthetic = False
-  else:
-    print("Error, invalid input.")
-    return
-  
   data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
   data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
   data_path_csv = os.path.join(root_path, "GNN_partitioning_single", "GNN_Analysing", "Results")
   
-  if use_synthetic:
-    df = get_dataframe_delta(data_path_csv, synthetic_path=data_path_synthetic) 
+  
+  os.system('clear')
+  input_synthetic = input("Enter Datatype (1 - synthethic, 2 -  real): ")
+  os.system('clear')
+  print("DataList loaded:")
+  if input_synthetic == "1":
+    dataList = get_data_paths(True, data_path_synthetic,100, 100, 7)
+  elif input_synthetic == "2":
+    dataList = None
   else:
-    df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
-    
-  print("Dataframe loaded.")
+    print("Error, invalid input.")
+    return
+  
+  print()
   while(True):
     input_synthetic = input("Options: \n 1 - exit \n 2 - get random data \n 3 - get specific data (TODO)\n")
     os.system('clear')
     if input_synthetic == "1":
       return
     if input_synthetic == "2":
-      random_row = df.sample()
+      
+      tree_path = random.choice(dataList[random.choice(list(dataList))])[0]
+      
       while(True):
         common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
         print("Current Data:")
-        print("LogName: " + random_row["logP_Name"].values[0][len(common_prefix):])
-        print("Cut type: " + random_row["cut_type"].values[0])
-        data_txt_file = convert_tree_path_to_text_path(random_row["logP_Name"].values[0])
+        print("LogName: " + tree_path[len(common_prefix):])
+        print("Cut type: " + tree_path)
+        data_txt_file = convert_tree_path_to_text_path(tree_path)
         data = None
         if os.path.exists(data_txt_file):     
           data = read_data_from_text_path(data_txt_file)
@@ -1044,18 +1043,55 @@ def run_show_data():
         if input_option == "1":
           break
         elif input_option == "2":
-          use_gnn_reverse = random_row["use_gnn"].values[0]
-          random_row_inverse = df[(df["logP_Name"] == random_row["logP_Name"].values[0]) & (df["cut_type"] == random_row["cut_type"].values[0]) & (df["use_gnn"] == use_gnn_reverse)]
-          if len(random_row_inverse) != 1:
-            print("Error, no inverse found.")
-            continue
-          net = random_row["net"].values[0]
-          im = random_row["im"].values[0]
-          fm = random_row["fm"].values[0]
+          print("Mining Petrinet:")
+          data = get_data_from_logName(tree_path)
           
-          save_vis_petri_net(net,im,fm,file_path = "test.png")
+          tree_path = data[0]
+          tree = load_tree(tree_path)
+          log = get_log_from_tree(tree, data[1]["random_seed_P"])
+          support = data[1]["Support"]
+          ratio = data[1]["Ratio"]
+          cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+          use_gnn = False
+          net, im, fm = inductive_miner.apply_bi(log,log, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(log)/len(log), cost_Variant=cost_Variant,use_gnn=use_gnn)
+          use_gnn = True
+          net_gnn, im_gnn, fm_gnn = inductive_miner.apply_bi(log,log, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(log)/len(log), cost_Variant=cost_Variant,use_gnn=use_gnn)
+          save_vis_petri_net(net,im,fm,os.path.join(data_path_csv, "petri1.png"))
+          save_vis_petri_net(net_gnn,im_gnn,fm_gnn,os.path.join(data_path_csv, "petri2.png"))
           
-          print(net)
+          import matplotlib.image as mpimg
+          # Load the first PNG image
+          image1 = mpimg.imread(os.path.join(data_path_csv, "petri1.png"))
+
+          # Load the second PNG image
+          image2 = mpimg.imread(os.path.join(data_path_csv, "petri2.png"))
+
+          # Calculate the maximum width between the two images
+          max_width = max(image1.shape[1], image2.shape[1])
+
+          # Calculate the width difference for centering
+          width_diff1 = (max_width - image1.shape[1]) // 2
+          width_diff2 = (max_width - image2.shape[1]) // 2
+
+          # Create a figure and two subplots
+          fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
+
+          # Plot the first image on the first subplot
+          ax1.imshow(np.pad(image1, ((0, 0), (width_diff1, width_diff1), (0, 0)), mode='constant'))
+          ax1.axis('off')  # Turn off axes
+          ax1.set_title("PetriNet use_gnn: False", fontsize=12)  # Add a title above the first image
+
+          # Plot the second image on the second subplot
+          ax2.imshow(np.pad(image2, ((0, 0), (width_diff2, width_diff2), (0, 0)), mode='constant'))
+          ax2.axis('off')  # Turn off axes
+          ax2.set_title("PetriNet use_gnn: True", fontsize=12)  # Add a title above the second image
+
+          # Adjust spacing between subplots
+          plt.subplots_adjust(hspace=0.0)  # You can adjust the vertical spacing as needed
+
+          # Save the combined image
+          plt.savefig(os.path.join(data_path_csv, "file.png"), bbox_inches='tight')  # bbox_inches='tight' to remove extra whitespace
+
           
           
         elif input_option == "3":
@@ -1076,7 +1112,7 @@ def run_show_data():
             
             return G
           
-          data = get_data_from_logName(random_row["logP_Name"].values[0] + ".json")
+          data = get_data_from_logName(tree_path)
           tree_path = data[0]
           tree = load_tree(tree_path)
           # Create a NetworkX graph from the JSON data
@@ -1143,7 +1179,7 @@ def run_show_data():
             cur_dfg = dfg_inst.apply(log, parameters=parameters)
             save_vis_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg, file_name + ".png")
           
-          data = get_data_from_logName(random_row["logP_Name"].values[0] + ".json")
+          data = get_data_from_logName(tree_path)
           
           tree_path = data[0]
           tree = load_tree(tree_path)
