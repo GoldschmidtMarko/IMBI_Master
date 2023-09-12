@@ -458,19 +458,47 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
 
     return combined_df
 
+def generate_criterion(use_symmetric, cut_type):
+    if use_symmetric == False:
+        return nn.BCEWithLogitsLoss()
+    else:
+        if cut_type == "par" or cut_type == "exc":
+            class SymmetricContrastiveLoss(nn.Module):
+                def __init__(self, margin=1.0):
+                    super(SymmetricContrastiveLoss, self).__init__()
+                    self.margin = margin
+
+                def forward(self, embeddings, labels):
+                    # Compute pairwise cosine similarity
+                    similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
+
+                    labels = labels.squeeze()  # Remove the extra dimension
+
+                    # Create a mask to identify positive and negative pairs
+                    pos_mask = labels.unsqueeze(1) == labels.unsqueeze(0)
+                    neg_mask = ~pos_mask
+
+                    # Extract the similarity scores for positive and negative pairs
+                    pos_scores = similarity_matrix[pos_mask].view(embeddings.size(0), -1)
+                    neg_scores = similarity_matrix[neg_mask].view(embeddings.size(0), -1)
+
+                    # Compute the contrastive loss
+                    loss = 0.5 * (F.relu(self.margin - pos_scores).mean() + F.relu(neg_scores - self.margin).mean())
+
+                    return loss
+
+            return SymmetricContrastiveLoss()
+
+
 def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args, data_settings, data_path):
     # Define the loss function
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = generate_criterion(use_symmetric, data_settings["Cut_type"])
 
     # Define the optimizer
     # optimizer = optim.SGD(model.parameters(), lr=0.01, weight_decay=0.01)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     # scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     
-    # Create a data loader with the specified batch size
-    # data_loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
-    # for batch_data in data_loader:
-
     all_train_items = [value for values in training_dic.values() for value in values]
     
     # Compute the total number of batches
@@ -517,22 +545,22 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
             mask_list = torch.cat(mask_list, dim=0)
             logits_list = torch.cat(logits_list, dim=0)
             
-            # Apply the mask to the ground truth labels and logits tensors
-            masked_ground_truth_labels = batch_labels * mask_list
-            masked_logits = logits_list * mask_list
 
-            # Compute the loss
-            loss = criterion(masked_logits, masked_ground_truth_labels)
+            batch_loss = 0.0
+            for logits, labels, mask in zip(logits_list, batch_labels, mask_list):
+                logits = logits * mask
+                labels = labels * mask
+                # Compute the loss for each data point in the batch
+                loss = criterion(logits, labels)
+
+                # Accumulate the losses
+                batch_loss += loss.item()  # Assuming you want to store the total loss as a scalar
             
-            # for par and exc, solutions are symmetric, so we adjust the loss
-            if use_symmetric:
-                if data_settings["Cut_type"] == "par" or data_settings["Cut_type"] == "exc":
-                    inverse_loss = criterion(masked_logits, 1 - masked_ground_truth_labels)
-                    # Take the minimum loss between both tasks
-                    loss = torch.min(loss, inverse_loss)
-
+            # Calculate the average loss for the batch (optional)
+            average_batch_loss = batch_loss / len(logits_list)
+            
             # Backward pass
-            loss.backward()
+            average_batch_loss.backward()
             
             # Update the weights
             optimizer.step()
@@ -682,7 +710,7 @@ def does_tree_exist(data, data_path):
     
     typeName = "Sup_"  + str(support)
     filePath = data_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece) + ".json"
     
     if os.path.exists(path_tree_P):
         return True
@@ -703,7 +731,6 @@ def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
                 for file in files:
                     if file.endswith(".txt"):  # Filter for text files
                         pathFiles.append(os.path.join(root, file))
-
 
     # we sort the files in reverse, so we start with high node graphs
     pathFiles = sorted(pathFiles, reverse=True)
@@ -752,8 +779,8 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
     model_number = 13
-    cut_types = ["par", "exc","loop", "seq"]
-    # cut_types = ["seq"]
+    # cut_types = ["par", "exc","loop", "seq"]
+    cut_types = ["par"]
     num_epochs = 30
     batch_size = 10
     max_dataSet_numbers = 100000
