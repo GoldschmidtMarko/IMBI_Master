@@ -460,9 +460,11 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
 
 def generate_criterion(use_symmetric, cut_type):
     if use_symmetric == False:
+        print("Using BCEWithLogitsLoss")
         return nn.BCEWithLogitsLoss()
     else:
         if cut_type == "par" or cut_type == "exc":
+            print("Using SymmetricContrastiveLoss")
             class SymmetricContrastiveLoss(nn.Module):
                 def __init__(self, margin=1.0):
                     super(SymmetricContrastiveLoss, self).__init__()
@@ -479,8 +481,8 @@ def generate_criterion(use_symmetric, cut_type):
                     neg_mask = ~pos_mask
 
                     # Extract the similarity scores for positive and negative pairs
-                    pos_scores = similarity_matrix[pos_mask].view(embeddings.size(0), -1)
-                    neg_scores = similarity_matrix[neg_mask].view(embeddings.size(0), -1)
+                    pos_scores = similarity_matrix[pos_mask]
+                    neg_scores = similarity_matrix[neg_mask]
 
                     # Compute the contrastive loss
                     loss = 0.5 * (F.relu(self.margin - pos_scores).mean() + F.relu(neg_scores - self.margin).mean())
@@ -539,13 +541,6 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
                 target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
                 batch_labels.append(target_tensor_transposed)
                 
-            
-            
-            batch_labels = torch.cat(batch_labels, dim=0)
-            mask_list = torch.cat(mask_list, dim=0)
-            logits_list = torch.cat(logits_list, dim=0)
-            
-
             batch_loss = 0.0
             for logits, labels, mask in zip(logits_list, batch_labels, mask_list):
                 logits = logits * mask
@@ -560,7 +555,11 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
             average_batch_loss = batch_loss / len(logits_list)
             
             # Backward pass
-            average_batch_loss.backward()
+            # Create a scalar tensor with gradients enabled
+            average_batch_loss_tensor = torch.tensor(average_batch_loss, requires_grad=True)
+
+            # Backward pass
+            average_batch_loss_tensor.backward()
             
             # Update the weights
             optimizer.step()
@@ -779,8 +778,8 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
     model_number = 13
-    # cut_types = ["par", "exc","loop", "seq"]
-    cut_types = ["par"]
+    cut_types = ["par", "exc","loop", "seq"]
+    # cut_types = ["par"]
     num_epochs = 30
     batch_size = 10
     max_dataSet_numbers = 100000
