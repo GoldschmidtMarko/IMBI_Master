@@ -89,33 +89,10 @@ def generate_trace(activity_names, trace_length):
   return trace
 
 def get_number_depending_on_deviation(avg_value, deviation_value):
-  return random.randint(avg_value - deviation_value, avg_value + deviation_value)
+  random_number = random.gauss(avg_value, deviation_value)
   
-# Todo trace frequency distribution (e.g. 80/20 or 40/20/10/5/3/3... )
-def generate_Random_Log(number_avg_traces, number_avg_traces_deviation, number_avg_trace_length, number_avg_trace_length_deviation, file_name):
-  activity_names = generate_activity_name_list(number_activities,4)
-  cur_case_id = 0
-  cur_number_of_traces = get_number_depending_on_deviation(number_avg_traces, number_avg_traces_deviation)
+  return int(random_number)
   
-  # Create an empty event log
-  log = EventLog()
-
-  # Create a trace
-  while(cur_case_id < cur_number_of_traces):
-    trace = Trace()
-    trace.attributes["concept:name"] = "Trace" + str(cur_case_id)
-    generated_trace = generate_trace(activity_names, trace_length=get_number_depending_on_deviation(number_avg_trace_length, number_avg_trace_length_deviation))
-    for event in generated_trace:
-      event1 = {"concept:name": str(event), "time:timestamp": "2023-06-24T10:00:00"}
-      trace.append(event1)
-    
-    # Add the trace to the event log
-    log.append(trace)
-    cur_case_id += 1
-    
-  # Export the event log to a XES file
-  apply(log, file_name + ".xes")
-
 def log_statistic(log_path):
   log = xes_importer.apply(log_path + ".xes")
   # log = pm4py.read_xes(log_path + ".xes")
@@ -198,7 +175,9 @@ def combine_process_trees_from_list(process_tree_list, operator = None):
   
   if operator == None:
     operatorList = [Operator.SEQUENCE,Operator.LOOP,Operator.PARALLEL,Operator.XOR]
-    new_operator = random.choice(operatorList)
+    operatorChance = [0.5,0.1,0.2,0.2]
+    
+    new_operator = random.choices(operatorList,operatorChance)[0]
   else:
     new_operator = operator
   
@@ -397,42 +376,38 @@ def generate_mutated_process_tree_from_process_tree(activites_list, process_tree
   
   return new_process_tree 
 
+def get_percentage_of_noise():
+  # Parameters
+  mean = 0.2
+  sigma = 0.1
+  max_noise_factor = 0.4
+
+  # Generate random samples
+  samples = []
+  while len(samples) < 10000:
+      random_noise = random.gauss(mean, sigma)
+      if 0 <= random_noise <= max_noise_factor:
+          return random_noise
+  
+  return mean
 
 # TODO make noise similar to traces by small local mutation
-def generate_log_from_process_tree(activites_list, noise_factor = 0):
-  process_tree = generate_random_process_tree(activites_list)
-  log = pm4py.play_out(process_tree)
-  number_noise_traces = int(noise_factor * len(log))
-  
-  number_avg_trace_length = int(get_avg_trace_length_from_log(log))
-  number_avg_trace_length_deviation = int((number_avg_trace_length / 8))
-  
-  # noise added
-  for i in range (number_noise_traces):
-    trace = Trace()
-    generated_trace = generate_trace(activites_list, trace_length=get_number_depending_on_deviation(number_avg_trace_length, number_avg_trace_length_deviation))
-    for event in generated_trace:
-      event1 = {"concept:name": str(event)}
-      trace.append(event1)
-
-    # Add the trace to the event log
-    log.append(trace)
-    
-  return log
-
-# TODO make noise similar to traces by small local mutation
-def generate_log_from_process_tree_for_cut_type(activites_list, process_tree, seed, noise_factor = 0):
+def generate_log_from_process_tree_for_cut_type(activites_list, process_tree, seed):
   random.seed(seed)
   log = pm4py.play_out(process_tree)
-  number_noise_traces = int(noise_factor * len(log))
   
-  number_avg_trace_length = int(get_avg_trace_length_from_log(log))
-  number_avg_trace_length_deviation = int((number_avg_trace_length / 8))
+  noise_Factor = get_percentage_of_noise()
+  
+  number_noise_traces = int(noise_Factor * len(log))
+  
+  number_avg_trace_length = get_avg_trace_length_from_log(log)
+  number_avg_trace_length_deviation = (number_avg_trace_length * 0.2)
   
   # noise added
   for i in range (number_noise_traces):
     trace = Trace()
-    generated_trace = generate_trace(activites_list, trace_length=get_number_depending_on_deviation(number_avg_trace_length, number_avg_trace_length_deviation))
+    cur_trace_length = get_number_depending_on_deviation(number_avg_trace_length, number_avg_trace_length_deviation)
+    generated_trace = generate_trace(activites_list, trace_length=cur_trace_length)
     for event in generated_trace:
       event1 = {"concept:name": str(event)}
       trace.append(event1)
@@ -470,15 +445,15 @@ def get_max_trace_length_from_log(log):
   return longest_length
 
 def get_avg_trace_length_from_log(log):
+  from statistics import mean
   # Calculate the average trace length
-  total_trace_length = 0
-  total_traces = len(log)
+  trace_lengths = []
 
   for trace in log:
       trace_length = len(trace)
-      total_trace_length += trace_length
+      trace_lengths.append(trace_length)
 
-  average_trace_length = total_trace_length / total_traces
+  average_trace_length = mean(trace_lengths)
   return average_trace_length
 
 def save_tree(tree, file_name):
@@ -678,7 +653,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, da
     process_tree_P = generate_random_process_tree_for_cut_type(activity_list, cut_type)
     
     random_seed_P = random.randint(100000, 999999)
-    logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, random_seed_P, 0)
+    logP = generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, random_seed_P)
 
     logM = logP.__deepcopy__()
     
@@ -892,8 +867,8 @@ if __name__ == '__main__':
   random.seed(random_start_seed)
   print()
   
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [2,3,4,5]
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [5]
   generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   
