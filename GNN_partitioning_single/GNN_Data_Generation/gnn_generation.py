@@ -892,9 +892,9 @@ if __name__ == '__main__':
   random.seed(random_start_seed)
   print()
   
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
   # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [2,3,4,5]
-  # generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
-  get_labeled_data_cut_type_distribution(relative_path, 0.2)
+  generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+  # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   
 

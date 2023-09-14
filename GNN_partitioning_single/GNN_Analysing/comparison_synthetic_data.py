@@ -127,9 +127,6 @@ def visualize_All_petriNet(df, miner):
     visualize_petriNet(df,miner,logPName,logMName)
 
 def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
-  common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
-  print("Process: " + str(os.getpid()) + " - Running MES, GNN: " + str(use_gnn) + " - LogP: " + logPName[len(common_prefix):])
-  
   mes = Optimzation_Goals.apply_petri_silent(log,logM,net,im,fm)
 
   df = pd.concat([df, pd.DataFrame.from_records([{
@@ -183,19 +180,13 @@ def applyMinerToLogForGNN(df, cut_Type, logP, logPName, noiseThreshold = 0.0, de
   cur_time = time.time()
     
   # imbi_ali
-  common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
-  print("Process: " + str(os.getpid()) + " - Running IMbi_ali, GNN: " + str(use_gnn) + " - LogP: " + logPName[len(common_prefix):])
-
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
 
   
   df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName="",im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
   time_in_bi = time.time() - cur_time
-  
-  print("Process: " + str(os.getpid()) + " - Done MES: " + str(use_gnn) + " - Time: " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " Runtime: " + str(time_in_bi))
-  
-  
+
   time_measurement = time.time() - cur_time
   cur_time = time.time()
   

@@ -269,13 +269,15 @@ def check_process_tree_for_consistency(data):
    
     
 def evaluate_model_helper(model_number, model_params, data_list, model_args, data_path, detailed = False):
+    df_res = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
+    if len(data_list) == 0:
+        return df_res
+    
     model = gnn_models.generate_model_args(model_args)
     model.load_state_dict(model_params)
     
     # 2. Set the Model to Evaluation Mode
     model.eval()
-    
-    df_res = pd.DataFrame(columns=["Nodes", "Right_Prediction", "Wrong_Prediction", "Accuracy"])
     
     # 3. Forward Pass
     with torch.no_grad():
@@ -290,7 +292,6 @@ def evaluate_model_helper(model_number, model_params, data_list, model_args, dat
             binary_predictions = torch.round(probs)
             predictions_list.append(binary_predictions)
             
-            
         for data in data_list:
             # Assuming you have a tensor `mask` that indicates which nodes to ignore
             mask = get_ignore_mask(data)
@@ -302,7 +303,7 @@ def evaluate_model_helper(model_number, model_params, data_list, model_args, dat
             target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
             batch_labels.append(target_tensor_transposed)
         
-
+        # print(batch_labels)
         batch_labels = torch.cat(batch_labels, dim=0)
         mask_list = torch.cat(mask_list, dim=0)
         predictions_list = torch.cat(predictions_list, dim=0)
@@ -329,13 +330,19 @@ def evaluate_model_helper(model_number, model_params, data_list, model_args, dat
             right_predictions = torch.sum(ground_truth_nodes == predicted_nodes).item()
             wrong_predictions = torch.sum(ground_truth_nodes != predicted_nodes).item()
             if use_symmetric:
-                right_prediction_inverse = torch.sum(~ground_truth_nodes == predicted_nodes).item()
-                right_predictions = max(right_predictions, right_prediction_inverse)
-                wrong_prediction_inverse = torch.sum(~ground_truth_nodes != predicted_nodes).item()
-                wrong_predictions = min(wrong_predictions, wrong_prediction_inverse)
-                
-                if torch.all(ground_truth_nodes == predicted_nodes) or torch.all(~ground_truth_nodes == predicted_nodes):
-                    amount_full_accuracy = 1
+                cut_type = data["Cut_type"]
+                if cut_type == "par" or cut_type == "exc":
+                    right_prediction_inverse = torch.sum(~ground_truth_nodes == predicted_nodes).item()
+                    right_predictions = max(right_predictions, right_prediction_inverse)
+                    wrong_prediction_inverse = torch.sum(~ground_truth_nodes != predicted_nodes).item()
+                    wrong_predictions = min(wrong_predictions, wrong_prediction_inverse)
+                    
+                    if torch.all(ground_truth_nodes == predicted_nodes) or torch.all(~ground_truth_nodes == predicted_nodes):
+                        amount_full_accuracy = 1
+                else:
+                    # Check if all nodes in the current segment are equal
+                    if torch.all(ground_truth_nodes == predicted_nodes):
+                        amount_full_accuracy = 1
             else:
                 # Check if all nodes in the current segment are equal
                 if torch.all(ground_truth_nodes == predicted_nodes):
@@ -459,10 +466,7 @@ def evaluate_model(model_number, model_params, test_dict, model_args, data_path,
     return combined_df
 
 def generate_criterion(use_symmetric, cut_type):
-    if use_symmetric == False:
-        print("Using BCEWithLogitsLoss")
-        return nn.BCEWithLogitsLoss()
-    else:
+    if use_symmetric == True:
         if cut_type == "par" or cut_type == "exc":
             print("Using SymmetricContrastiveLoss")
             class SymmetricContrastiveLoss(nn.Module):
@@ -490,7 +494,9 @@ def generate_criterion(use_symmetric, cut_type):
                     return loss
 
             return SymmetricContrastiveLoss()
-
+    
+    print("Using BCEWithLogitsLoss")
+    return nn.BCEWithLogitsLoss()
 
 def train_model(model_number, model, num_epochs, batch_size, training_dic, model_args, data_settings, data_path):
     # Define the loss function
@@ -528,9 +534,6 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
                 logits = gnn_models.get_model_outcome(model_number, model, data)
                 logits_list.append(logits)
             
-            
-
-            
             for data in batch_data:
                 # Assuming you have a tensor `mask` that indicates which nodes to ignore
                 mask = get_ignore_mask(data)
@@ -541,25 +544,22 @@ def train_model(model_number, model, num_epochs, batch_size, training_dic, model
                 target_tensor_transposed = torch.unsqueeze(target_tensor, dim=1)
                 batch_labels.append(target_tensor_transposed)
                 
-            batch_loss = 0.0
+            batch_losses = []
             for logits, labels, mask in zip(logits_list, batch_labels, mask_list):
                 logits = logits * mask
                 labels = labels * mask
                 # Compute the loss for each data point in the batch
-                loss = criterion(logits, labels)
+                loss_data = criterion(logits, labels)
 
                 # Accumulate the losses
-                batch_loss += loss.item()  # Assuming you want to store the total loss as a scalar
-            
-            # Calculate the average loss for the batch (optional)
-            average_batch_loss = batch_loss / len(logits_list)
-            
-            # Backward pass
-            # Create a scalar tensor with gradients enabled
-            average_batch_loss_tensor = torch.tensor(average_batch_loss, requires_grad=True)
+                batch_losses.append(loss_data)  # Assuming you want to store the total loss as a scalar
 
             # Backward pass
-            average_batch_loss_tensor.backward()
+            # Create a scalar tensor with gradients enabled
+            loss = torch.mean(torch.stack(batch_losses))
+
+            # Backward pass
+            loss.backward()
             
             # Update the weights
             optimizer.step()
@@ -778,8 +778,8 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
     model_number = 13
-    cut_types = ["par", "exc","loop", "seq"]
-    # cut_types = ["par"]
+    cut_types = ["loop", "seq", "par", "exc"]
+    # cut_types = ["seq", "loop"]
     num_epochs = 30
     batch_size = 10
     max_dataSet_numbers = 100000
