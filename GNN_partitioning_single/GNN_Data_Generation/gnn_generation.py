@@ -860,16 +860,24 @@ def get_input_arguments(list_inputs):
   number_new_data_instances_per_category = int(list_inputs[2])
   list_grap_node_sizes = map(int, list_inputs[3].strip('[]').split(','))
   
+  print("unique_indentifier: " + str(unique_indentifier))
+  print("number_new_data_instances_per_category: " + str(number_new_data_instances_per_category))
+  print("list_grap_node_sizes: " + str(list_grap_node_sizes))
+  
   return unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes
    
    
 if __name__ == '__main__':
   random.seed(random_start_seed)
-  print()
+  cur_time = time.time()
   
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [5]
+  print()
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [5]
   generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
+  
+  print("Runtime: " + str(time.time() - cur_time))
   
 
