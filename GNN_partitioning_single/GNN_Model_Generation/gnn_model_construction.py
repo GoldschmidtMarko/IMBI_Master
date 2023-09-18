@@ -136,7 +136,7 @@ def show_dfg(log):
 def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece, random_seed_P, data_path):
     typeName = "Sup_"  + str(sup)
     filePath = data_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_" + str(datapiece)
     
     treeP = load_tree(path_tree_P + ".json")
     
@@ -221,7 +221,7 @@ def check_process_tree_for_consistency(data):
     
     typeName = "Sup_"  + str(support)
     filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_" + str(datapiece)
     
     treeP = load_tree(path_tree_P)
  
@@ -233,7 +233,7 @@ def check_process_tree_for_consistency(data):
     random.seed(seed_P)
     logP = play_out(treeP)
     
-    logP_ = get_log(filePath + "/logP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece))
+    logP_ = get_log(filePath + "/logP_" + str(dataSet_numbers) + "_" + typeName + "_" + str(datapiece))
     
     if not are_logs_equal(logP, logP_):
         print("logs dont match...")
@@ -709,7 +709,7 @@ def does_tree_exist(data, data_path):
     
     typeName = "Sup_"  + str(support)
     filePath = data_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece) + ".json"
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_" + str(datapiece) + ".json"
     
     if os.path.exists(path_tree_P):
         return True

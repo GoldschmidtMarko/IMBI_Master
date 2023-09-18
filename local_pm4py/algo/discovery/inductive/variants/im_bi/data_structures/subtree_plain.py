@@ -476,7 +476,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 
                 if useGNN == True:
-                    possible_partition_gnn = get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.3)
+                    possible_partition_gnn = get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
                     if possible_partition_gnn == None:
                         possible_partitions = dfg_functions.find_possible_partitions(netP)
                     else:

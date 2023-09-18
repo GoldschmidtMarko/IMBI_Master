@@ -274,7 +274,8 @@ def convert_tree_path_to_text_path(input_str):
   numeric_part = parts3[2].split('.')[0]
   
   # Construct the output string
-  output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
+  # output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
+  output_str = parts1[0] + "Data_" + numeric_part + ".txt"
   return output_str
 
 def read_data_from_text_path(file_path):
@@ -368,6 +369,9 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
         number_part = rest.split('/')[0]
         if number_part.isdigit():
             return int(number_part)
+        number_part = rest.split('\\')[0]
+        if number_part.isdigit():
+            return int(number_part)
     return 101
   
   if use_synthetic:
@@ -419,15 +423,21 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
                 
               if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
                 pathFiles.append((file_P, file_M))
+  if use_synthetic:
+    for key in pathFiles:
+      pathFiles[key] = sorted(pathFiles[key], key=lambda x: x[0], reverse=True)
 
-  for key in pathFiles:
-    pathFiles[key] = sorted(pathFiles[key], key=lambda x: x[0], reverse=True)
+    for cut_type, dataList in pathFiles.items():
+      print("Data")
+      print("Cut type: " + cut_type + " Number of files: " + str(len(dataList)))
 
-  for cut_type, dataList in pathFiles.items():
+    return pathFiles
+  else:
     print("Data")
-    print("Cut type: " + cut_type + " Number of files: " + str(len(dataList)))
-
-  return pathFiles
+    print("Number of files: " + str(len(pathFiles)))
+    return pathFiles
+  
+  
 def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False):
   pathFiles = get_data_paths(True, dataPath, max_node_size, num_data_per_category)
 
@@ -453,7 +463,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
           input_data.append((df_temp, cut_type, batch_data, [False, True]))
           offset += batch_size
           
-      TIMEOUT_SECONDS = 60 * 5 * batch_size
+      TIMEOUT_SECONDS = 60 * batch_size
       # TIMEOUT_SECONDS = 60 * 10
       print("Timeout: " + str(TIMEOUT_SECONDS))
       
@@ -589,7 +599,11 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, par
   for dataList in pathFiles:
     for sup in sup_list:
       for ratio in ratio_list:
-        enriched_pathFiles.append((dataList[0], dataList[1], sup, ratio))
+        enriched_pathFiles.append(
+          {"logP": dataList[0],
+           "logM": dataList[1],
+           "Support": sup,
+           "Ratio": ratio})
 
 
   if parallel:
@@ -710,16 +724,25 @@ def load_tree(file_name):
   
 def run_evaluation_category(df, cut_type, dataList, using_gnn):
   for data in dataList:
-    support = data[1]["Support"]
-    ratio = data[1]["Ratio"]
-    
-    tree_path = data[0]
-    treeP = load_tree(tree_path)
-    logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
+    if len(data) == 4:
+      support = data["Support"]
+      ratio = data["Ratio"]
+
+      logP = get_log(data["logP"])
+      log_name = data["logP"]
+      
+    else:
+      support = data[1]["Support"]
+      ratio = data[1]["Ratio"]
+      
+      tree_path = data[0]
+      treeP = load_tree(tree_path)
+      logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
+      log_name = tree_path
     
     for use_gnn in using_gnn:
       try:
-        df = applyMinerToLogForGNN(df, cut_type, logP, tree_path, 0.2, 0.99, support, ratio,use_gnn)
+        df = applyMinerToLogForGNN(df, cut_type, logP, log_name, 0.2, 0.99, support, ratio,use_gnn)
       except Exception as exc:
         import traceback
         traceback.print_exc()  # Print the full traceback
@@ -882,8 +905,8 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
       df.to_csv(csv_filename, index=False)
     elif progress == 1:
       using_gnn = [False, True]
-      sup_list = [0, 0.2, 0.3]
-      ratio_list = [0.5, 0.8, 1.0]
+      sup_list = [0, 0.2, 0.3, 0.4, 0.5, 0.6]
+      ratio_list = [0]
       df = run_evaluation_delta_real(df, real_path, sup_list, ratio_list, using_gnn, parallel = True)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
@@ -1181,8 +1204,8 @@ def run_show_data():
           
   
 if __name__ == '__main__':
-  # run_comparison()
-  run_show_data()
+  run_comparison()
+  # run_show_data()
   # manual_run()
   
 

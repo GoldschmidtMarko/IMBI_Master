@@ -630,7 +630,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       os.makedirs(folder_name, exist_ok=True)
   
   folder_name += "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_" + str(data_piece_index)
 
   
   
@@ -738,7 +738,7 @@ def check_if_data_piece_exists(file_path, number_of_activites, support, ratio, d
   folder_name += "/Data_" + str(number_of_activites)
   folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
   
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_" + str(data_piece_index)
   
   test_file = folder_name + "/treeP_" + ending_File_string + ".pmt"
   
@@ -881,7 +881,7 @@ def manual_run(file_path, number_of_activites, support, ratio, data_piece_index)
   warnings.filterwarnings("ignore")
   
   folder_name = file_path + "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_" + str(data_piece_index)
 
   
   
@@ -927,8 +927,8 @@ if __name__ == '__main__':
   
   # typeName = "Sup_"  + str(1.0) + "_Ratio_" + str(1.0) 
   # filePath = relative_path + "/" + "seq" + "/Data_" + str(6) + "/" + typeName
-  # logPathP = filePath + "/logP_" + str(6) + "_" + typeName + "_Data_" + str(2)
-  # logPathM = filePath + "/logM_" + str(6) + "_" + typeName + "_Data_" + str(2)
+  # logPathP = filePath + "/logP_" + str(6) + "_" + typeName + "_" + str(2)
+  # logPathM = filePath + "/logM_" + str(6) + "_" + typeName + "_" + str(2)
   # view_log(get_log(logPathP))
   # view_log(get_log(logPathM))
   

@@ -118,8 +118,8 @@ def get_log(file_name):
 def get_score_value_from_partition(A, B, cut_type, dataSet_numbers, sup, ratio, datapiece, random_seed_P, random_seed_M):
     typeName = "Sup_"  + str(sup) + "_Ratio_" + str(ratio)
     filePath = relative_path + "/" + cut_type + "/Data_" + str(dataSet_numbers) + "/" + typeName
-    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
-    path_tree_M = filePath + "/treeM_" + str(dataSet_numbers) + "_" + typeName + "_Data_" + str(datapiece)
+    path_tree_P = filePath + "/treeP_" + str(dataSet_numbers) + "_" + typeName + "_" + str(datapiece)
+    path_tree_M = filePath + "/treeM_" + str(dataSet_numbers) + "_" + typeName + "_" + str(datapiece)
     
     treeP = tree_importer.apply(path_tree_P)
     treeM = tree_importer.apply(path_tree_M)

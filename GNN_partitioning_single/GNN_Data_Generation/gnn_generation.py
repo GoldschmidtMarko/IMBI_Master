@@ -618,7 +618,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, da
       os.makedirs(folder_name, exist_ok=True)
   
   folder_name += "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_" +  str(data_piece_index)
 
   
   
@@ -697,7 +697,7 @@ def check_if_data_piece_exists(file_path, number_of_activites, support, data_pie
   folder_name += "/Data_" + str(number_of_activites)
   folder_name += "/Sup_" + str(support)
   
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_" + str(data_piece_index)
   
   test_file = folder_name + "/treeP_" + ending_File_string + ".pmt"
   
@@ -830,7 +830,7 @@ def manual_run(file_path, number_of_activites, support, ratio, data_piece_index)
   warnings.filterwarnings("ignore")
   
   folder_name = file_path + "/Data_" + str(number_of_activites)
-  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_Data_" + str(data_piece_index)
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_" + str(ratio) + "_" + str(data_piece_index)
 
   
   
@@ -872,8 +872,8 @@ if __name__ == '__main__':
   cur_time = time.time()
   
   print()
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 20, [5]
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 10, [2,3,4,5,6,7]
   generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
 
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
