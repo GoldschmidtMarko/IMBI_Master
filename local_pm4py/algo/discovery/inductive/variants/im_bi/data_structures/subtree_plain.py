@@ -801,6 +801,7 @@ class SubtreePlain(object):
             numberBestCutsSaved = 3
             currentIteration = 1
             
+            folder_name = os.path.join(root_path,"imbi_cuts")
             folder_name = "imbi_cuts"
             # Check if the folder already exists
             if not os.path.exists(folder_name):
