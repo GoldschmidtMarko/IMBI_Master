@@ -795,10 +795,12 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
   y_max = df_measurement[column_feature].max().max()
   if use_synthetic:
     df_grouped = df_measurement.groupby("cut_type")
+    number_columns = 4
   else:
     df_grouped = df_measurement.groupby("logP_Name")
-
-  fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(16, 10))
+    number_columns = 3
+    
+  fig, axes = plt.subplots(nrows=1, ncols=number_columns, figsize=(16, 10))
   fig.suptitle(title)
 
   for i, (cut_type, group) in enumerate(df_grouped):
@@ -933,7 +935,7 @@ def run_comparison():
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = True
+    use_synthetic = False
     column_feature = ["precision","fitP"]
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'

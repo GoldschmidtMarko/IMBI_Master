@@ -25,6 +25,7 @@ from pm4py.statistics.end_activities.log import get as end_activities_get
 from pm4py.statistics.start_activities.log import get as start_activities_get
 from pm4py.algo.discovery.dfg.variants import native as dfg_inst
 from pm4py import view_dfg
+from pm4py import save_vis_dfg
 from pm4py.objects.process_tree.obj import ProcessTree, Operator
 import shutil
 import numpy as np
@@ -144,6 +145,15 @@ def view_log(log):
   end_act_cur_dfg = end_activities_get.get_end_activities(log)
   cur_dfg = dfg_inst.apply(log)
   view_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg)
+  
+def save_log_as_dfg(log, file_name):
+  start_act_cur_dfg = start_activities_get.get_start_activities(log)
+  end_act_cur_dfg = end_activities_get.get_end_activities(log)
+  cur_dfg = dfg_inst.apply(log)
+  save_vis_dfg(cur_dfg, start_act_cur_dfg, end_act_cur_dfg, file_name + ".png")
+  
+  
+  
 
 def generate_random_process_tree(activites_list):
   generated_ProcessTrees = []
@@ -403,6 +413,8 @@ def generate_log_from_process_tree_for_cut_type(activites_list, process_tree, se
   number_avg_trace_length = get_avg_trace_length_from_log(log)
   number_avg_trace_length_deviation = (number_avg_trace_length * 0.2)
   
+  # save_log_as_dfg(log, "log1")
+  
   # noise added
   for i in range (number_noise_traces):
     trace = Trace()
@@ -415,6 +427,7 @@ def generate_log_from_process_tree_for_cut_type(activites_list, process_tree, se
     # Add the trace to the event log
     log.append(trace)
     
+  # save_log_as_dfg(log, "log2")
   return log
 
 
@@ -873,8 +886,8 @@ if __name__ == '__main__':
   
   print()
   # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 10, [2,3,4,5,6,7]
-  generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test10", 10, [5]
+  generate_data(relative_path, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, False)
 
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   

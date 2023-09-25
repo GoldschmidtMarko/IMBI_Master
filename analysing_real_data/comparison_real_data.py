@@ -281,7 +281,7 @@ def applyMinerToLog(df,result_path, logPathP, logPathM,logPName, logMName = "", 
   # print("Running IMbi_ali")
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
-  df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_freq",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
   
   fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + logMName[:logMName.rfind(".")]
   visualize_cuts(result_path, fileName_cuts_ali)
@@ -295,7 +295,7 @@ def applyMinerToLog(df,result_path, logPathP, logPathM,logPName, logMName = "", 
   # print("Running IMbi_mar")
   cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
-  df = add_Model_To_Database(df=df, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_mar",logPName=logPName, logMName=logMName, im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  df = add_Model_To_Database(df=df, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_rel",logPName=logPName, logMName=logMName, im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
   
   fileName_cuts_mar = "cuts_IMbi_mar_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP-" + logPName[:logPName.rfind(".")] + "_logM-" + logMName[:logMName.rfind(".")]
   visualize_cuts(result_path, fileName_cuts_mar)
@@ -307,10 +307,10 @@ def applyMinerToLog(df,result_path, logPathP, logPathM,logPName, logMName = "", 
   # for double log
   marImproved = False
   if logMName != "":
-    f1_ali = get_df_value(df,"IMbi_ali",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
-    f1_mar = get_df_value(df,"IMbi_mar",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
-    preccP_ali = get_df_value(df,"IMbi_ali",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
-    preccP_mar = get_df_value(df,"IMbi_mar",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+    f1_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+    f1_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+    preccP_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+    preccP_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
     diff_prec_ali_mar = preccP_ali - preccP_mar
     diff_f1_ali_mar = f1_ali - f1_mar
     
@@ -397,7 +397,8 @@ def displayDoubleLog(df, saveFig = False):
       axs[cur_Row,cur_Col].bar(j+2,fitP, color="g", label="fitP")
       axs[cur_Row,cur_Col].bar(j+3,fitM, color="b", label="fitM")
       axs[cur_Row,cur_Col].bar(j+4,f1_fit, color="orange", label="f1_fit")
-      xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+      # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+      xTickLabel.append(miner)
       idx.append(j + 2.5)
       j += 6
       
@@ -456,7 +457,8 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
         axs[cur_Row,cur_Col].bar(j+2,fitP, color="g", label="fitP")
         axs[cur_Row,cur_Col].bar(j+3,fitM, color="b", label="fitM")
         axs[cur_Row,cur_Col].bar(j+4,f1_fit, color="orange", label="f1_fit")
-        xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+        # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+        xTickLabel.append(miner)
         idx.append(j + 2.5)
         j += 6
         
@@ -565,11 +567,11 @@ def get_comparison_df(csv_filename, result_path):
   
 def filter_and_sort_dataframe(df, number_rows, get_mar_improved = True):
   def custom_agg(group):
-    precision_diff = group.loc[group['miner'] == "IMbi_ali", 'precP'].mean() - \
-                    group.loc[group['miner'] == "IMbi_mar", 'precP'].mean()
+    precision_diff = group.loc[group['miner'] == "IMbi_freq", 'precP'].mean() - \
+                    group.loc[group['miner'] == "IMbi_rel", 'precP'].mean()
 
-    fit_f1_diff = group.loc[group['miner'] == "IMbi_ali", 'f1_fit_logs'].mean() - \
-                group.loc[group['miner'] == "IMbi_mar", 'f1_fit_logs'].mean()
+    fit_f1_diff = group.loc[group['miner'] == "IMbi_freq", 'f1_fit_logs'].mean() - \
+                group.loc[group['miner'] == "IMbi_rel", 'f1_fit_logs'].mean()
 
     return pd.Series({'precision': precision_diff, 'fit_f1': fit_f1_diff})
 
@@ -658,7 +660,7 @@ if __name__ == '__main__':
   df_measurement = filter_and_sort_dataframe(df, 10, get_mar_improved = False)
   print(df_measurement)
   
-  create_comparison_petri_nets(result_path, "lp_2017_f.xes","lm_2017_f.xes",0.4,0.8)
+  # create_comparison_petri_nets(result_path, "lp_2017_f.xes","lm_2017_f.xes",0.4,0.8)
 
   
 
