@@ -656,6 +656,8 @@ def read_data_from_path(file_path):
                     lineList = line.split(" ")[:-1]
                     np_array = np.array(lineList, dtype=int)
                     matrix_P_arrayList.append(np_array)
+                    
+    data["Path"] = file_path
     return data
 
 def generate_ground_truth(data):
@@ -760,6 +762,18 @@ def save_model_parameter(file_name, data_settings, model_args):
         for key, value in model_args.items():
             file.write(key + ': ' + str(value) + '\n')
             
+def save_used_data(file_name, train_data, test_data):
+    with open(file_name, 'w') as file:
+        file.write('# Test Data\n')
+        for key, value in test_data.items():
+            for item in value:
+                file.write(str(key) + ': ' + str(item["Path"]) + '\n')
+        file.write('\n')
+        file.write('# Train Data\n')
+        for key, value in train_data.items():
+            for item in value:
+                file.write(str(key) + ': ' + str(item["Path"]) + '\n')
+            
                     
 def generate_Models(file_path_models, save_results = False, file_path_results = "", relative_path_data = ""):
     
@@ -842,8 +856,10 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
         analyse_dataframe_result(df_res, data_settings, detailed=save_results, file_path=file_path_results)
         if not os.path.exists(file_path_models):
             os.makedirs(file_path_models)
+            
         torch.save(model.state_dict(), file_path_models + '/gnn_model_' + cut_type + ".pt")
-        save_model_parameter(file_path_models + '/gnn_model_' + cut_type + ".txt", data_settings, model_args)
+        save_model_parameter(file_path_models + '/gnn_model_' + cut_type + "_setting.txt", data_settings, model_args)
+        save_used_data(file_path_models + '/gnn_model_' + cut_type + "_data.txt", train_dict, test_dict)
     
     
     time_end = time.time()
