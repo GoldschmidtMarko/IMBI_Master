@@ -1,0 +1,38 @@
+{
+    "label": null,
+    "operand": "*",
+    "children": [
+        {
+            "label": null,
+            "operand": "->",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "->",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "bEFwls",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": null,
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": "TnVCCe",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

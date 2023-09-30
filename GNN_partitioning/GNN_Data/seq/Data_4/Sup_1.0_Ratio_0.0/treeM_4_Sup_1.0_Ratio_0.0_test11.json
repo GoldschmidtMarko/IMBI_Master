@@ -1,0 +1,71 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "None",
+            "children": []
+        },
+        {
+            "label": null,
+            "operand": "*",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": "CKAIm",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "->",
+                            "children": [
+                                {
+                                    "label": null,
+                                    "operand": "+",
+                                    "children": [
+                                        {
+                                            "label": "tBWwB",
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": null,
+                                            "operand": "X",
+                                            "children": [
+                                                {
+                                                    "label": null,
+                                                    "operand": "None",
+                                                    "children": []
+                                                },
+                                                {
+                                                    "label": "vzyYr",
+                                                    "operand": "None",
+                                                    "children": []
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": "AMyot",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,38 @@
+{
+    "label": null,
+    "operand": "+",
+    "children": [
+        {
+            "label": "UCArsD",
+            "operand": "None",
+            "children": []
+        },
+        {
+            "label": null,
+            "operand": "->",
+            "children": [
+                {
+                    "label": "cFMSmW",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": null,
+                    "operand": "->",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

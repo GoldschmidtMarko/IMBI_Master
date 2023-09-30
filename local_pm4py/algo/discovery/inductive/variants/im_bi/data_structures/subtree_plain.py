@@ -24,7 +24,9 @@ import networkx as nx
 from pm4py.algo.filtering.log.start_activities import start_activities_filter
 from pm4py.algo.filtering.log.end_activities import end_activities_filter
 from pm4py.algo.discovery.dfg.utils.dfg_utils import get_activities_from_dfg
-from GNN_partitioning_single.GNN_Model_Generation.gnn_models import get_partitions_from_gnn
+from GNN_partitioning.GNN_Model_Generation.uni.gnn_models import get_partitions_from_gnn as uni_get_partitions_from_gnn
+from GNN_partitioning.GNN_Model_Generation.bi.gnn_models import get_partitions_from_gnn as bi_get_partitions_from_gnn
+
 import logging 
 
 from local_pm4py.algo.analysis import dfg_functions
@@ -472,11 +474,14 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 start_partition = time.time()
                 
 
-                gnn_path = os.path.join("GNN_partitioning_single", "GNN_Model")
+                gnn_path = os.path.join("GNN_partitioning", "GNN_Model")
                 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 
                 if useGNN == True:
-                    possible_partition_gnn = get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
+                    if ratio == 0:
+                        possible_partition_gnn = uni_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
+                    else:
+                        possible_partition_gnn = bi_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
                     if possible_partition_gnn == None:
                         possible_partitions = dfg_functions.find_possible_partitions(netP)
                     else:

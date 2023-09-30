@@ -1,0 +1,60 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "->",
+            "children": [
+                {
+                    "label": "IJmVzqQ",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": null,
+                    "operand": "*",
+                    "children": [
+                        {
+                            "label": "KpDXVFs",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": null,
+                            "operand": "X",
+                            "children": [
+                                {
+                                    "label": null,
+                                    "operand": "->",
+                                    "children": [
+                                        {
+                                            "label": null,
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": null,
+                                            "operand": "None",
+                                            "children": []
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": "DtFHkCP",
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "bJKRgxZ",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

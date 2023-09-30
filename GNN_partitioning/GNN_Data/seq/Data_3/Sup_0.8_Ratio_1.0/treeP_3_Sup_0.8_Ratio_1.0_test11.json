@@ -1,0 +1,60 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "X",
+            "children": [
+                {
+                    "label": "bUoyjGO",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": null,
+                            "operand": "X",
+                            "children": [
+                                {
+                                    "label": null,
+                                    "operand": "X",
+                                    "children": [
+                                        {
+                                            "label": null,
+                                            "operand": "None",
+                                            "children": []
+                                        },
+                                        {
+                                            "label": null,
+                                            "operand": "None",
+                                            "children": []
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": null,
+                                    "operand": "None",
+                                    "children": []
+                                }
+                            ]
+                        },
+                        {
+                            "label": "JnjvYUG",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "TKEzIuY",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

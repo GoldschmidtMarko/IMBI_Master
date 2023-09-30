@@ -1,0 +1,16 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "None",
+            "children": []
+        },
+        {
+            "label": "teoucv",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

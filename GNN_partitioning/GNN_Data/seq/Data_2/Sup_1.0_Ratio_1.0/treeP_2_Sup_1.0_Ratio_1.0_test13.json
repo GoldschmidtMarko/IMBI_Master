@@ -1,0 +1,27 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "uPHOx",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": "STKNp",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

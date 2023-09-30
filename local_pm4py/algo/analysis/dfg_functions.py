@@ -135,7 +135,15 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
         for y in B:
             
             dividend = net.out_degree(y, weight='weight')
-            divisor = sum([net.out_degree(p, weight='weight') for p in B]) + sum([net.out_degree(p, weight='weight') for p in A])
+            sum_list_1 = []
+            for p in B:
+                sum_list_1.append(net.out_degree(p, weight='weight'))
+            sum_list_2 = []
+            for p in A:
+                sum_list_2.append(net.out_degree(p, weight='weight'))
+                
+            divisor = sum(sum_list_1) + sum(sum_list_2)
+            # divisor = sum([net.out_degree(p, weight='weight') for p in B]) + sum([net.out_degree(p, weight='weight') for p in A])
 
             c2 += max(0, scores[(x, y)] * net.out_degree(x, weight='weight') * sup * (dividend / divisor) - flow[(x, y)])
 

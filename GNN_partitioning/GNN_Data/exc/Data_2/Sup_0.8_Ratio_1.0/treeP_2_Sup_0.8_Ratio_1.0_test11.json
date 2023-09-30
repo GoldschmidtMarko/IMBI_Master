@@ -1,0 +1,27 @@
+{
+    "label": null,
+    "operand": "X",
+    "children": [
+        {
+            "label": null,
+            "operand": "X",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "Xhtem",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": "euypP",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

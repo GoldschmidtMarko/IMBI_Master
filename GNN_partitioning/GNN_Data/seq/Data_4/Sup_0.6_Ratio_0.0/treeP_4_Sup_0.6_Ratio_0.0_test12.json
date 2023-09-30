@@ -1,0 +1,38 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": null,
+                    "operand": "+",
+                    "children": [
+                        {
+                            "label": "ZgqNkWGw",
+                            "operand": "None",
+                            "children": []
+                        },
+                        {
+                            "label": "UcADZYQV",
+                            "operand": "None",
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "label": "oltaUAsq",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        },
+        {
+            "label": "yUuzyEOg",
+            "operand": "None",
+            "children": []
+        }
+    ]
+}

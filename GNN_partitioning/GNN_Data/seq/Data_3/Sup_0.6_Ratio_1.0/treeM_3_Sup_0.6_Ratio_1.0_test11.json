@@ -1,0 +1,27 @@
+{
+    "label": null,
+    "operand": "->",
+    "children": [
+        {
+            "label": null,
+            "operand": "None",
+            "children": []
+        },
+        {
+            "label": null,
+            "operand": "+",
+            "children": [
+                {
+                    "label": "QPwXw",
+                    "operand": "None",
+                    "children": []
+                },
+                {
+                    "label": "utzIq",
+                    "operand": "None",
+                    "children": []
+                }
+            ]
+        }
+    ]
+}
