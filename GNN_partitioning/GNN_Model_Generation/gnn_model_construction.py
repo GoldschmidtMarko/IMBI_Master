@@ -65,27 +65,55 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
             data_distance_list.append(group_df['distance_ratio'])
             data_Label_list.append(group_name)
 
-        fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 8))
+        # fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
+        
+        import matplotlib.font_manager as fm
+        custom_font = fm.FontProperties(family='Arial', size=16, weight='bold')
         
         # Add a global title
-        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]))
+        measurement_string = 'Total accuracy: ' + str(round(accuracy,2)) + " | " + "Full accuracy: " + str(round(full_accuracy,2))
         
-        axes[0].boxplot(data_accuracy_list)
-        axes[0].set_title('Accuracy')
-        axes[0].set_ylabel('Accuracy')
+        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]) + "\n\n" + measurement_string, fontproperties=custom_font)
+        
+        axes[0].boxplot(data_accuracy_list, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lightblue', 'linewidth': 2},
+                        capprops={'linewidth': 2},
+                        whiskerprops={'linewidth': 2},
+                        medianprops={'color': 'orange', 'linewidth': 2})
+        axes[0].set_title('GNN Accuracy for Different Graph Sizes', fontproperties=custom_font)
+        axes[0].set_ylabel('Prediction Accuracy', fontproperties=custom_font)
+        axes[0].set_xlabel("Graph Size", fontproperties=custom_font)
         axes[0].set_xticklabels(data_Label_list)
+        axes[0].tick_params(axis='x', labelsize=16)
+        axes[0].tick_params(axis='y', labelsize=16)
         
-        axes[1].boxplot(data_missClass_list)
-        axes[1].set_title('Number of misclassified nodes')
-        axes[1].set_ylabel('# of misclassified nodes')
+        axes[1].boxplot(data_missClass_list, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lightblue', 'linewidth': 2},
+                        capprops={'linewidth': 2},
+                        whiskerprops={'linewidth': 2},
+                        medianprops={'color': 'orange', 'linewidth': 2})
+        axes[1].set_title('Misclassified Nodes for Different Graph Sizes', fontproperties=custom_font)
+        axes[1].set_ylabel('Misclassified Nodes', fontproperties=custom_font)
+        axes[1].set_xlabel("Graph Size", fontproperties=custom_font)
         axes[1].set_xticklabels(data_Label_list)
+        axes[1].tick_params(axis='x', labelsize=16)
+        axes[1].tick_params(axis='y', labelsize=16)
         
-        axes[2].boxplot(data_distance_list)
-        axes[2].set_title('Difference actual to predicted score')
-        axes[2].set_ylabel('Percentage')
-        axes[2].set_xticklabels(data_Label_list)
+        # axes[2].boxplot(data_distance_list)
+        # axes[2].set_title('Difference actual to predicted score')
+        # axes[2].set_ylabel('Percentage')
+        # axes[2].set_xticklabels(data_Label_list)
 
-        fig.text(0.5, 0.005, 'Total accuracy: ' + str(round(accuracy,2)) + " | " + "Full accuracy: " + str(round(full_accuracy,2)), ha='center')
+        # fig.text(0.5, 0.005, 'Total accuracy: ' + str(round(accuracy,2)) + " | " + "Full accuracy: " + str(round(full_accuracy,2)), ha='center')
+        
+        axes[0].grid(True, linestyle='--', alpha=0.6)
+        axes[0].set_axisbelow(True)
+        axes[1].grid(True, linestyle='--', alpha=0.6)
+        axes[1].set_axisbelow(True)
+
         
         # axes[1].plot(x2, y2)
         plt.tight_layout()
@@ -94,6 +122,7 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
         
         fig_name = "/GNN_results_" + data_settings["Cut_type"] + "_dataset_" + str(len(df)) + "_model_" + str(data_settings["model_number"]) + "_epochs_" + str(data_settings["num_epochs"]) + "_batch_" + str(data_settings["batch_size"])
         fig.savefig(file_path + fig_name + ".pdf")
+
     
 
 def get_ignore_mask(data):
@@ -337,7 +366,7 @@ def evaluate_model_helper(model_number, model_params, data_list, model_args, dat
                 # Apply softmax to obtain probability distributions over classes
                 probs = F.sigmoid(predictions)
                 binary_predictions = torch.round(probs)
-                
+
 
                 partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
                 
@@ -800,22 +829,11 @@ def does_path_files_has_ratio(pathFiles):
             return False
     return False
 
-def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
+def convert_path_files_to_data(pathFiles, file_path, max_dataSet_numbers, input_max_node_size = 0):
+    consider_ratio = does_path_files_has_ratio(pathFiles)
+    
     data_dic = dict()
     max_node_size_in_dataset = 0
-    currentPath = file_path
-    pathFiles = []
-    consider_ratio = False
-    
-    if os.path.exists(currentPath):
-        currentPath += "/" + cut_type
-        if os.path.exists(currentPath):
-            for root, _ , files in os.walk(currentPath):
-                for file in files:
-                    if file.endswith(".txt"):  # Filter for text files
-                        pathFiles.append(os.path.join(root, file))
-
-    consider_ratio = does_path_files_has_ratio(pathFiles)
 
     # we sort the files in reverse, so we start with high node graphs
     pathFiles = sorted(pathFiles, reverse=True)
@@ -835,8 +853,24 @@ def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
             else:
                 data_dic[nodeSize] = [data]
                                   
-    data_dic = setup_dataSet(data_dic,max_node_size_in_dataset, consider_ratio)
+    if input_max_node_size != 0:
+        max_node_size_in_dataset = input_max_node_size
+    data_dic = setup_dataSet(data_dic, max_node_size_in_dataset, consider_ratio)
     return data_dic, max_node_size_in_dataset, consider_ratio
+
+def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
+    currentPath = file_path
+    pathFiles = []
+    
+    if os.path.exists(currentPath):
+        currentPath += "/" + cut_type
+        if os.path.exists(currentPath):
+            for root, _ , files in os.walk(currentPath):
+                for file in files:
+                    if file.endswith(".txt"):  # Filter for text files
+                        pathFiles.append(os.path.join(root, file))
+
+    return convert_path_files_to_data(pathFiles, file_path, max_dataSet_numbers)
                
 def save_model_parameter(file_name, data_settings, model_args):
     with open(file_name, 'w') as file:
@@ -859,7 +893,42 @@ def save_used_data(file_name, train_data, test_data):
         for key, value in train_data.items():
             for item in value:
                 file.write(str(key) + ': ' + str(item["Path"]) + '\n')
-            
+       
+def get_used_data_from_model_filepath(model_data_path):
+    train_data = dict()
+    test_data = dict()
+    with open(model_data_path, 'r') as file:
+        state = -1
+        for line in file:
+            if state == -1:
+                state += 1
+                continue
+            elif state == 0:
+                if line == "\n":
+                    state += 1
+                    continue
+                splitted = line.split(": ")
+                key = int(splitted[0])
+                value = splitted[1][:-1]
+                if key in test_data:
+                    test_data[key].append(value)
+                else:
+                    test_data[key] = [value]
+            elif state >= 1:
+                if state == 1:
+                    state += 1
+                    continue
+                if line == "\n":
+                    state += 1
+                    continue
+                splitted = line.split(": ")
+                key = int(splitted[0])
+                value = splitted[1][:-1]
+                if key in train_data:
+                    train_data[key].append(value)
+                else:
+                    train_data[key] = [value]
+    return train_data, test_data
                     
 def generate_Models(file_path_models, save_results = False, file_path_results = "", relative_path_data = ""):
     
@@ -956,6 +1025,83 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     time_end = time.time()
     print("Runtime of the program is " + str(round(time_end - time_start,2)) + " seconds")
 
+
+def run_performance_plot(relative_path_results, relative_path_data):
+    print("Evaluating Model")
+
+    from GNN_partitioning.GNN_Model_Generation import gnn_models
+
+    gnn_path = os.path.join("GNN_partitioning", "GNN_Model")
+    root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+    gnn_file_path = os.path.join(root_path, gnn_path)
+    
+    model_setting_paths = []
+    model_data_paths = []
+    model_paths = []
+    if os.path.exists(gnn_file_path):
+        for root, _ , files in os.walk(gnn_file_path):
+            for file in files:
+                if file.endswith("_setting.txt"):  # Filter for text files
+                    model_setting_paths.append(os.path.join(root, file))
+                if file.endswith("_data.txt"):  # Filter for text files
+                    model_data_paths.append(os.path.join(root, file))
+                if file.endswith(".pt"):  # Filter for pt files
+                    model_paths.append(os.path.join(root, file))
+    
+    model_parameters = []
+    for model_setting_path in model_setting_paths:
+        data_settings, model_args = gnn_models.read_model_parameter(model_setting_path)
+        model_parameters.append((data_settings, model_args))
+            
+    for data_setting, model_args in model_parameters:
+        cut_type = data_setting["Cut_type"]
+        model_number = int(data_setting["model_number"])
+        
+        print("Cut type: " + cut_type)
+            
+        max_dataSet_numbers = 100000
+        
+        data_dic, max_node_size_in_dataset, consider_ratio = read_all_data_for_cut_Type(relative_path_data, cut_type, max_dataSet_numbers)
+    
+        cur_model_path = ""
+        for model_path in model_paths:
+            if gnn_models.check_substring_after_last_slash(model_path, cut_type):
+                cur_model_path = model_path
+                break
+            
+        if cur_model_path == "":
+            print("Error: no model found for cut type " + cut_type)
+            return None
+        
+        cur_model_data_path = ""
+        for model_data_path in model_data_paths:
+            if gnn_models.check_substring_after_last_slash(model_data_path, cut_type):
+                cur_model_data_path = model_data_path
+                break
+            
+        if cur_model_data_path == "":
+            print("Error: no model data found for cut type " + cut_type)
+            return None
+        
+        
+        if consider_ratio:
+            cur_model = bi_gnn_models.generate_model_from_args(model_args)
+        else:
+            cur_model = uni_gnn_models.generate_model_from_args(model_args)   
+            
+        cur_model.load_state_dict(torch.load(cur_model_path))
+
+        train_data_paths_dic, test_data_paths_dic = get_used_data_from_model_filepath(cur_model_data_path)
+        test_data_paths = []
+        for item in test_data_paths_dic.values():
+            test_data_paths += item
+        test_data = convert_path_files_to_data(test_data_paths, relative_path_data, max_dataSet_numbers, int(model_args["input_dim"]))[0]
+
+        df_res = evaluate_model(model_number,cur_model.state_dict(), test_data, model_args,relative_path_data, consider_ratio=consider_ratio, detailed=True)
+        analyse_dataframe_result(df_res, data_setting, detailed=True, file_path=relative_path_results)
+        
+        
+
 if __name__ == '__main__':
     random.seed(random_seed)
 
@@ -963,7 +1109,9 @@ if __name__ == '__main__':
     relative_path_results = root_path + "/GNN_partitioning/GNN_Accuracy_results"
     relative_path_data = root_path + "/GNN_partitioning/GNN_Data"
     
-    generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
+    run_performance_plot(relative_path_results, relative_path_data)
+    
+    # generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
 
 
 
