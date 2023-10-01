@@ -69,12 +69,14 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
         # fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
         
         import matplotlib.font_manager as fm
-        custom_font = fm.FontProperties(family='Arial', size=16, weight='bold')
+        # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
+        custom_font_bold = fm.FontProperties(family='Arial', size=16, weight='bold')
+        custom_font = fm.FontProperties(family='Arial', size=16)
         
         # Add a global title
-        measurement_string = 'Total accuracy: ' + str(round(accuracy,2)) + " | " + "Full accuracy: " + str(round(full_accuracy,2))
+        measurement_string = 'ACC_Node: ' + str(round(accuracy,2)) + " | " + "ACC_Full: " + str(round(full_accuracy,2))
         
-        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]) + "\n\n" + measurement_string, fontproperties=custom_font)
+        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]) + "\n\n" + measurement_string, fontproperties=custom_font_bold)
         
         axes[0].boxplot(data_accuracy_list, patch_artist=True,    # Fill boxes with color
                         showfliers=False,     # Hide outliers
@@ -1054,6 +1056,7 @@ def run_performance_plot(relative_path_results, relative_path_data):
         model_parameters.append((data_settings, model_args))
             
     for data_setting, model_args in model_parameters:
+        start_time = time.time()
         cut_type = data_setting["Cut_type"]
         model_number = int(data_setting["model_number"])
         
@@ -1099,6 +1102,7 @@ def run_performance_plot(relative_path_results, relative_path_data):
 
         df_res = evaluate_model(model_number,cur_model.state_dict(), test_data, model_args,relative_path_data, consider_ratio=consider_ratio, detailed=True)
         analyse_dataframe_result(df_res, data_setting, detailed=True, file_path=relative_path_results)
+        print("Runtime of the program is " + str(round(time.time() - start_time,2)) + " seconds")
         
         
 
