@@ -822,14 +822,19 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     x_labels = []
     
     for j, col in enumerate(column_feature):
-      group.boxplot(column=col,positions=[j],widths=0.5, ax=ax)
+      group.boxplot(column=col,positions=[j],widths=0.5, ax=ax, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lightblue', 'linewidth': 2},
+                        capprops={'linewidth': 2},
+                        whiskerprops={'linewidth': 2},
+                        medianprops={'color': 'orange', 'linewidth': 2})
       
       # Modify x-axis tick labels
       x_ticks.append(j)
-      x_labels.append(column_prefix + col, fontproperties=custom_font)
+      x_labels.append(column_prefix + col)
       
     ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_labels, rotation=45)
+    ax.set_xticklabels(x_labels, rotation=45, fontproperties=custom_font)
     ax.tick_params(axis='x', labelsize=16)
     ax.tick_params(axis='y', labelsize=16)
     
@@ -939,8 +944,8 @@ def run_comparison():
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
   data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
-  data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
-  data_path_csv = os.path.join(root_path, "GNN_partitioning_single", "GNN_Analysing", "Results")
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
+  data_path_csv = os.path.join(root_path, "GNN_partitioning", "GNN_Analysing", "Results")
   
   if not os.path.exists(data_path_csv):
     os.makedirs(data_path_csv)
