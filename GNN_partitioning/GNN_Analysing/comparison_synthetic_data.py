@@ -800,16 +800,23 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     df_grouped = df_measurement.groupby("logP_Name")
     number_columns = 3
     
+  import matplotlib.font_manager as fm
+  # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
+  custom_font_bold = fm.FontProperties(family='Arial', size=16, weight='bold')
+  custom_font = fm.FontProperties(family='Arial', size=16)
+    
   fig, axes = plt.subplots(nrows=1, ncols=number_columns, figsize=(16, 10))
-  fig.suptitle(title)
+  fig.suptitle(title, fontproperties=custom_font_bold)
+  
+
 
   for i, (cut_type, group) in enumerate(df_grouped):
     ax = axes[i]  # Select the specific axis for this subplot
     if use_synthetic:
       ax.set_title("Data folder: " + str(cut_type) + "\nDatasize: " + str(len(group)))  # Set title for the subplot
     else:
-      ax.set_title("Data: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nDatasize: " + str(len(group)))  # Set title for the subplot
-    ax.set_ylabel("Values")  # Set ylabel for the subplot
+      ax.set_title("Data: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nDatasize: " + str(len(group)), fontproperties=custom_font)  # Set title for the subplot
+    ax.set_ylabel("Delta percentage", fontproperties=custom_font)  # Set ylabel for the subplot
     
     x_ticks = []
     x_labels = []
@@ -819,10 +826,15 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
       
       # Modify x-axis tick labels
       x_ticks.append(j)
-      x_labels.append(column_prefix + col)
+      x_labels.append(column_prefix + col, fontproperties=custom_font)
       
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, rotation=45)
+    ax.tick_params(axis='x', labelsize=16)
+    ax.tick_params(axis='y', labelsize=16)
+    
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.set_axisbelow(True)
 
     # TODO MAKE SMALLER AROUND MIN AND MAX
     y_interval = max(0.2, (y_max - y_min) / 10)
