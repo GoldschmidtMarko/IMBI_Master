@@ -281,15 +281,61 @@ def get_input_arguments(list_inputs):
   return unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes
    
    
+   
+def log_runtime_of_imbi():
+  overall_runtime = time.time()
+  from GNN_partitioning.GNN_Data_Generation.bi import gnn_generation as gnn_generation_bi
+  from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
+  from local_pm4py.algo.analysis import custom_enum
+  from local_pm4py.algo.discovery.inductive.variants.im_bi.data_structures.subtree_plain import get_best_cut_with_cut_type
+  
+  ratio = 1
+  support = 0.2 
+  
+  max_activites = 18
+  
+  for number_of_activites in range(2,max_activites + 1):
+    print("Number of activites: " + str(number_of_activites))
+    # print("Generating data...")
+    activity_list = gnn_generation_bi.generate_activity_name_list(number_of_activites,
+                                                  random.randint(5,8))
+      
+    process_tree_P = gnn_generation_bi.generate_random_process_tree_for_cut_type(activity_list, "seq")
+    
+    random_seed_P = random.randint(100000, 999999)
+    logP = gnn_generation_bi.generate_log_from_process_tree_for_cut_type(activity_list, process_tree_P, random_seed_P)
+    
+    percentage_is_subset = 0.8
+    activity_list_near = gnn_generation_bi.get_partial_activity_names(activity_list, percentage_is_subset, min_percentage_subset = 0.5)
+    process_tree_M = gnn_generation_bi.generate_mutated_process_tree_from_process_tree(activity_list_near, process_tree_P, mutation_rate=0.5)
+
+    random_seed_M = random.randint(100000, 999999)
+    logM = gnn_generation_bi.generate_log_from_process_tree_for_cut_type(activity_list_near, process_tree_M, random_seed_M)
+    
+    # print("Running IMBI...")
+    cur_time = time.time()
+    # net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn=False)
+    get_best_cut_with_cut_type(logP,logM,sup=support, ratio=ratio, cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE)
+    
+    # print("Runtime of IMBI: " + str(time.time() - cur_time))
+
+
+  print("Runtime overall: " + str(time.time() - overall_runtime))
+  
+def run_generate_data():
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 10, [7]
+  generate_data(relative_path, 0.2, 0, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+  
+  
+   
 if __name__ == '__main__':
   random.seed(random_start_seed)
   cur_time = time.time()
-  
-  print()
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test1", 3, [2,3,4]
-  generate_data(relative_path, 0.2, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
 
+  print()
+  # run_generate_data()
+  log_runtime_of_imbi()
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   
   print("Runtime: " + str(time.time() - cur_time))

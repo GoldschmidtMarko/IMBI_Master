@@ -756,7 +756,7 @@ def get_measurement_delta(df, columnList, column_feature):
   # Trim the DataFrame to include only specific columns
   df = df[columns_to_keep]
   df = df.fillna("")
-  # common_prefix = "C:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master\\GNN_partitioning_single\\GNN_Data"
+  # common_prefix = "C:\\Users\\Marko\\Desktop\\GIt\\IMBI_Master\\GNN_partitioning\\GNN_Data"
   # df['logP_Name'] = df['logP_Name'].str.replace(common_prefix, '', regex=False)
   
   # pd.set_option("display.max_colwidth", 200)
@@ -952,7 +952,7 @@ def run_comparison():
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = False
+    use_synthetic = True
     column_feature = ["precision","fitP"]
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
@@ -995,7 +995,7 @@ def manual_run():
   df = create_df()
   
   found_problem_path = "/loop/Data_6/Sup_0.6/treeP_6_Sup_0.6_Data_run1_79.json"
-  data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
   pathFiles = get_data_paths(True, data_path_synthetic, 1000, 100)
   
   
@@ -1032,8 +1032,8 @@ def get_data_from_logName(tree_path):
   
 def run_show_data():
   data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
-  data_path_synthetic = os.path.join(root_path, "GNN_partitioning_single", "GNN_Data")
-  data_path_csv = os.path.join(root_path, "GNN_partitioning_single", "GNN_Analysing", "Results")
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
+  data_path_csv = os.path.join(root_path, "GNN_partitioning", "GNN_Analysing", "Results")
   
   
   os.system('clear')
@@ -1059,7 +1059,7 @@ def run_show_data():
       tree_path = random.choice(dataList[random.choice(list(dataList))])[0]
       
       while(True):
-        common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning_single/GNN_Data"
+        common_prefix = "/rwthfs/rz/cluster/work/xm454523/IMBI_Master/GNN_partitioning/GNN_Data"
         print("Current Data:")
         print("LogName: " + tree_path[len(common_prefix):])
         print("Cut type: " + tree_path)

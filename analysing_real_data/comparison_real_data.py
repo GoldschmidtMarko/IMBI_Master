@@ -433,8 +433,8 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
     rows = math.ceil(float(len(df_grouped.index.unique()))/numberOfPlotPerRow)
     cols = min(len(df_grouped.index.unique()),numberOfPlotPerRow)
 
-    fig, axs = plt.subplots(rows, cols, figsize=(15 * (cols / numberOfPlotPerRow), 4 * rows), squeeze=False)
-    fig.tight_layout(pad=10.0)
+    fig, axs = plt.subplots(rows, cols, figsize=(17 * (cols / numberOfPlotPerRow), 6 * rows), squeeze=False)
+    fig.tight_layout(pad=18.0)
     cur_Row = 0
     cur_Col = 0
 
@@ -452,13 +452,16 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
       minValue = 0
       for miner, use_gnn, precP, acc, fitP, fitM, f1_fit in zip(df_log_grouped.miner, df_log_grouped.use_gnn, df_log_grouped.precP, df_log_grouped.acc_logs, df_log_grouped.fitP, df_log_grouped.fitM, df_log_grouped.f1_fit_logs):
         minValue = min([minValue, acc, fitP, fitM, f1_fit])
-        axs[cur_Row,cur_Col].bar(j,precP, color="r", label="precP")
-        axs[cur_Row,cur_Col].bar(j+1,acc, color="black", label="acc")
-        axs[cur_Row,cur_Col].bar(j+2,fitP, color="g", label="fitP")
-        axs[cur_Row,cur_Col].bar(j+3,fitM, color="b", label="fitM")
-        axs[cur_Row,cur_Col].bar(j+4,f1_fit, color="orange", label="f1_fit")
+        axs[cur_Row,cur_Col].bar(j,precP, color="r", label="$prec_{align}(L^{+},M)$")
+        axs[cur_Row,cur_Col].bar(j+1,acc, color="black", label="$acc_{align}(L^{+},L^{-},M)$")
+        axs[cur_Row,cur_Col].bar(j+2,fitP, color="g", label="$fit_{align}(L^{+},M)$")
+        axs[cur_Row,cur_Col].bar(j+3,fitM, color="b", label="$fit_{align}(L^{-},M)$")
+        axs[cur_Row,cur_Col].bar(j+4,f1_fit, color="orange", label="$f1\_fit_{align}(L^{+},L^{-},M)$")
         # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
-        xTickLabel.append(miner)
+        if miner == "IMbi_freq":
+          xTickLabel.append("Cost-Func")
+        else:
+          xTickLabel.append("Reward-Func")
         idx.append(j + 2.5)
         j += 6
         
@@ -466,7 +469,7 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
       axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
       axs[cur_Row,cur_Col].set_xticks(idx)
       axs[cur_Row,cur_Col].set_xticklabels(xTickLabel)
-      axs[cur_Row,cur_Col].legend(loc='center left', ncols=1, labels=["precP","acc", "fitP", "fitM", "f1_fit"], bbox_to_anchor=(1, 0.5))
+      axs[cur_Row,cur_Col].legend(loc='center left', ncols=1, labels=["$prec_{align}(L^{+},M)$","$acc_{align}(L^{+},L^{-},M)$", "$fit_{align}(L^{+},M)$", "$fit_{align}(L^{-},M)$", "$f1\_fit_{align}(L^{+},L^{-},M)$"], bbox_to_anchor=(1.2, 0.5))
       cur_Col += 1
       
       if cur_Col == numberOfPlotPerRow:
@@ -558,7 +561,6 @@ def run_comparison(csv_filename, result_path):
 def get_comparison_df(csv_filename, result_path):
   if not os.path.exists(os.path.join(result_path,csv_filename)):
     df = run_comparison(csv_filename, result_path)
-    
     displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
   else:
     df = pd.read_csv(os.path.join(result_path,csv_filename))

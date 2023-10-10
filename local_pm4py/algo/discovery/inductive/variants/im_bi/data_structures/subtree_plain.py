@@ -497,6 +497,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 partition_time = end_partition - start_partition
                 if show_runtime:
                     print("Finding partition time: " + str(partition_time))
+                    print("Number of possible partitions: " + str(len(possible_partitions)))
 
                 # recalculate and assign since net pruning in find_possible_partitions change them
                 start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
@@ -540,7 +541,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                     calc_repetition_FactorP = repetition_Factor(log_art, activity_key)
                     calc_repetition_FactorM = repetition_Factor(logM_art, activity_key)
                   
-                
+                start_time_calculation = time.time()
                 for pp in tqdm(possible_partitions,total=len(possible_partitions)) if show_runtime else possible_partitions:
                     A = pp[0] - {'start', 'end'}
                     B = pp[1] - {'start', 'end'}
@@ -635,6 +636,9 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                         cut = ('none', 'none', 'none','none','none', 'none')   
             else:
                 cut = ('none', 'none', 'none','none','none', 'none')
+
+            if show_runtime:
+                print("Finding best cut time: " + str(time.time() - start_time_calculation))
 
         return isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, possible_partitions
 
