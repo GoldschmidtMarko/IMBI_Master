@@ -432,6 +432,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 
         if isbase == False:
             dfg2 = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,self_end_activities, 0.1)
 
             netP = generate_nx_graph_from_dfg(dfg2)
             if ('start', 'end') in dfg2:
@@ -785,7 +786,7 @@ class SubtreePlain(object):
                     _, cut_gnn, _, _, _, _, _ = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = True)
                 else:
                     cut_gnn = cut
-                    _, cut, _, _, _, _, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, size_par,cost_Variant,self.detected_cut,self.parameters,use_gnn = False)
+                    _, cut, _, _, _, _, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, size_par,cost_Variant,self.detected_cut,self.parameters,useGNN = False)
                 
                 solution_distance = get_gnn_cut_distance_from_best_cut(cut, possible_partitions)
                 print("solution_distance: " + str(solution_distance))

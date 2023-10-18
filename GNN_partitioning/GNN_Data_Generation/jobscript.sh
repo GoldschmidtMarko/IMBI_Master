@@ -8,7 +8,7 @@
 #SBATCH --job-name=GNN-Data-Generation
 
 ### Declare the merged STDOUT/STDERR file
-#SBATCH --output=output3.%J.txt
+#SBATCH --output=output1.%J.txt
 
 # Insert this AFTER the #SLURM argument section of your job script
 export CONDA_ROOT=$HOME/miniconda3
@@ -19,4 +19,4 @@ export PATH="$CONDA_ROOT/bin:$PATH"
 conda activate base
 
 ### Begin of executable commands
-python -u ./gnn_generation.py run3 100 "[2,3,4,5,6,7]"
+python -u ./gnn_generation.py run1 100 "[2,3,4,5,6,7]"

@@ -177,6 +177,7 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     consider_ratio = True
+    print("Ratio list: " + str(ratio_list))
     
 
   cut_types = ["exc", "seq", "par", "loop"]
@@ -323,9 +324,9 @@ def log_runtime_of_imbi():
   print("Runtime overall: " + str(time.time() - overall_runtime))
   
 def run_generate_data():
-  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
-  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 10, [7]
-  generate_data(relative_path, 0.2, 0, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
+  unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = get_input_arguments(sys.argv)
+  # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 10, [7]
+  generate_data(relative_path, 0.2, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   
   
    
@@ -334,8 +335,8 @@ if __name__ == '__main__':
   cur_time = time.time()
 
   print()
-  # run_generate_data()
-  log_runtime_of_imbi()
+  run_generate_data()
+  # log_runtime_of_imbi()
   # get_labeled_data_cut_type_distribution(relative_path, 0.2)
   
   print("Runtime: " + str(time.time() - cur_time))
