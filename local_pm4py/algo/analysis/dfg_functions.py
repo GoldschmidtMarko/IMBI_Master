@@ -340,8 +340,9 @@ def cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, score
     if len(input_B) != 0:
         for a in end_A:
             for b in input_B:
-               c5 +=  max(0, scores[(a,b)] * M_P * sup * (n_edges(net,{a}, {'end'})/n_edges(net, end_A, {'end'})) * (n_edges(net, end_A, {b})/ n_edges(net, end_A, input_B))- n_edges(net, {a}, {b}, scaling=scores))
-
+                ratio_end = (n_edges(net,{a}, {'end'})/n_edges(net, end_A, {'end'}))
+                ratio_end_A = (n_edges(net, end_A, {b})/ n_edges(net, end_A, input_B))
+                c5 +=  max(0, scores[(a,b)] * M_P * sup * ratio_end * ratio_end_A - n_edges(net, {a}, {b}, scaling=scores))
 
 
     if sup*M_P==0:
@@ -542,7 +543,7 @@ def remove_infrequent_edges(dfg, end_activities, threshold, show_pruning = False
         if x[1] < threshold * edge_max_out[x[0][0]]:
             nx_graph.remove_edge(*x[0])
             # check start end reachability
-            if nx.has_path(nx_graph,"start","end"):
+            if nx.has_path(nx_graph,x[0][0],"end") and nx.has_path(nx_graph,"start",x[0][0]):
                 dfg_list_filtered.remove(x)
             else:
                 nx_graph.add_edge(*x[0])

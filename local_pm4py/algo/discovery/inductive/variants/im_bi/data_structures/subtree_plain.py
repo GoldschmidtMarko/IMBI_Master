@@ -445,6 +445,8 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 del dfg2M[('start', 'end')]
             
             dfgP = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+            dfgP = dfg_functions.remove_infrequent_edges(dfgP,self_end_activities, 0.1)
+            
             dfgM = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
 
             
