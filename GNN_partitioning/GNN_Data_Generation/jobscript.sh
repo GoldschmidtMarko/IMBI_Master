@@ -12,11 +12,11 @@
 
 # Insert this AFTER the #SLURM argument section of your job script
 export CONDA_ROOT=$HOME/miniconda3
-. $CONDA_ROOT/etc/profile.d/conda.sh
+. $CONDA_ROOT/etc/profile.d/conda.sh  
 export PATH="$CONDA_ROOT/bin:$PATH"
 
 # Now you can activate your configured conda environments
 conda activate base
 
 ### Begin of executable commands
-python -u ./gnn_generation.py run1 100 "[2,3,4,5,6,7]"
+python -u ./gnn_generation.py balanceRun1 1 "[2,3,4,5,6]"

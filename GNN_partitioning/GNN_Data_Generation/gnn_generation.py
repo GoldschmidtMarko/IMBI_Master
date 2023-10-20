@@ -139,6 +139,99 @@ def check_if_data_piece_exists(file_path, number_of_activites, support, data_pie
     return True
   else:
     return False
+  
+  
+def get_distribution_dictionary(file_path, sup_step, ratio_step = 0.0):
+  print("Getting labeled data cut type distribution in: " + file_path)
+  result_dic = dict()
+  
+  # Setup sup list
+  if sup_step == 0:
+    sup_list = [0]
+  else:
+    sup_list = np.round(np.arange(0,1 + sup_step,sup_step),1)
+    
+  # Setup ratio list
+  if ratio_step == 0.0:
+    ratio_list = [0]
+    consider_ratio = False
+  else:
+    ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
+    consider_ratio = True
+    print("Ratio list: " + str(ratio_list))
+    
+  cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
+    
+  def get_txt_files(directory):
+    txt_files = [file for file in os.listdir(directory) if file.endswith('.txt')]
+    return txt_files
+    
+  for cut in cut_types:
+    current_path_cut = file_path + "/" + cut
+    if os.path.exists(current_path_cut):
+      result_dic[cut] = dict()
+      for integer in range(2,30):
+        current_path_cut_Data = current_path_cut + "/Data_" + str(integer)
+        if os.path.exists(current_path_cut_Data):
+          if integer not in result_dic[cut]:
+            result_dic[cut][integer] = {"Total": 0}
+          for sup in sup_list:
+            if consider_ratio:
+              for ratio in ratio_list:
+                sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio)
+                current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
+                if os.path.exists(current_path_variant):
+                  txt_files = get_txt_files(current_path_variant)
+
+                  result_dic[cut][integer]["Total"] += len(txt_files)
+                  result_dic[cut][integer][sup_ratio_string] = len(txt_files)
+            else:
+              sup_ratio_string = "Sup_" + str(sup)
+              current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
+              if os.path.exists(current_path_variant):
+                txt_files = get_txt_files(current_path_variant)
+                result_dic[cut][integer]["Total"] += len(txt_files)
+                result_dic[cut][integer] = {sup_ratio_string: len(txt_files)}
+  return result_dic
+
+def extract_sup_and_ratio(input_string):
+  parts = input_string.split('_')
+
+  if len(parts) == 4 and parts[0] == 'Sup' and parts[2] == 'Ratio':
+      try:
+          sup = float(parts[1])
+          ratio = float(parts[3])
+          return sup, ratio
+      except ValueError:
+          # Handle conversion errors
+          return None, None
+
+  return None, None
+
+def get_deviating_categories_per_graph_per_category(result_dic, graph_node, cut_types, workitems):
+  res_categories = []
+  for cut_type in cut_types:
+    max_v = 0
+    for key, value in result_dic[cut_type][graph_node].items():
+      if key != "Total":
+        if value > max_v:
+          max_v = value
+    for key, value in result_dic[cut_type][graph_node].items():
+      if key != "Total":
+        sup, ratio = extract_sup_and_ratio(key)
+        if value < max_v * 0.9:
+          res_categories.append({"Graph_Node_Size": graph_node, "Cut_Type": cut_type, "Support": sup, "Ratio": ratio, "Work": max_v - value + workitems})
+        else:
+          res_categories.append({"Graph_Node_Size": graph_node, "Cut_Type": cut_type, "Support": sup, "Ratio": ratio, "Work": workitems})
+        
+  return res_categories
+
+
+def get_number_work_per_graph_size_per_category(result_dic, graph_node_size, cut_types, workitems):
+  res_work = []
+  for graph_node in graph_node_size:
+    res_work = res_work + get_deviating_categories_per_graph_per_category(result_dic, graph_node, cut_types, workitems)
+  return res_work
     
 def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new_data_instances_per_category, list_grap_node_sizes, use_parallel = True):
   
@@ -171,7 +264,7 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
     sup_list = [float(x) for x in sup_list_temp]
     
   # Setup ratio list
-  if ratio_step == 0:
+  if ratio_step == 0.0:
     ratio_list = [0]
     consider_ratio = False
   else:
@@ -182,13 +275,23 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
 
   cut_types = ["exc", "seq", "par", "loop"]
   # cut_types = ["seq"]
-    
-  list_data_pool = [(file_path, number_activ, sup, ratio, f"{unique_identifier}{data_piece_name}", cut_type, consider_ratio)
-              for number_activ in list_grap_node_sizes
-              for sup in sup_list
-              for ratio in ratio_list
-              for data_piece_name in range(1,number_new_data_instances_per_category + 1)
-              for cut_type in cut_types]
+  
+
+  list_data_pool = []
+  balancing_work = True
+  if balancing_work:
+    result_distribution = get_distribution_dictionary(relative_path, 0.2, 0.2)
+    worklist = get_number_work_per_graph_size_per_category(result_distribution, list_grap_node_sizes, cut_types, number_new_data_instances_per_category)
+    for work in worklist:
+      for data_piece_name in range(1,work["Work"] + 1):
+        list_data_pool.append((file_path, work["Graph_Node_Size"], work["Support"], work["Ratio"], f"{unique_identifier}{data_piece_name}", work["Cut_Type"], consider_ratio))
+  else:
+    list_data_pool = [(file_path, number_activ, sup, ratio, f"{unique_identifier}{data_piece_name}", cut_type, consider_ratio)
+                for number_activ in list_grap_node_sizes
+                for sup in sup_list
+                for ratio in ratio_list
+                for data_piece_name in range(1,number_new_data_instances_per_category + 1)
+                for cut_type in cut_types]
   
   
   # Check if the folder already exists
@@ -222,7 +325,7 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
   print("Number of generated data pieces: " + str(sum_results) + " of " + str(len(list_data_pool)))
   print("Percentage of generated data pieces: " + str(round((sum_results / len(list_data_pool) * 100),2)) + "%")
    
-def get_labeled_data_cut_type_distribution(file_path, sup_step):
+def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step = 0.0):
   print("Getting labeled data cut type distribution in: " + file_path)
   result_dic = dict()
   
@@ -231,6 +334,15 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step):
     sup_list = [0]
   else:
     sup_list = np.round(np.arange(0,1 + sup_step,sup_step),1)
+    
+  # Setup ratio list
+  if ratio_step == 0.0:
+    ratio_list = [0]
+    consider_ratio = False
+  else:
+    ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
+    consider_ratio = True
+    print("Ratio list: " + str(ratio_list))
     
   cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
     
@@ -248,11 +360,19 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step):
           if integer not in result_dic[cut]:
             result_dic[cut][integer] = 0
           for sup in sup_list:
-            sup_ratio_string = "Sup_" + str(sup)
-            current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
-            if os.path.exists(current_path_variant):
-              txt_files = get_txt_files(current_path_variant)
-              result_dic[cut][integer] += len(txt_files)
+            if consider_ratio:
+              for ratio in ratio_list:
+                sup_ratio_string = "Sup_" + str(sup) + "_Ratio_" + str(ratio)
+                current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
+                if os.path.exists(current_path_variant):
+                  txt_files = get_txt_files(current_path_variant)
+                  result_dic[cut][integer] += len(txt_files)
+            else:
+              sup_ratio_string = "Sup_" + str(sup)
+              current_path_variant = current_path_cut_Data + "/" + sup_ratio_string
+              if os.path.exists(current_path_variant):
+                txt_files = get_txt_files(current_path_variant)
+                result_dic[cut][integer] += len(txt_files)
   
   for key, dic_data in result_dic.items():
     if key != "loop_tau" and key != "exc_tau":
@@ -337,7 +457,7 @@ if __name__ == '__main__':
   print()
   run_generate_data()
   # log_runtime_of_imbi()
-  # get_labeled_data_cut_type_distribution(relative_path, 0.2)
+  # get_labeled_data_cut_type_distribution(relative_path, 0.2, 0.2)
   
   print("Runtime: " + str(time.time() - cur_time))
   
