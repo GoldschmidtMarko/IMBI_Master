@@ -125,21 +125,46 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
 def generate_data_piece_star_function_cut_Type(args):
     return generate_data_piece_for_cut_type(*args)
        
-def check_if_data_piece_exists(file_path, number_of_activites, support, data_piece_index, cut_type):
+def check_if_data_piece_exists(consider_ratio, file_path, dataItem):
+  number_of_activites  = dataItem[1]
+  support = dataItem[2]
+  ratio = dataItem[3]
+  data_piece_index = dataItem[4]
+  cut_type = dataItem[5]
+    
+  if consider_ratio:
+    return check_if_data_piece_exists_bi(file_path, number_of_activites, support, ratio, data_piece_index, cut_type)
+  else:
+    return check_if_data_piece_exists_uni(file_path, number_of_activites, support, data_piece_index, cut_type)
+  
+def check_if_data_piece_exists_uni(file_path, number_of_activites, support, data_piece_index, cut_type):
   folder_name = file_path + "/" + cut_type
   folder_name += "/Data_" + str(number_of_activites)
   folder_name += "/Sup_" + str(support)
   
   ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_" + str(data_piece_index)
   
-  test_file = folder_name + "/treeP_" + ending_File_string + ".pmt"
-  
+  test_file = folder_name + "/treeP_" + ending_File_string + ".json"
   # Check if the folder already exists
   if os.path.exists(test_file):
     return True
   else:
     return False
   
+def check_if_data_piece_exists_bi(file_path, number_of_activites, support, ratio, data_piece_index, cut_type):
+  folder_name = file_path + "/" + cut_type
+  folder_name += "/Data_" + str(number_of_activites)
+  folder_name += "/Sup_" + str(support) + "_Ratio_" + str(ratio)
+  
+  ending_File_string = str(number_of_activites) + "_Sup_"+ str(support) + "_Ratio_"+ str(ratio)+ "_" + str(data_piece_index)
+  
+  test_file = folder_name + "/treeP_" + ending_File_string + ".json"
+  # print(test_file)
+  # Check if the folder already exists
+  if os.path.exists(test_file):
+    return True
+  else:
+    return False
   
 def get_distribution_dictionary(file_path, sup_step, ratio_step = 0.0):
   print("Getting labeled data cut type distribution in: " + file_path)
@@ -210,12 +235,18 @@ def extract_sup_and_ratio(input_string):
 
 def get_deviating_categories_per_graph_per_category(result_dic, graph_node, cut_types, workitems):
   res_categories = []
+  max_v = 0
+  max_total = 0
   for cut_type in cut_types:
-    max_v = 0
     for key, value in result_dic[cut_type][graph_node].items():
       if key != "Total":
         if value > max_v:
           max_v = value
+      else:
+        if value > max_total:
+          max_total = value
+          
+  for cut_type in cut_types:
     for key, value in result_dic[cut_type][graph_node].items():
       if key != "Total":
         sup, ratio = extract_sup_and_ratio(key)
@@ -295,18 +326,26 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
   
   
   # Check if the folder already exists
-  if len(list_data_pool) > 0:
-    if check_if_data_piece_exists(file_path, list_data_pool[0][1], list_data_pool[0][2], list_data_pool[0][3], list_data_pool[0][4]):
-        # Error
-        print("Error, data already exists for unique identifier: " + str(unique_identifier))
-        sys.exit()
+  if len(list_data_pool) > 2:
+    # random_elements = random.sample(list_data_pool, list_data_pool)
+    random_elements = list_data_pool
+    for dataItem in random_elements:
+      if check_if_data_piece_exists(consider_ratio, file_path, dataItem):
+          # Error
+          print("Error, data already exists for unique identifier: " + str(unique_identifier))
+          sys.stdout.flush()
+          sys.exit()
+  else:
+    print("Error, not enough data pieces to generate.")
+    sys.stdout.flush()
+    sys.exit()
       
-  
   space_Approx = 4000/(5400 * 1000)
   
   if get_available_disk_space(file_path) < space_Approx * len(list_data_pool):
     print("Error, not enough space available. Approx. space needed: " + str(space_Approx * len(list_data_pool)) + " GB")
     print("Available space: " + str(get_available_disk_space(file_path)) + " GB")
+    sys.stdout.flush()
     sys.exit()
 
   sum_results = 0
@@ -342,9 +381,8 @@ def get_labeled_data_cut_type_distribution(file_path, sup_step, ratio_step = 0.0
   else:
     ratio_list = np.round(np.arange(0,1 + ratio_step,ratio_step),1)
     consider_ratio = True
-    print("Ratio list: " + str(ratio_list))
     
-  cut_types = ["exc", "exc_tau", "seq", "par", "loop_tau", "loop"]
+  cut_types = ["exc", "seq", "par", "loop"]
     
   def get_txt_files(directory):
     txt_files = [file for file in os.listdir(directory) if file.endswith('.txt')]

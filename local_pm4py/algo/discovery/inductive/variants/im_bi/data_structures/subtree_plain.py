@@ -432,7 +432,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 
         if isbase == False:
             dfg2 = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,self_end_activities, 0.1)
+            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,self_end_activities, 0.3)
 
             netP = generate_nx_graph_from_dfg(dfg2)
             if ('start', 'end') in dfg2:
@@ -445,7 +445,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 del dfg2M[('start', 'end')]
             
             dfgP = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfgP = dfg_functions.remove_infrequent_edges(dfgP,self_end_activities, 0.1)
+            dfgP = dfg_functions.remove_infrequent_edges(dfgP,self_end_activities, 0.3)
             
             dfgM = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
 

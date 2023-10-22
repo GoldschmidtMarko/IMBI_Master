@@ -831,6 +831,81 @@ def does_path_files_has_ratio(pathFiles):
             return False
     return False
 
+def process_path_file_star(args):
+    return process_path_file(*args)
+
+def process_path_file(pathFiles, data_dic, max_dataSet_numbers, max_node_size_in_dataset, consider_ratio, file_path):
+    for pathFile in pathFiles:
+        if get_data_length_from_dic(data_dic) > max_dataSet_numbers:
+            return (data_dic, max_node_size_in_dataset)
+
+        if consider_ratio:
+            data = bi_read_data_from_path(pathFile)
+        else:
+            data = uni_read_data_from_path(pathFile)
+
+        if does_tree_exist(data, file_path, consider_ratio):
+            max_node_size_in_dataset = max(max_node_size_in_dataset, len(data["Labels"]))
+            nodeSize = len(data["PartitionA"]) + len(data["PartitionB"])
+            if nodeSize in data_dic:
+                data_dic[nodeSize].append(data)
+            else:
+                data_dic[nodeSize] = [data]
+    
+    return (data_dic, max_node_size_in_dataset)
+
+def merge_data_dicts(merged_dict,dicts):
+    for nodeSize, data_list in dicts.items():
+        if nodeSize in merged_dict:
+            merged_dict[nodeSize].extend(data_list)
+        else:
+            merged_dict[nodeSize] = data_list
+    return merged_dict
+
+def convert_path_files_to_data_parallel(pathFiles, file_path, max_dataSet_numbers, input_max_node_size=0):
+    num_processors_available = multiprocessing.cpu_count()
+    if num_processors_available > 20:
+        num_processors = max(1,round(num_processors_available))
+    else:
+        num_processors = max(1,round(num_processors_available/2))
+    consider_ratio = does_path_files_has_ratio(pathFiles)
+    data_dic = dict()
+    max_node_size_in_dataset = 0
+
+    pathFiles = sorted(pathFiles, reverse=True)
+    print("Running parallel reading with " + str(num_processors) + "/" + str(num_processors_available) + " processors")
+    
+    pool = multiprocessing.Pool(num_processors)
+    
+    
+    list_data_pool = []
+    batch_size = math.ceil(len(pathFiles) / num_processors)
+    list_data_pool = []
+    offset = 0
+    for i in range(num_processors):
+        batch_data = pathFiles[offset:offset + batch_size]
+        # pathFiles, data_dic, max_dataSet_numbers, max_node_size_in_dataset, consider_ratio, file_path
+        batch = (batch_data, data_dic.copy(), max_dataSet_numbers, max_node_size_in_dataset, consider_ratio, file_path)
+        list_data_pool.append(batch)
+        offset += batch_size
+    
+    pool_res = None
+    with multiprocessing.Pool(num_processors) as pool:
+        # pool_res = tqdm(pool.imap(evaluate_model_helper_star, list_data_pool),total=len(list_data_pool))
+        pool_res = pool.imap(process_path_file_star, list_data_pool)
+        
+        for result in pool_res:
+            # Process individual evaluation result
+            max_node_size_in_dataset = max(max_node_size_in_dataset, result[1])
+            data_dic = merge_data_dicts(data_dic, result[0])
+    
+    if input_max_node_size != 0:
+        max_node_size_in_dataset = input_max_node_size
+    
+    data_dic = setup_dataSet(data_dic, max_node_size_in_dataset, consider_ratio)
+    
+    return data_dic, max_node_size_in_dataset, consider_ratio
+
 def convert_path_files_to_data(pathFiles, file_path, max_dataSet_numbers, input_max_node_size = 0):
     consider_ratio = does_path_files_has_ratio(pathFiles)
     
@@ -872,7 +947,7 @@ def read_all_data_for_cut_Type(file_path, cut_type, max_dataSet_numbers):
                     if file.endswith(".txt"):  # Filter for text files
                         pathFiles.append(os.path.join(root, file))
 
-    return convert_path_files_to_data(pathFiles, file_path, max_dataSet_numbers)
+    return convert_path_files_to_data_parallel(pathFiles, file_path, max_dataSet_numbers)
                
 def save_model_parameter(file_name, data_settings, model_args):
     with open(file_name, 'w') as file:
@@ -951,9 +1026,9 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     model_number = 13
     cut_types = ["loop", "seq", "par", "exc"]
     # cut_types = ["seq", "loop"]
-    num_epochs = 3
+    num_epochs = 30
     batch_size = 10
-    max_dataSet_numbers = 100000
+    max_dataSet_numbers = 10000000000000
     
     for cut_type in cut_types:
         print("Cut type: " + cut_type)
@@ -1113,9 +1188,9 @@ if __name__ == '__main__':
     relative_path_results = root_path + "/GNN_partitioning/GNN_Accuracy_results"
     relative_path_data = root_path + "/GNN_partitioning/GNN_Data"
     
-    run_performance_plot(relative_path_results, relative_path_data)
+    # run_performance_plot(relative_path_results, relative_path_data)
     
-    # generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
+    generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
 
 
 

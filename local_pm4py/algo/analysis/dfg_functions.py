@@ -543,7 +543,7 @@ def remove_infrequent_edges(dfg, end_activities, threshold, show_pruning = False
         if x[1] < threshold * edge_max_out[x[0][0]]:
             nx_graph.remove_edge(*x[0])
             # check start end reachability
-            if nx.has_path(nx_graph,x[0][0],"end") and nx.has_path(nx_graph,"start",x[0][0]):
+            if nx.has_path(nx_graph,"start","end"):
                 dfg_list_filtered.remove(x)
             else:
                 nx_graph.add_edge(*x[0])
