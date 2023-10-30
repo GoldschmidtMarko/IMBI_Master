@@ -1,7 +1,7 @@
 #!/usr/bin/zsh
 
-### Ask for 10 GB memory
-#SBATCH --mem=10G
+### Ask for 20 GB memory
+#SBATCH --mem=20G
 #SBATCH --time=16:00:00
 
 ### Name the job

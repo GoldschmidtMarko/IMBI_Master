@@ -353,29 +353,34 @@ def evaluate_model_helper(model_number, model_params, data_list, model_args, dat
                     res_data_dic[length]["amount_full_accuracy"] += amount_full_accuracy
                     res_data_dic[length]["number_instances"] += 1
             else:
-                add_data = True
-                if consider_ratio:
-                    actual_score = bi_get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data["random_seed_M"], data_path)
-                else:
-                    actual_score = uni_get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
-            
-                mask = get_ignore_mask(data)
-                if consider_ratio:
-                    predictions = bi_gnn_models.get_model_outcome(model_number, model, data)
-                else:
-                    predictions = uni_gnn_models.get_model_outcome(model_number, model, data)  
-
-                # Apply softmax to obtain probability distributions over classes
-                probs = F.sigmoid(predictions)
-                binary_predictions = torch.round(probs)
-
-
-                partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
+                compare_score = False
                 
-                if consider_ratio:
-                    predicted_score = bi_get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data["random_seed_M"], data_path)
+                if compare_score:
+                    if consider_ratio:
+                        actual_score = bi_get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data["random_seed_M"], data_path)
+                    else:
+                        actual_score = uni_get_score_value_from_partition(set(data["PartitionA"]), set(data["PartitionB"]), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
+                
+                    mask = get_ignore_mask(data)
+                    if consider_ratio:
+                        predictions = bi_gnn_models.get_model_outcome(model_number, model, data)
+                    else:
+                        predictions = uni_gnn_models.get_model_outcome(model_number, model, data)  
+
+                    # Apply softmax to obtain probability distributions over classes
+                    probs = F.sigmoid(predictions)
+                    binary_predictions = torch.round(probs)
+
+
+                    partitionA, partitionB = partition_names(binary_predictions, data["Labels"], mask)
+                    
+                    if consider_ratio:
+                        predicted_score = bi_get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data["random_seed_M"], data_path)
+                    else:
+                        predicted_score = uni_get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
                 else:
-                    predicted_score = uni_get_score_value_from_partition(set(partitionA), set(partitionB), data["Cut_type"], len(data["PartitionA"]) + len(data["PartitionB"]), data["Support"], data["Ratio"], data["Dataitem"], data["random_seed_P"], data_path)
+                    actual_score = 0
+                    predicted_score = 0
 
                 if length not in res_data_dic:
                     res_data_dic[length] = [{
@@ -1026,7 +1031,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     model_number = 13
     cut_types = ["loop", "seq", "par", "exc"]
     # cut_types = ["seq", "loop"]
-    num_epochs = 30
+    num_epochs = 15
     batch_size = 10
     max_dataSet_numbers = 10000000000000
     
