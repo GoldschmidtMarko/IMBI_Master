@@ -432,7 +432,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 
         if isbase == False:
             dfg2 = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfg2 = dfg_functions.remove_infrequent_edges(dfg2,self_end_activities, 0.3)
+            # dfg2 = dfg_functions.remove_infrequent_edges(dfg2,self_end_activities, 0.3)
 
             netP = generate_nx_graph_from_dfg(dfg2)
             if ('start', 'end') in dfg2:
@@ -445,7 +445,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 del dfg2M[('start', 'end')]
             
             dfgP = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
-            dfgP = dfg_functions.remove_infrequent_edges(dfgP,self_end_activities, 0.3)
+            # dfgP = dfg_functions.remove_infrequent_edges(dfgP,self_end_activities, 0.3)
             
             dfgM = dfg_discovery.apply(logM_art, variant=dfg_discovery.Variants.FREQUENCY)
 
@@ -481,7 +481,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 
                 if useGNN == True:
-                    if ratio == 0:
+                    if ratio == 0 and False:
                         possible_partition_gnn = uni_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
                     else:
                         possible_partition_gnn = bi_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)

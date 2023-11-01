@@ -172,10 +172,12 @@ def get_log(file_name):
   log = apply_import_xes(file_name, parameters=parameter)
   return log
 
-def applyMinerToLogForGNN(df, cut_Type, logP, logPName, noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
-  cur_time = time.time()
+def applyMinerToLogForGNN(df, cut_Type, logP, logPName, logM, logMName, consider_ratio = False, noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
   
-  logM = logP.__deepcopy__()
+  if consider_ratio == False:
+    logM = logP.__deepcopy__()
+    logMName = ""
+  
   
   cur_time = time.time()
     
@@ -184,7 +186,7 @@ def applyMinerToLogForGNN(df, cut_Type, logP, logPName, noiseThreshold = 0.0, de
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
 
   
-  df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName="",im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  df = add_Model_To_Database(df=df,cut_Type=cut_Type, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_ali",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
   time_in_bi = time.time() - cur_time
 
   time_measurement = time.time() - cur_time
@@ -192,7 +194,7 @@ def applyMinerToLogForGNN(df, cut_Type, logP, logPName, noiseThreshold = 0.0, de
   
   save_cuts = False
   if save_cuts == True:
-    fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + ""
+    fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + logMName[:logMName.rfind(".")]
     visualize_cuts(fileName_cuts_ali)
   
   # print("Load: " + str(round(time_loading,2)) + " | Imbi: " + str(round(time_in_bi,2)) + " | Measure: " + str(round(time_measurement,2)))
@@ -350,7 +352,7 @@ def read_data_from_text_path(file_path):
   return data
 
 
-def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_category = 1, min_number_node_size = 0):
+def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_size = 100, num_data_per_category = 1, min_number_node_size = 0):
 
   def is_string_present(string, list):
     if list == None:
@@ -414,12 +416,16 @@ def get_data_paths(use_synthetic, dataPath, max_node_size = 100, num_data_per_ca
           for file in files:
             if file.endswith(".xes"):  # Filter for text files
               found_file = os.path.join(root, file)
-              if "lp" in found_file:
-                file_M = found_file.replace("lp", "lm")
-                file_P = found_file
+              if consider_ratio:
+                if "lp" in found_file:
+                  file_M = found_file.replace("lp", "lm")
+                  file_P = found_file
+                else:
+                  file_M = found_file
+                  file_P = found_file.replace("lm", "lp")
               else:
                 file_M = found_file
-                file_P = found_file.replace("lm", "lp")
+                file_P = found_file
                 
               if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
                 pathFiles.append((file_P, file_M))
@@ -592,8 +598,8 @@ def run_evaluation_trace_variants_real(dataPath, parallel = False):
   return df
 
 
-def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, parallel = False):
-  pathFiles = get_data_paths(False, dataPath)
+def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, consider_ratio = False, parallel = False):
+  pathFiles = get_data_paths(False, dataPath, consider_ratio=consider_ratio)
 
   enriched_pathFiles = []
   for dataList in pathFiles:
@@ -621,7 +627,7 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, par
       iterator += 1
       for gnn in using_gnn:
         df_temp = create_df()
-        input_data.append((df_temp, iterator, [data], [gnn]))
+        input_data.append((df_temp, iterator, [data], [gnn], consider_ratio))
     
     pool_res = None
     '''
@@ -638,7 +644,7 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, par
     iterator = 0
     for data in enriched_pathFiles:
       iterator += 1
-      df = run_evaluation_category(df, iterator, [data], using_gnn)
+      df = run_evaluation_category(df, iterator, [data],using_gnn,consider_ratio)
 
   return df
 
@@ -722,14 +728,17 @@ def load_tree(file_name):
 
   return deserialize_tree(serialized_tree)
   
-def run_evaluation_category(df, cut_type, dataList, using_gnn):
+def run_evaluation_category(df, cut_type, dataList, using_gnn, consider_ratio):
   for data in dataList:
     if len(data) == 4:
       support = data["Support"]
       ratio = data["Ratio"]
 
       logP = get_log(data["logP"])
-      log_name = data["logP"]
+      logP_name = data["logP"]
+      
+      logM = get_log(data["logM"])
+      logM_name = data["logM"]
       
     else:
       support = data[1]["Support"]
@@ -738,11 +747,18 @@ def run_evaluation_category(df, cut_type, dataList, using_gnn):
       tree_path = data[0]
       treeP = load_tree(tree_path)
       logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
-      log_name = tree_path
+      logP_name = tree_path
+      
+      if consider_ratio:
+        raise Exception("Not implemented")
+        treeMpath = data[0]
+        treeM = load_tree(tree_path)
+        logM = get_log_from_tree(treeP, data[1]["random_seed_P"])
+        logM_name = tree_path
     
     for use_gnn in using_gnn:
       try:
-        df = applyMinerToLogForGNN(df, cut_type, logP, log_name, 0.2, 0.99, support, ratio,use_gnn)
+        df = applyMinerToLogForGNN(df, cut_type, logP, logP_name, logM, logM_name, consider_ratio, 0.2, 0.99, support, ratio,use_gnn)
       except Exception as exc:
         import traceback
         traceback.print_exc()  # Print the full traceback
@@ -798,7 +814,7 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     number_columns = 4
   else:
     df_grouped = df_measurement.groupby("logP_Name")
-    number_columns = 3
+    number_columns = df_grouped.ngroups
     
   import matplotlib.font_manager as fm
   # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
@@ -815,7 +831,7 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     if use_synthetic:
       ax.set_title("Data folder: " + str(cut_type) + "\nDatasize: " + str(len(group)))  # Set title for the subplot
     else:
-      ax.set_title("Data: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nDatasize: " + str(len(group)), fontproperties=custom_font)  # Set title for the subplot
+      ax.set_title("Data P: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nData M: " + str(os.path.basename(group.logM_Name.iloc[0])) + "\nDatasize: " + str(len(group)), fontproperties=custom_font)  # Set title for the subplot
     ax.set_ylabel("Delta percentage", fontproperties=custom_font)  # Set ylabel for the subplot
     
     x_ticks = []
@@ -924,9 +940,12 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
       df.to_csv(csv_filename, index=False)
     elif progress == 1:
       using_gnn = [False, True]
-      sup_list = [0, 0.2, 0.3, 0.4, 0.5, 0.6]
-      ratio_list = [0]
-      df = run_evaluation_delta_real(df, real_path, sup_list, ratio_list, using_gnn, parallel = True)
+      sup_list = [0, 0.2, 0.4, 0.6]
+      ratio_list = [0, 0.5, 1]
+      consider_ratio = False
+      if len(ratio_list) > 1:
+        consider_ratio = True
+      df = run_evaluation_delta_real(df, real_path, sup_list, ratio_list, using_gnn,consider_ratio=consider_ratio, parallel = True)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
       
@@ -943,7 +962,8 @@ def run_comparison():
   
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
-  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  # data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
   data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
   data_path_csv = os.path.join(root_path, "GNN_partitioning", "GNN_Analysing", "Results")
   
@@ -952,7 +972,7 @@ def run_comparison():
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = True
+    use_synthetic = False
     column_feature = ["precision","fitP"]
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'

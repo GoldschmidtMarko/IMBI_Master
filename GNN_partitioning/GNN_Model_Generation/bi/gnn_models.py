@@ -839,7 +839,8 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         for root, _ , files in os.walk(gnn_file_path):
             for file in files:
                 if file.endswith(".txt"):  # Filter for text files
-                    model_setting_paths.append(os.path.join(root, file))
+                    if not file.endswith("_data.txt"):
+                        model_setting_paths.append(os.path.join(root, file))
                 if file.endswith(".pt"):  # Filter for pt files
                     model_paths.append(os.path.join(root, file))
     

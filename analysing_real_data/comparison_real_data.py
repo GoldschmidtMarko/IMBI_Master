@@ -493,11 +493,12 @@ def create_df():
 
 
 def get_data_paths():
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
-  lpNames = ["lp_2012_f.xes", "lp_2017_f.xes", "lp_2018_f.xes"]
+  # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
+  lpNames = ["2012_O_P.xes", "2017_O_P.xes"]
   # lpNames = ["lp_2018_o.xes"]
 
-  lMNames = ["lm_2012_f.xes", "lm_2017_f.xes", "lm_2018_f.xes"]
+  lMNames = ["2012_O_M.xes", "2017_O_M.xes"]
   # lMNames = ["lm_2018_o.xes"]
   lpPaths = []
   lmPaths = []
