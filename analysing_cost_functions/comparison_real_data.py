@@ -251,6 +251,41 @@ def visualize_cuts(file_dir, file_name):
   pdf.output(output_path + ".pdf")
 
 
+def run_imbi_miner(cost_Variant, cost_variant_name,logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn,imbi_cuts_path):
+  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
+  df = add_Model_To_Database(df=df, log=logP, logM=logM,net=net,im=im,fm=fm,name=cost_variant_name,logPName=logPName, logMName=logMName, im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  
+  fileName_cuts_mar = "cuts_IMbi_mar_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP-" + logPName[:logPName.rfind(".")] + "_logM-" + logMName[:logMName.rfind(".")]
+  visualize_cuts(result_path, fileName_cuts_mar)
+  
+  if os.path.exists(imbi_cuts_path):
+    for f in os.listdir(imbi_cuts_path):
+      os.remove(os.path.join(imbi_cuts_path, f))
+      
+  return df
+
+def find_max_difference_tuple(tuples):
+  max_values = None
+  iterator = None
+
+  for i, (a, b) in enumerate(tuples):
+    if max_values == None:
+      max_values = (a, b)
+      iterator = i
+      continue
+    if a > max_values[0] and b > max_values[1]:
+      max_values = (a, b)
+      iterator = i
+      continue
+    
+    if (a - max_values[0]) + (b - max_values[1]) > 0:
+      max_values = (a, b)
+      iterator = i
+      continue
+
+  return iterator, max_values
+  
+
 def applyMinerToLog(df,result_path, logPathP, logPathM,logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
   parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
   logP = xes_importer.apply(logPathP, parameters=parameter)
@@ -279,63 +314,66 @@ def applyMinerToLog(df,result_path, logPathP, logPathM,logPName, logMName = "", 
     
   # imbi_ali
   # print("Running IMbi_ali")
-  cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
-  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
-  df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_freq",logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
-  
-  fileName_cuts_ali = "cuts_IMbi_ali_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP_" + logPName[:logPName.rfind(".")] + "_logM_" + logMName[:logMName.rfind(".")]
-  visualize_cuts(result_path, fileName_cuts_ali)
   
   imbi_cuts_path = os.path.join(root_path,"imbi_cuts")
-  if os.path.exists(imbi_cuts_path):
-    for f in os.listdir(imbi_cuts_path):
-      os.remove(os.path.join(imbi_cuts_path, f))
   
-  #imbi_mar
+  df = run_imbi_miner(custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, "IMbi_freq",logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn,imbi_cuts_path)
+
+  # imbi_mar  
   # print("Running IMbi_mar")
-  cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
-  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
-  df = add_Model_To_Database(df=df, log=logP, logM=logM,net=net,im=im,fm=fm,name="IMbi_rel",logPName=logPName, logMName=logMName, im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  df = run_imbi_miner(custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE, "IMbi_rel",logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn, imbi_cuts_path)
   
-  fileName_cuts_mar = "cuts_IMbi_mar_sup_" + str(support) + "_ratio_" + str(ratio) + "_logP-" + logPName[:logPName.rfind(".")] + "_logM-" + logMName[:logMName.rfind(".")]
-  visualize_cuts(result_path, fileName_cuts_mar)
+  # imbi_mar  
+  # print("Running IMbi_mar")
+  df = run_imbi_miner(custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE, "IMbi_aprox",logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn, imbi_cuts_path)
   
-  if os.path.exists(imbi_cuts_path):
-    for f in os.listdir(imbi_cuts_path):
-      os.remove(os.path.join(imbi_cuts_path, f))
-  
-  # for double log
-  marImproved = False
-  if logMName != "":
-    f1_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
-    f1_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
-    preccP_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
-    preccP_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
-    diff_prec_ali_mar = preccP_ali - preccP_mar
-    diff_f1_ali_mar = f1_ali - f1_mar
-    
-    result = -1
-    
-    if f1_ali < f1_mar and preccP_ali < preccP_mar:
-      result = 1
-    elif f1_ali > f1_mar and preccP_ali > preccP_mar:
-      result = 0
-    else:
-      overall_diff = diff_prec_ali_mar + diff_f1_ali_mar
-      if overall_diff > 0:
-        result = 0
-      elif overall_diff < 0:
-        result = 1
-      else:
-        result = -1
       
-    if marImproved == False:
-      file_cut_ali_path = os.path.join(result_path,fileName_cuts_ali + ".pdf")
-      file_cut_mar_path = os.path.join(result_path,fileName_cuts_mar + ".pdf")
-      if os.path.exists(file_cut_ali_path):
-        os.remove(file_cut_ali_path)
-      if os.path.exists(file_cut_mar_path):
-        os.remove(file_cut_mar_path)
+  if False:
+    # for double log
+    marImproved = False
+    if logMName != "":
+      f1_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+      f1_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+      preccP_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+      preccP_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+      diff_prec_ali_mar = preccP_ali - preccP_mar
+      diff_f1_ali_mar = f1_ali - f1_mar
+      
+      result = -1
+      
+      if f1_ali < f1_mar and preccP_ali < preccP_mar:
+        result = 1
+      elif f1_ali > f1_mar and preccP_ali > preccP_mar:
+        result = 0
+      else:
+        overall_diff = diff_prec_ali_mar + diff_f1_ali_mar
+        if overall_diff > 0:
+          result = 0
+        elif overall_diff < 0:
+          result = 1
+        else:
+          result = -1
+        
+      if marImproved == False:
+        file_cut_ali_path = os.path.join(result_path,fileName_cuts_ali + ".pdf")
+        file_cut_mar_path = os.path.join(result_path,fileName_cuts_mar + ".pdf")
+        if os.path.exists(file_cut_ali_path):
+          os.remove(file_cut_ali_path)
+        if os.path.exists(file_cut_mar_path):
+          os.remove(file_cut_mar_path)
+          
+
+  if logMName != "":
+      f1_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+      f1_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+      f1_aprox = get_df_value(df,"IMbi_aprox",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="f1_fit_logs")
+
+      preccP_ali = get_df_value(df,"IMbi_freq",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+      preccP_mar = get_df_value(df,"IMbi_rel",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+      preccP_aprox = get_df_value(df,"IMbi_aprox",logPName,logMName,support,ratio, use_gnn = use_gnn, target_column="precP")
+      
+      result, _ = find_max_difference_tuple([(f1_ali, preccP_ali), (f1_mar, preccP_mar), (f1_aprox, preccP_aprox)])
+
   return df, result
 
 
@@ -437,6 +475,7 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
     fig.tight_layout(pad=18.0)
     cur_Row = 0
     cur_Col = 0
+    
 
     for logGroup in df_grouped.index.unique():
       df_log_grouped = df_grouped.loc[logGroup]
@@ -450,6 +489,17 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
       xTickLabel = []
       idx = []
       minValue = 0
+      best_miner = ""
+      scores_miners = []
+      miner_names = []
+      for miner, use_gnn, precP, acc, fitP, fitM, f1_fit in zip(df_log_grouped.miner, df_log_grouped.use_gnn, df_log_grouped.precP, df_log_grouped.acc_logs, df_log_grouped.fitP, df_log_grouped.fitM, df_log_grouped.f1_fit_logs):
+        scores_miners.append((f1_fit,precP))
+        miner_names.append(miner)
+        
+      result, _ = find_max_difference_tuple(scores_miners)
+      best_miner = miner_names[result]
+      
+        
       for miner, use_gnn, precP, acc, fitP, fitM, f1_fit in zip(df_log_grouped.miner, df_log_grouped.use_gnn, df_log_grouped.precP, df_log_grouped.acc_logs, df_log_grouped.fitP, df_log_grouped.fitM, df_log_grouped.f1_fit_logs):
         minValue = min([minValue, acc, fitP, fitM, f1_fit])
         axs[cur_Row,cur_Col].bar(j,precP, color="r", label="$prec_{align}(L^{+},M)$")
@@ -458,17 +508,25 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
         axs[cur_Row,cur_Col].bar(j+3,fitM, color="b", label="$fit_{align}(L^{-},M)$")
         axs[cur_Row,cur_Col].bar(j+4,f1_fit, color="orange", label="$f1\_fit_{align}(L^{+},L^{-},M)$")
         # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+        miner_text = ""
         if miner == "IMbi_freq":
-          xTickLabel.append("Cost-Func")
-        else:
-          xTickLabel.append("Reward-Func")
+          miner_text = "Cost-Func"
+        elif miner == "IMbi_rel":
+          miner_text = "Reward-Func"
+        elif miner == "IMbi_aprox":
+          miner_text = "Aprox-Func"
+          
+        if miner == best_miner:
+          miner_text = "$\\bf{" + miner_text + "}$"
+        xTickLabel.append(miner_text)
+          
         idx.append(j + 2.5)
         j += 6
         
       
       axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
       axs[cur_Row,cur_Col].set_xticks(idx)
-      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel)
+      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=90)
       axs[cur_Row,cur_Col].legend(loc='center left', ncols=1, labels=["$prec_{align}(L^{+},M)$","$acc_{align}(L^{+},L^{-},M)$", "$fit_{align}(L^{+},M)$", "$fit_{align}(L^{-},M)$", "$f1\_fit_{align}(L^{+},L^{-},M)$"], bbox_to_anchor=(1.2, 0.5))
       cur_Col += 1
       
@@ -495,10 +553,10 @@ def create_df():
 def get_data_paths():
   # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
   rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
-  lpNames = ["2012_O_P.xes", "2017_O_P.xes"]
+  lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
   # lpNames = ["lp_2018_o.xes"]
 
-  lMNames = ["2012_O_M.xes", "2017_O_M.xes"]
+  lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
   # lMNames = ["lm_2018_o.xes"]
   lpPaths = []
   lmPaths = []
@@ -526,9 +584,12 @@ def run_comparison(csv_filename, result_path):
   runs = 1
   mar_better_runs = 0
   ali_better_runs = 0
+  aprox_better_runs = 0
   
   ratios = [1, 0.8, 0.5]
   sups = [0.2, 0.3, 0.4]
+  # sups = [0.2]
+  # ratios = [1]
 
   start_time = time.time()
   
@@ -536,6 +597,7 @@ def run_comparison(csv_filename, result_path):
   with open(os.path.join(result_path,"output.txt"), 'w') as txt_file:
     
     warnings.filterwarnings("ignore")
+    
     for i in range(0,len(lpPaths)):
       for ratio in ratios:
         for sup in sups:
@@ -543,15 +605,18 @@ def run_comparison(csv_filename, result_path):
           txt_file.write("run: " + str(i) + " | ratio: " + str(ratio) + " | sup: " + str(sup)+ "\n")
           df, result = applyMinerToLog(df, result_path, lpPaths[i][1], lmPaths[i][1], lpPaths[i][0],lmPaths[i][0], 0.2, 0.99, sup, ratio)
           
-          if result == 1:
-            txt_file.write("Mar > Ali"+ "\n")
-            mar_better_runs += 1
           if result == 0:
-            txt_file.write("Ali > Mar"+ "\n")
+            txt_file.write("Ali > Rest"+ "\n")
             ali_better_runs += 1
+          if result == 1:
+            txt_file.write("Mar > Rest"+ "\n")
+            mar_better_runs += 1
+          if result == 2:
+            txt_file.write("Aprox > Rest"+ "\n")
+            aprox_better_runs += 1
           
           runs += 1
-          txt_file.write("Stats Mar: " + str(mar_better_runs) + "| Ali: " + str(ali_better_runs) + " | Total: " + str(totalRuns)+ "\n")
+          txt_file.write("Mar: " + str(mar_better_runs) + "| Ali: " + str(ali_better_runs) + "| Aprox: " + str(aprox_better_runs) + " | Total: " + str(totalRuns)+ "\n")
           txt_file.write("\n")
           txt_file.flush()
     
@@ -651,7 +716,7 @@ def create_comparison_petri_nets(result_path, logP_path, logM_path, sup, ratio):
 
   
 if __name__ == '__main__':
-  data_path = os.path.join(root_path, "analysing_real_data")
+  data_path = os.path.join(root_path, "analysing_cost_functions")
   result_path = os.path.join(data_path, "results")
   
   df = get_comparison_df("df.csv", result_path)

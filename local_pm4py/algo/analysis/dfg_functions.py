@@ -94,22 +94,26 @@ def standard_deviation(lst : "list[float]") -> float:
     # TODO consider dividing by len(lst) - 1
     return math.sqrt( (sum / ( len(lst) ) ) )
             
-def cost_seq(net, A, B, start_set, end_set, sup, flow, scores, dic_indirect_follow_log, cost_Variant):
-    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-        return cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores)
-    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_seq_relation(net, A, B, dic_indirect_follow_log)
+def cost_seq(net, A, B, start_set, end_set,scores, cut_function_util_data):
+    if cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_seq_frequency(net, A, B, start_set, end_set, cut_function_util_data["sup"], cut_function_util_data["flow"], scores)
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_seq_relation(net, A, B, cut_function_util_data["dic_indirect_follow_log"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+        return cost_seq_aprox(net, A, B, cut_function_util_data["dic_indirect_follow_log"])
     else:
         msg = "Error, could not call a valid cost function for cost_seq."
         logging.error(msg)
         raise Exception(msg)
     
-def cost_loop_tau(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o,  cost_Variant):
+def cost_loop_tau(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o, cost_Variant, data_loop_tau):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_loop_tau_frequency(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
         msg = "Error, cost_loop_tau on cost variant ACTIVITY_RELATION_SCORE."
         raise Exception(msg)
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+        return cost_loop_tau_aprox(data_loop_tau)
     else:
         msg = "Error, could not call a valid cost function for cost_loop_tau."
         logging.error(msg)
@@ -124,6 +128,19 @@ def cost_loop_tau_frequency(start_acts, end_acts, log, sup, dfg, start_activitie
             missing_loop += L1P
             c_rec += get_frequency(dfg,(y,x))
     return missing_loop, c_rec
+
+def cost_loop_tau_aprox(data_loop_tau):
+    net = data_loop_tau["net"]
+    A = data_loop_tau["A"]
+    B = data_loop_tau["B"]
+    start_A = data_loop_tau["start_A"]
+    end_A = data_loop_tau["end_A"]
+    input_B = data_loop_tau["input_B"]
+    output_B = data_loop_tau["output_B"]
+    dic_indirect_follow_log = data_loop_tau["dic_indirect_follow_log"]
+    bias_l = data_loop_tau["bias_l"]
+    return cost_loop_aprox(net, A, B, start_A, end_A, input_B, output_B, dic_indirect_follow_log, bias_l), 1
+    
 
 def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
     scores_toggle = toggle(scores)
@@ -154,6 +171,17 @@ def cost_seq_frequency(net, A, B, start_set, end_set, sup, flow, scores):
                                                                                                        (n_edges(net, A.union({'start'}), B.union({'end'}), scaling=scores))) - n_edges(net, {x}, {y}, scaling=scores))
 
     return c1 + c2 + c3
+
+def cost_seq_aprox(net, A, B, dic_indirect_follow_log):
+    scores = []
+    for x in A:
+        for y in B:
+            dividend = get_direct_edge_count(net,x,y) + dic_indirect_follow_log[x][y]
+
+            divisor = get_direct_edge_count(net,x,y) + dic_indirect_follow_log[x][y] + get_direct_edge_count(net,y,x) + dic_indirect_follow_log[y][x] + 1
+            res = dividend/divisor
+            scores.append(res)
+    return average(scores)
 
 def cost_seq_relation(net, A, B, dic_indirect_follow_log):
     # TODO SUP
@@ -212,11 +240,13 @@ def fit_loop(log_var,A,B,A_end,A_start):
     return fit
 
 
-def cost_exc(net, A, B, scores, flow, dic_indirect_follow_log, count_activities, cost_Variant):
-    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-        return cost_exc_frequency(net, A, B, scores)
-    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities)
+def cost_exc(net, A, B, cut_function_util_data):
+    if cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_exc_frequency(net, A, B, cut_function_util_data["feat_scores"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_exc_relation(net, A, B, cut_function_util_data["flow"], cut_function_util_data["dic_indirect_follow_log"], cut_function_util_data["count_activities"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+        return cost_exc_aprox(net, A, B, cut_function_util_data["dic_indirect_follow_log"])
     else:
         msg = "Error, could not call a valid cost function for cost_exc."
         logging.error(msg)
@@ -240,12 +270,24 @@ def cost_exc_relation(net, A, B, flow, dic_indirect_follow_log, count_activities
             scores.append( ((dividend1/divisor1)*0.5 + (dividend2/divisor2)*0.5) )
     return average(scores) - standard_deviation(scores)
 
+def cost_exc_aprox(net, A, B, dic_indirect_follow_log):
+    scores = []
+    for x in A:
+        for y in B:
+            dividend = 1
+            divisor = get_direct_edge_count(net,x,y) + dic_indirect_follow_log[x][y] + get_direct_edge_count(net,y,x) + dic_indirect_follow_log[y][x] + 1
+            res = dividend/divisor
+            scores.append(res)
+    return average(scores)
+
 def cost_exc_tau(net, log, sup_thr, cost_Variant):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_exc_tau_frequency(net, log, sup_thr)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
         msg = "Error, could not call cost_exc_tau on cost variant ACTIVITY_RELATION_SCORE."
         raise Exception(msg)
+    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+        return cost_exc_tau_aprox(net, log)
     else:
         msg = "Error, could not call a valid cost function for cost_exc_tau."
         logging.error(msg)
@@ -258,12 +300,16 @@ def cost_exc_tau_frequency(net, log, sup_thr):
 def cost_exc_tau_relation(net, log):
     return n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')
 
+def cost_exc_tau_aprox(net, log):
+    return n_edges(net,{'start'},{'end'}) / len(log)
 
-def cost_par(net, A, B, sup, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
-    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-        return cost_par_frequency(net, A, B, sup, scores)
-    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repetition_Factor)
+def cost_par(net, A, B, cut_function_util_data):
+    if cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_par_frequency(net, A, B, cut_function_util_data["sup"], cut_function_util_data["feat_scores"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_par_relation(net, A, B, cut_function_util_data["sup"], cut_function_util_data["flow"], cut_function_util_data["dic_indirect_follow_log"], cut_function_util_data["calc_repetition_Factor"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+        return cost_par_aprox(net, A, B, cut_function_util_data["bias_l"])
     else:
         msg = "Error, could not call a valid cost function for cost_par."
         logging.error(msg)
@@ -293,12 +339,24 @@ def cost_par_relation(net, A, B, sup, flow, dic_indirect_follow_log, calc_repeti
             scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
     return average(scores) * min(calc_repetition_Factor, 1)
 
+def cost_par_aprox(net, A, B, bias_l):
+    # TODO SUP
+    scores = []
+    for x in A:
+        for y in B:
+            dividend = 2 * get_direct_edge_count(net,x,y) * get_direct_edge_count(net,y,x)
+            divisor = math.pow(get_direct_edge_count(net,x,y),2) + math.pow(get_direct_edge_count(net,y,x),2) + 1
+            scores.append(dividend/divisor)
+    return average(scores) * (1 - bias_l)
 
-def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, scores, flow, dic_indirect_follow_log, calc_repetition_Factor, cost_Variant):
-    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
-        return cost_loop_frequency(net, A, B, sup, start_A, end_A, input_B, output_B, scores)
-    elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        return cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, dic_indirect_follow_log, calc_repetition_Factor)
+
+def cost_loop(net, A, B, start_A, end_A, input_B, output_B, cut_function_util_data):
+    if cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
+        return cost_loop_frequency(net, A, B, cut_function_util_data["sup"], start_A, end_A, input_B, output_B, cut_function_util_data["feat_scores"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+        return cost_loop_relation(net, A, B, cut_function_util_data["sup"], cut_function_util_data["flow"], start_A, end_A, input_B, output_B, cut_function_util_data["dic_indirect_follow_log"], cut_function_util_data["calc_repetition_Factor"])
+    elif cut_function_util_data["cost_Variant"] == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+        return cost_loop_aprox(net, A, B, start_A, end_A, input_B, output_B, cut_function_util_data["dic_indirect_follow_log"], cut_function_util_data["bias_l"])
     else:
         msg = "Error, could not call a valid cost function for cost_loop."
         logging.error(msg)
@@ -372,6 +430,23 @@ def cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, 
                 divisor2 = dic_indirect_follow_log[x][y] + 1
                 scores.append( min((dividend1/divisor1), (dividend2/divisor2)) )
     return average(scores) + ( standard_deviation(scores) * (1 - min(calc_repetition_Factor,1) ) )
+
+def cost_loop_aprox(net, A, B, start_A, end_A, input_B, output_B, dic_indirect_follow_log, bias_l):
+    # TODO SUP
+    scores = []
+    for x in A:
+        for y in B:
+            if (x in end_A and y in input_B) or (x in start_A and y in output_B):
+                # redo s
+                dividend = 2 * get_direct_edge_count(net,x,y) * (dic_indirect_follow_log[y][x] + get_direct_edge_count(net,y,x))
+                divisor = math.pow(get_direct_edge_count(net,x,y),2) + math.pow(get_direct_edge_count(net,y,x) + dic_indirect_follow_log[y][x],2) + 1
+                scores.append(dividend/divisor)
+            else:
+                # redo i
+                dividend = 2 * dic_indirect_follow_log[x][y] * dic_indirect_follow_log[y][x]
+                divisor = math.pow(dic_indirect_follow_log[x][y],2) + math.pow(dic_indirect_follow_log[y][x],2) + 1
+                scores.append(dividend/divisor)
+    return average(scores) * bias_l
 
 
 def visualisecpcm(cuts, ratio, size_par):
