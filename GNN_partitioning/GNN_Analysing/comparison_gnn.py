@@ -1242,8 +1242,28 @@ def run_show_data():
         
           
   
+def run_runtime_comparison():
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
+  pathFiles = get_data_paths(False, data_path_real, consider_ratio=True)
+  for files in pathFiles:
+    logP = get_log(files[0])
+    logM = get_log(files[1])
+    support = 0.3
+    ratio = 1
+    use_gnn = False
+    start_time = time.time()
+    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
+    print("Time elapsed: " + str(time.time() - start_time) + " seconds")
+    use_gnn = True
+    start_time = time.time()
+    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
+    print("Time elapsed: " + str(time.time() - start_time) + " seconds")
+    print()    
+  
+  
 if __name__ == '__main__':
-  run_comparison()
+  run_runtime_comparison()
+  # run_comparison()
   # run_show_data()
   # manual_run()
   

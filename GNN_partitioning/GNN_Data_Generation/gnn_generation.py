@@ -257,7 +257,6 @@ def get_deviating_categories_per_graph_per_category(result_dic, graph_node, cut_
         
   return res_categories
 
-
 def get_number_work_per_graph_size_per_category(result_dic, graph_node_size, cut_types, workitems):
   res_work = []
   for graph_node in graph_node_size:
@@ -439,8 +438,6 @@ def get_input_arguments(list_inputs):
   
   return unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes
    
-   
-   
 def log_runtime_of_imbi():
   overall_runtime = time.time()
   from GNN_partitioning.GNN_Data_Generation.bi import gnn_generation as gnn_generation_bi
@@ -486,8 +483,6 @@ def run_generate_data():
   # unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes = "test", 10, [7]
   generate_data(relative_path, 0.2, 0.2, unique_indentifier, number_new_data_instances_per_category, list_grap_node_sizes, True)
   
-  
-   
 if __name__ == '__main__':
   random.seed(random_start_seed)
   cur_time = time.time()

@@ -238,6 +238,7 @@ def combine_score_values(scoreP, scoreM, cost_Variant, ratio, size_par):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return scoreP - ratio * size_par * scoreM
     else:
+        # res = scoreP - ratio * scoreM
         res = scoreP - ratio * scoreM
         return res
 
@@ -456,7 +457,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
             start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
             end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
 
-            if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
+            if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE and False:
                 isRelationBase, cut, new_log_P, new_log_M = dfg_functions.check_relation_base_case(netP, netM,log,logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, self_start_activities,self_end_activities)
                 
                 if isRelationBase == True:
@@ -484,6 +485,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
 
                 if useGNN == True:
                     if ratio == 0 and False:
+                        #  a check if needed if we only consider logP for gnn prediction
                         possible_partition_gnn = uni_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
                     else:
                         possible_partition_gnn = bi_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
@@ -527,7 +529,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 data_loop_tau_P, data_loop_tau_M = get_loop_tau_data(dfgP, dfgM, self_activities, {},log,logM, log_art, logM_art, activity_key, self_activities, activitiesM,netP,netM)
                 
                 if len(start_acts_P.intersection(end_acts_P)) == 0:
-                    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE or cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+                    if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE or cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE or cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
                         cost_loop_P, c_recP = dfg_functions.cost_loop_tau(start_acts_P,end_acts_P,log,sup,dfgP,self_start_activities,self_end_activities,cost_Variant,data_loop_tau_P)
                         cost_loop_M, c_recM = dfg_functions.cost_loop_tau(start_acts_P.intersection(self_start_activitiesM.keys()),end_acts_P.intersection(self_end_activitiesM.keys()), logM, sup, dfgM, self_start_activitiesM,self_end_activitiesM,cost_Variant,data_loop_tau_M)
                         if c_recP > 0:
@@ -610,7 +612,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                     #####################################################################
                     # xor-tau check
                     if dfg_functions.n_edges(netP,{'start'},{'end'})>0:
-                        if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE or cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
+                        if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE or cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE or cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
                             cost_exc_tau_P = dfg_functions.cost_exc_tau(netP,log,sup,cost_Variant)
                             cost_exc_tau_M = dfg_functions.cost_exc_tau(netM,logM,sup,cost_Variant)
                             # print(cost_exc_tau_P) 

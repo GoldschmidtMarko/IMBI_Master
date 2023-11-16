@@ -110,8 +110,7 @@ def cost_loop_tau(start_acts, end_acts, log, sup, dfg, start_activities_o, end_a
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_loop_tau_frequency(start_acts, end_acts, log, sup, dfg, start_activities_o, end_activities_o)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        msg = "Error, cost_loop_tau on cost variant ACTIVITY_RELATION_SCORE."
-        raise Exception(msg)
+        return cost_loop_tau_aprox(data_loop_tau)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
         return cost_loop_tau_aprox(data_loop_tau)
     else:
@@ -284,8 +283,7 @@ def cost_exc_tau(net, log, sup_thr, cost_Variant):
     if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE:
         return cost_exc_tau_frequency(net, log, sup_thr)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
-        msg = "Error, could not call cost_exc_tau on cost variant ACTIVITY_RELATION_SCORE."
-        raise Exception(msg)
+        return cost_exc_tau_aprox(net, log)
     elif cost_Variant == custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE:
         return cost_exc_tau_aprox(net, log)
     else:
@@ -297,8 +295,11 @@ def cost_exc_tau_frequency(net, log, sup_thr):
     cost = max(0, sup_thr * len(log) - n_edges(net,{'start'},{'end'}))
     return cost
 
-def cost_exc_tau_relation(net, log):
+def cost_exc_tau_relation_base(net, log):
     return n_edges(net,{'start'},{'end'}) / net.out_degree('start', weight='weight')
+
+def cost_exc_tau_relation(net, log):
+    return n_edges(net,{'start'},{'end'}) / len(log)
 
 def cost_exc_tau_aprox(net, log):
     return n_edges(net,{'start'},{'end'}) / len(log)
@@ -432,7 +433,6 @@ def cost_loop_relation(net, A, B, sup, flow, start_A, end_A, input_B, output_B, 
     return average(scores) + ( standard_deviation(scores) * (1 - min(calc_repetition_Factor,1) ) )
 
 def cost_loop_aprox(net, A, B, start_A, end_A, input_B, output_B, dic_indirect_follow_log, bias_l):
-    # TODO SUP
     scores = []
     for x in A:
         for y in B:
@@ -574,9 +574,9 @@ def check_relation_base_case(netP, netM, log, logM, sup, ratio, size_par, dfgP, 
     activitiesP = netP.nodes - {'start', 'end'}
          
     # xor tau
-    cost_exc_tau_P = cost_exc_tau_relation(netP, log)
+    cost_exc_tau_P = cost_exc_tau_relation_base(netP, log)
     if cost_exc_tau_P > sup:
-        cost_exc_tau_M = cost_exc_tau_relation(netM, logM)
+        cost_exc_tau_M = cost_exc_tau_relation_base(netM, logM)
         return True, ((activitiesP, set()), 'exc_tau', cost_exc_tau_P, cost_exc_tau_M,cost_exc_tau_P - ratio * cost_exc_tau_M,1), 'none', 'none'
         
     

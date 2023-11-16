@@ -589,6 +589,7 @@ def generate_data_piece_for_cut_type(file_path, number_of_activites, support, ra
       
     return 0
    
+   
 if __name__ == '__main__':
   print("Error, not supported to run as main")
 
