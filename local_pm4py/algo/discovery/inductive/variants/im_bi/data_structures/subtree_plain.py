@@ -24,8 +24,8 @@ import networkx as nx
 from pm4py.algo.filtering.log.start_activities import start_activities_filter
 from pm4py.algo.filtering.log.end_activities import end_activities_filter
 from pm4py.algo.discovery.dfg.utils.dfg_utils import get_activities_from_dfg
-from GNN_partitioning.GNN_Model_Generation.uni.gnn_models import get_partitions_from_gnn as uni_get_partitions_from_gnn
-from GNN_partitioning.GNN_Model_Generation.bi.gnn_models import get_partitions_from_gnn as bi_get_partitions_from_gnn
+from GNN_partitioning.GNN_Model_Generation.uni import gnn_models as gnn_models_uni
+from GNN_partitioning.GNN_Model_Generation.bi import gnn_models as gnn_models_bi
 
 import logging 
 
@@ -53,7 +53,6 @@ def artificial_start_end(log):
         trace.insert(0, start_event)
         trace.append(end_event)
     return log
-
 def generate_nx_graph_from_dfg(dfg):
     dfg_acts = set()
     for x in dfg:
@@ -205,6 +204,8 @@ def get_bias_l(log, activity_key : str) -> float:
     for trace in log:
         trace_lengths.append(len(trace))
     res = max(average(trace_lengths) - len(dic_activities.keys()),0)
+    if len(dic_activities.keys()) == 0:
+        return 1
     res = min(1,res/len(dic_activities.keys()))
     return res
    
@@ -408,7 +409,7 @@ def get_best_cut(log, logM, sup= None, ratio = None, cost_Variant = custom_enum.
         return cut
 
 
-def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None, useGNN = False):
+def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activities, self_start_activitiesM, self_end_activitiesM, self_activities,activity_key, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, detected_cut = None, parameters=None, useGNN = False, self_loaded_gnn_models = None):
         logP_var = Counter([tuple([x['concept:name'] for x in t]) for t in log])
         logM_var = Counter([tuple([x['concept:name'] for x in t]) for t in logM])
         
@@ -457,7 +458,7 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
             start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}
             end_acts_P = set([x[0] for x in dfgP if (x[1] == 'end')])-{'start'}
 
-            if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE and False:
+            if cost_Variant == custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE:
                 isRelationBase, cut, new_log_P, new_log_M = dfg_functions.check_relation_base_case(netP, netM,log,logM, sup, ratio, size_par, dfgP, dfgM, activity_key, start_acts_P, end_acts_P, self_start_activities,self_end_activities)
                 
                 if isRelationBase == True:
@@ -480,21 +481,24 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                 start_partition = time.time()
                 
 
-                gnn_path = os.path.join("GNN_partitioning", "GNN_Model")
-                root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+                # gnn_path = os.path.join("GNN_partitioning", "GNN_Model")
+                # root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 
                 if useGNN == True:
                     if ratio == 0 and False:
                         #  a check if needed if we only consider logP for gnn prediction
                         possible_partition_gnn = uni_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
                     else:
-                        possible_partition_gnn = bi_get_partitions_from_gnn(root_path, gnn_path, log, logM, sup, ratio, size_par, 0.1)
+                        gnn_data_object_data = gnn_models_bi.generate_data_from_dfg(dfgP, dfgM, sup, ratio, size_par)
+                        # possible_partition_gnn = gnn_models_bi.get_partitions_from_gnn_data_object(root_path,gnn_path, gnn_data_object_data, 0.1)
+                        possible_partition_gnn = gnn_models_bi.get_partitions_from_gnn_models_and_data_object(self_loaded_gnn_models, gnn_data_object_data, 0.1)
                     if possible_partition_gnn == None:
                         possible_partitions = dfg_functions.find_possible_partitions(netP)
                     else:
                         possible_partitions = possible_partition_gnn
                 else:
                     possible_partitions = dfg_functions.find_possible_partitions(netP)
+                    
                     
                 end_partition = time.time()
                 
@@ -760,6 +764,12 @@ class SubtreePlain(object):
             self.original_log = logp
             self.activities = None
             
+            self.loaded_gnn_models = None
+            if use_gnn == True:
+                gnn_path = os.path.join("GNN_partitioning", "GNN_Model")
+                root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
+                self.loaded_gnn_models = gnn_models_bi.load_gnn_models(root_path, gnn_path)
+            
             self.initialize_tree(dfg, logp, logm, initial_dfg, activities, parameters = parameters, sup = sup, ratio = ratio, size_par = size_par, cost_Variant = cost_Variant, use_gnn = use_gnn)
 
 
@@ -795,7 +805,7 @@ class SubtreePlain(object):
         
         
         # gnn_cut 
-        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = use_gnn)
+        isbase, cut, sorted_cuts, detected_cut, new_log_P, new_log_M, possible_partitions = get_cuts(self.log,self.logM,self.log_art,self.logM_art,self.start_activities,self.end_activities,self.start_activitiesM,self.end_activitiesM,self.activities,activity_key,sup,ratio, size_par,cost_Variant,self.detected_cut,self.parameters, useGNN = use_gnn, self_loaded_gnn_models = self.loaded_gnn_models)
         
         self.detected_cut = detected_cut
         

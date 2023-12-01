@@ -158,11 +158,9 @@ def get_model_outcome(model_number, model, data):
         return model(torch_matrix_P, node_degree_P, global_feature)
         
 
-def generate_data_from_log(logP, sup, ratio, size_par):
+def generate_data_from_log(logP,logP_art, sup, ratio, size_par):
     unique_node_P, adj_matrix_P = gnn_models.generate_adjacency_matrix_from_log(logP)
 
-    logP_art = gnn_models.artificial_start_end(logP.__deepcopy__())
-    
     activity_count_P = gnn_models.get_activity_count(logP_art)
     unique_activity_count_P = gnn_models.get_activity_count_list_from_unique_list(activity_count_P, unique_node_P)
     
@@ -191,7 +189,7 @@ def pad_data(data, max_node_size_in_dataset):
     data["Number_nodes"] = max_node_size_in_dataset
     return data
 
-def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, ratio, size_par, percentage_of_nodes = 0):
+def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logP_art, sup, ratio, size_par, percentage_of_nodes = 0):
     model_setting_paths = []
     model_paths = []
     
@@ -214,7 +212,7 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         data_settings, model_args = gnn_models.read_model_parameter(model_setting_path)
         model_parameters.append((data_settings, model_args))
 
-    data = generate_data_from_log(logP, sup, ratio, size_par)
+    data = generate_data_from_log(logP,logP_art, sup, ratio, size_par)
     
 
     possible_partitions = []

@@ -277,7 +277,7 @@ def convert_tree_path_to_text_path(input_str):
   
   # Construct the output string
   # output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
-  output_str = parts1[0] + "Data_" + numeric_part + ".txt"
+  output_str = parts1[0] + "Data_" + parts3[1] + "_" + numeric_part + ".txt"
   return output_str
 
 def read_data_from_text_path(file_path):
@@ -287,68 +287,81 @@ def read_data_from_text_path(file_path):
       with open(file_path, 'r') as file:
           # Iterate over each line in the file
           matrix_P_arrayList = []
+          matrix_M_arrayList = []
           state = -1
           for line in file:
-              if state == -1:
-                  state += 1
-                  continue
-              elif state == 0 :
-                  data["Labels"] = line.split(" ")[:-1]
-                  state += 1
-                  continue
-              elif state == 1:
-                  data["Activity_count_P"] = np.array(line.split(" ")[:-1]).astype(int)
-                  state += 1
-                  continue
-              elif state == 2 and line == "\n":
-                  data["Adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
-                  state += 1
-                  continue
-              elif state == 3:
-                  data["Cut_type"] = line[:-1]
-                  state += 1
-                  continue 
-              elif state == 4:
-                  data["Support"] = float(line[:-1])
-                  state += 1
-                  continue 
-              elif state == 5:
-                  data["Ratio"] = float(line[:-1])
-                  state += 1
-                  continue 
-              elif state == 6:
-                  data["Size_par"] = float(line[:-1])
-                  state += 1
-                  continue 
-              elif state == 7:
-                  data["Dataitem"] = line[:-1]
-                  state += 1
-                  continue 
-              elif state == 8:
-                  data["PartitionA"] = line.split(" ")[:-1]
-                  state += 1
-                  continue 
-              elif state == 9:
-                  data["PartitionB"] = line.split(" ")[:-1]
-                  state += 1
-                  continue 
-              elif state == 10:
-                  data["Score"] = float(line[:-1])
-                  state += 1
-                  continue 
-              elif state == 11:
-                  data["random_seed_P"] = int(line[:-1])
-                  state += 1
-                  continue 
-              elif state == 12:
-                  data["tree"] = str(line[:-1])
-                  state += 1
-                  continue 
-              
-              if state == 2:
-                  lineList = line.split(" ")[:-1]
-                  np_array = np.array(lineList, dtype=int)
-                  matrix_P_arrayList.append(np_array)
+                if state == -1:
+                    state += 1
+                    continue
+                elif state == 0 :
+                    data["Labels"] = line.split(" ")[:-1]
+                    state += 1
+                    continue
+                elif state == 1:
+                    data["Activity_count_P"] = np.array(line.split(" ")[:-1]).astype(int)
+                    state += 1
+                    continue
+                elif state == 2:
+                    data["Activity_count_M"] = np.array(line.split(" ")[:-1]).astype(int)
+                    state += 1
+                    continue
+                elif state == 3 and line == "\n":
+                    data["Adjacency_matrix_P"] = np.vstack(matrix_P_arrayList)
+                    state += 1
+                    continue
+                elif state == 4 and line == "\n":
+                    data["Adjacency_matrix_M"] = np.vstack(matrix_M_arrayList)
+                    state += 1
+                    continue   
+                elif state == 5:
+                    data["Cut_type"] = line[:-1]
+                    state += 1
+                    continue 
+                elif state == 6:
+                    data["Support"] = float(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 7:
+                    data["Ratio"] = float(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 8:
+                    data["Size_par"] = float(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 9:
+                    data["Dataitem"] = line[:-1]
+                    state += 1
+                    continue 
+                elif state == 10:
+                    data["PartitionA"] = line.split(" ")[:-1]
+                    state += 1
+                    continue 
+                elif state == 11:
+                    data["PartitionB"] = line.split(" ")[:-1]
+                    state += 1
+                    continue 
+                elif state == 12:
+                    data["Score"] = float(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 13:
+                    data["random_seed_P"] = int(line[:-1])
+                    state += 1
+                    continue 
+                elif state == 14:
+                    data["random_seed_M"] = int(line[:-1])
+                    state += 1
+                    continue 
+                
+                if state == 3:
+                    lineList = line.split(" ")[:-1]
+                    np_array = np.array(lineList, dtype=int)
+                    matrix_P_arrayList.append(np_array)
+                if state == 4:
+                    lineList = line.split(" ")[:-1]
+                    np_array = np.array(lineList, dtype=int)
+                    matrix_M_arrayList.append(np_array)
   return data
 
 
@@ -378,6 +391,9 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
   
   if use_synthetic:
     cut_types = ["par", "exc","loop", "seq"]
+    
+    foundFiles = set()
+    
     # cut_types = ["loop", "exc","par", "seq"]
     pathFiles = {key: [] for key in cut_types}
     currentPath = dataPath
@@ -398,12 +414,19 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
                   break
                 
                 if file.endswith(".json"):
-                  tree_file = os.path.join(root, file)
-                  data_txt_file = convert_tree_path_to_text_path(tree_file)
+                  found_file = os.path.join(root, file)
+                  if "treeP" in found_file:
+                    file_M = found_file.replace("treeP", "treeM")
+                    file_P = found_file
+                  else:
+                    file_M = found_file
+                    file_P = found_file.replace("treeM", "treeP")
+                  data_txt_file = convert_tree_path_to_text_path(found_file)
                   
-                  if os.path.exists(data_txt_file):     
-                    data = read_data_from_text_path(data_txt_file)
-                    pathFiles[cut_type].append((tree_file, data))
+                  if os.path.exists(data_txt_file):   
+                    if file_P not in foundFiles and file_M not in foundFiles:
+                      data = read_data_from_text_path(data_txt_file)
+                      pathFiles[cut_type].append((file_P, file_M, data))
                   if len(pathFiles[cut_type]) >= num_data_per_category:
                     continue_running = False
                     break
@@ -1236,33 +1259,71 @@ def run_show_data():
           
           tree_path = data[0]
           tree = load_tree(tree_path)
-          log = get_log_from_tree(tree, data[1]["random_seed_P"])
+          log = get_log_from_tree(tree, data[2]["random_seed_P"])
           save_dfg(log,os.path.join(data_path_csv, "file"))
           print("Saved dfg.\n")
         
+def compare_gnn_time(logP,logM,support,ratio):
+  start_time = time.time()
+  use_gnn = False
+  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
+  time_no_gnn = time.time() - start_time
+  
+  use_gnn = True
+  start_time = time.time()
+  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
+  time_gnn = time.time() - start_time
+  return (time_no_gnn, time_gnn)
+  
           
+  
+def run_time_comparison_artificial():
+  data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
+  dataDict = get_data_paths(True, data_path_synthetic,True,100, 100, 2)
+  
+  total_time_no_gnn = 0
+  total_time_gnn = 0
+  runs = 1
+  totalRuns = 0
+  for dataList in dataDict.values():
+    totalRuns += len(dataList)
+    
+  for dataList in dataDict.values():
+    for dataPair in dataList:
+      print("Run: " + str(runs) + "/" + str(totalRuns))
+      runs += 1
+      data = dataPair[2]
+      treeP = load_tree(dataPair[0])
+      treeM = load_tree(dataPair[1])
+      logP = get_log_from_tree(treeP, data["random_seed_P"])
+      logM = get_log_from_tree(treeM, data["random_seed_M"])
+      time_no_gnn, time_gnn = compare_gnn_time(logP,logM,data["Support"],data["Ratio"])
+      total_time_no_gnn += time_no_gnn
+      total_time_gnn += time_gnn
+      
+  print("Total time no gnn: " + str(total_time_no_gnn))
+  print("Total time gnn: " + str(total_time_gnn))
+  
+
+
   
 def run_runtime_comparison():
   data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
   pathFiles = get_data_paths(False, data_path_real, consider_ratio=True)
   for files in pathFiles:
     logP = get_log(files[0])
     logM = get_log(files[1])
     support = 0.3
     ratio = 1
-    use_gnn = False
-    start_time = time.time()
-    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
-    print("Time elapsed: " + str(time.time() - start_time) + " seconds")
-    use_gnn = True
-    start_time = time.time()
-    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
-    print("Time elapsed: " + str(time.time() - start_time) + " seconds")
-    print()    
+    time_no_gnn, time_gnn = compare_gnn_time(logP,logM,support,ratio)
+    print("Time no gnn: " + str(time_no_gnn))
+    print("Time gnn: " + str(time_gnn))
   
   
 if __name__ == '__main__':
-  run_runtime_comparison()
+  run_time_comparison_artificial()
+  # run_runtime_comparison()
   # run_comparison()
   # run_show_data()
   # manual_run()

@@ -8,7 +8,7 @@ import math
 from pm4py.util import xes_constants
 from itertools import combinations
 from pm4py.objects.log import obj as log_instance
-
+import time
 import sys
 root_path = os.getcwd().split("IMBI_Master")[0] + "IMBI_Master"
 sys.path.append(root_path)
@@ -688,6 +688,14 @@ def generate_model(model_args):
 def generate_model_from_args(model_args):
     return generate_model(model_args)
 
+def get_prediction_from_model(model_number, model, data):
+    model_outcome = get_model_outcome(model_number, model, data)
+    probs = F.sigmoid(model_outcome)
+        
+    binary_predictions = torch.round(probs)
+    
+    return binary_predictions
+
 def transform_data_to_model(data):
     # converting the data to torch
     torch_matrix_P = torch.from_numpy(data["Adjacency_matrix_P"]).to(torch.float32)
@@ -816,6 +824,36 @@ def generate_data_from_log(logP, logM, sup, ratio, size_par):
     
     return data
     
+def generate_data_from_dfg(dfgP_art, dfgM_art, sup, ratio, size_par):
+    time_1 = time.time()
+    unique_node_P, adj_matrix_P = gnn_models.generate_adjacency_matrix_from_dfg_art(dfgP_art)
+    unique_node_M, adj_matrix_M = gnn_models.generate_adjacency_matrix_from_dfg_art(dfgM_art)
+    unique_nodeList, matrix_P, matrix_M = generate_union_adjacency_matrices(adj_matrix_P,unique_node_P,adj_matrix_M,unique_node_M)
+    
+    # logP_art = gnn_models.artificial_start_end(logP.__deepcopy__())
+    # logM_art = gnn_models.artificial_start_end(logM.__deepcopy__())
+    
+    activity_count_P = gnn_models.get_activity_count_from_dfg(dfgP_art)
+    activity_count_M = gnn_models.get_activity_count_from_dfg(dfgM_art)
+    unique_activity_count_P = gnn_models.get_activity_count_list_from_unique_list(activity_count_P, unique_nodeList)
+    unique_activity_count_M = gnn_models.get_activity_count_list_from_unique_list(activity_count_M, unique_nodeList)
+    size_par = 1
+    
+    data = {"Adjacency_matrix_P": matrix_P,
+            "Adjacency_matrix_M": matrix_M,
+            "Support": sup,
+            "Ratio": ratio,
+            "Size_par": size_par,
+            "Labels": unique_nodeList,
+            "Activity_count_P": np.array(unique_activity_count_P).astype(int),
+            "Activity_count_M": np.array(unique_activity_count_M).astype(int),
+            "Number_nodes": matrix_P.shape[0],
+            "PartitionA": [],
+            "PartitionB": []
+            }
+    
+    return data
+    
 def pad_data(data, max_node_size_in_dataset):
     diff_size = max_node_size_in_dataset - data["Adjacency_matrix_P"].shape[0]
     # Pad the adjacency matrix with zeros
@@ -828,13 +866,13 @@ def pad_data(data, max_node_size_in_dataset):
     data["Number_nodes"] = max_node_size_in_dataset
     return data  
 
-def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, ratio, size_par, percentage_of_nodes = 0):
+def load_gnn_models(root_file_path, gnn_file_path):
+    res_models = []
+    
     model_setting_paths = []
     model_paths = []
-    
     gnn_file_path = os.path.join(root_file_path, gnn_file_path)
-    
-    
+
     if os.path.exists(gnn_file_path):
         for root, _ , files in os.walk(gnn_file_path):
             for file in files:
@@ -852,22 +890,9 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         data_settings, model_args = gnn_models.read_model_parameter(model_setting_path)
         model_parameters.append((data_settings, model_args))
 
-    data = generate_data_from_log(logP, logM, sup, ratio, size_par)
-    
-
-    possible_partitions = []
     for data_setting, model_args in model_parameters:
         cut_type = data_setting["Cut_type"]
         model_number = int(data_setting["model_number"])
-        
-        if data["Number_nodes"] > int(model_args["input_dim"]):
-            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
-            return None
-        
-        data = pad_data(data, int(model_args["input_dim"]))
-        if data["Number_nodes"] != int(model_args["input_dim"]):
-            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
-            return None
         
         cur_model_path = ""
         for model_path in model_paths:
@@ -885,6 +910,31 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
         # Freeze the model's parameters
         for param in cur_model.parameters():
             param.requires_grad = False
+
+        res_models.append((model_number, cur_model, cut_type, int(model_args["input_dim"])))
+    return res_models
+
+
+
+def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, ratio, size_par, percentage_of_nodes = 0):
+    gnn_data_object_data = generate_data_from_log(logP, logM, sup, ratio, size_par)
+    possible_partitions = get_partitions_from_gnn_data_object(root_file_path, gnn_file_path, gnn_data_object_data, percentage_of_nodes)
+    return possible_partitions    
+
+def get_partitions_from_gnn_data_object(root_file_path, gnn_file_path, data, percentage_of_nodes = 0):
+    possible_partitions = []
+    loaded_gnn_models = load_gnn_models(root_file_path, gnn_file_path)
+    
+    for model_number, cur_model, cut_type, model_max_input_dim in loaded_gnn_models:
+        if data["Number_nodes"] > model_max_input_dim:
+            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            return None
+        
+        data = pad_data(data, model_max_input_dim)
+        if data["Number_nodes"] != model_max_input_dim:
+            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            return None
+        
         
         binary_prediction = get_prediction_from_model(model_number, cur_model, data)
         
@@ -912,6 +962,8 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
                 partitionB.add(data["Labels"][i])
         possible_partitions.append((partitionA, partitionB, {cut_type}))
 
+
+
     possible_local_partitions = gnn_models.get_local_partitions(possible_partitions, percentage_of_nodes)
     possible_local_partitions_cleaned = gnn_models.clean_error_partitions(possible_local_partitions)
     possible_local_partitions_filtered = gnn_models.filter_impossible_partitions(possible_local_partitions_cleaned, data["Labels"], data["Adjacency_matrix_P"])
@@ -927,13 +979,62 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logM, sup, rati
 
     return possible_local_partitions    
 
-def get_prediction_from_model(model_number, model, data):
-    model_outcome = get_model_outcome(model_number, model, data)
-    probs = F.sigmoid(model_outcome)
+def get_partitions_from_gnn_models_and_data_object(loaded_gnn_models : (int, object), data, percentage_of_nodes = 0):
+    possible_partitions = []
+    for model_number, cur_model, cut_type, model_max_input_dim in loaded_gnn_models:
+        if data["Number_nodes"] > model_max_input_dim:
+            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            return None
         
-    binary_predictions = torch.round(probs)
+        data = pad_data(data, model_max_input_dim)
+        if data["Number_nodes"] != model_max_input_dim:
+            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            return None
+        
+        binary_prediction = get_prediction_from_model(model_number, cur_model, data)
+        
+        if torch.any(torch.isnan(binary_prediction)):
+            print("Error: the model returned a nan value.")
+            return None
+        
+        binary_prediction_list = binary_prediction.view(-1).tolist()
+        binary_prediction_list = [int(element) for element in binary_prediction_list]
+        binary_mask = [1 if element != 0 else 0 for element in data["Activity_count_P"] ]
+        binary_mask[0] = 0 # start
+        binary_mask[1] = 0 # end
+        
+        for i, mask in enumerate(binary_mask):
+            if mask == 0:
+                binary_prediction_list[i] = -1
+        
+        partitionA = set()
+        partitionB = set()
+        
+        for i, pred in enumerate(binary_prediction_list):
+            if pred == 0:
+                partitionA.add(data["Labels"][i])
+            if pred == 1:
+                partitionB.add(data["Labels"][i])
+        possible_partitions.append((partitionA, partitionB, {cut_type}))
+
+
+
+    possible_local_partitions = gnn_models.get_local_partitions(possible_partitions, percentage_of_nodes)
+    possible_local_partitions_cleaned = gnn_models.clean_error_partitions(possible_local_partitions)
+    possible_local_partitions_filtered = gnn_models.filter_impossible_partitions(possible_local_partitions_cleaned, data["Labels"], data["Adjacency_matrix_P"])
     
-    return binary_predictions
+    if len(possible_local_partitions_filtered) == 0:
+        print("Error: no possible partitions found. Filtered out all partitions.")
+        return None
+    
+    # custom_cut_types = generate_custom_cut_type_partitions(data["Labels"],data["Adjacency_matrix_P"])
+    custom_cut_types = []
+    
+    possible_local_partitions = possible_local_partitions_cleaned + custom_cut_types
+
+    return possible_local_partitions    
+
+
 
 
 

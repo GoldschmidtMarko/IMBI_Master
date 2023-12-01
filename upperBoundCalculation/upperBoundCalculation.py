@@ -208,7 +208,7 @@ def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
   sum_valueP = sum(get_dfg_from_log(log_P).values())
   sum_valueM = sum(get_dfg_from_log(log_M).values())
 
-  print("Running calculation")
+  print("Running trace upper bound calculation")
   while True:
     max_gain_edge = get_maximum_gain_edge(log_P, log_M, sum_valueP, sum_valueM)
     if max_gain_edge is None:

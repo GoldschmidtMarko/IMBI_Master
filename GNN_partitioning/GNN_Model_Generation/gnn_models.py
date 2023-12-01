@@ -27,18 +27,18 @@ def artificial_start_end(log):
 
 def generate_adjacency_matrix_from_log(log):
   log_art = artificial_start_end(log.__deepcopy__())
-  dfg = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+  dfg_art = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
   
   
   unique_nodes = ["start", "end"]
-  unique_nodes = unique_nodes + list(set([node for edge in dfg.keys() for node in edge]) - {"start", "end"})
+  unique_nodes = unique_nodes + list(set([node for edge in dfg_art.keys() for node in edge]) - {"start", "end"})
   num_nodes = len(unique_nodes)
   
   # Initialize an empty adjacency matrix
   adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
 
   # Populate the adjacency matrix
-  for edge, count in dfg.items():
+  for edge, count in dfg_art.items():
       source_node, target_node = edge
       source_index = unique_nodes.index(source_node)
       target_index = unique_nodes.index(target_node)
@@ -47,6 +47,30 @@ def generate_adjacency_matrix_from_log(log):
   # print(unique_nodes)
   # print(adj_matrix)
   return unique_nodes, adj_matrix
+
+def generate_adjacency_matrix_from_dfg_art(dfg_art):
+  # log_art = artificial_start_end(log.__deepcopy__())
+  # dfg_art = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+  
+  
+  unique_nodes = ["start", "end"]
+  unique_nodes = unique_nodes + list(set([node for edge in dfg_art.keys() for node in edge]) - {"start", "end"})
+  num_nodes = len(unique_nodes)
+  
+  # Initialize an empty adjacency matrix
+  adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
+
+  # Populate the adjacency matrix
+  for edge, count in dfg_art.items():
+      source_node, target_node = edge
+      source_index = unique_nodes.index(source_node)
+      target_index = unique_nodes.index(target_node)
+      adj_matrix[source_index, target_index] = count
+  
+  # print(unique_nodes)
+  # print(adj_matrix)
+  return unique_nodes, adj_matrix
+
 
 def add_epsilon_to_matrix(adjacency_matrix, number_relevant_nodes):
     def add_epsilon(adjacency_matrix, epsilon, k):
@@ -103,6 +127,26 @@ def get_activity_count(log):
               activity_count[activity] += 1
           else:
               activity_count[activity] = 1
+  return activity_count
+
+def get_activity_count_from_dfg(dfg):
+  # Count the occurrences of each activity
+  activity_count = {}
+  for key, value in dfg.items():
+    if key[0] == "start":
+        if key[0] not in activity_count:
+            activity_count[key[0]] = value
+        else:
+            activity_count[key[0]] += value
+        if key[1] not in activity_count:
+            activity_count[key[1]] = value
+        else:
+            activity_count[key[1]] += value
+    else:
+        if key[1] not in activity_count:
+            activity_count[key[1]] = value
+        else:
+            activity_count[key[1]] += value
   return activity_count
 
 def get_activity_count_list_from_unique_list(activity_count, unique_node_list):
