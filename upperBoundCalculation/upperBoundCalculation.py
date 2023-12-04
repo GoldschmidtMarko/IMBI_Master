@@ -15,6 +15,7 @@ import pandas as pd
 from pyemd import emd,emd_with_flow
 from pyemd import emd_with_flow
 from enum import Enum
+from Levenshtein import distance as levenshtein_distance
 
 class ShorestModelPathEstimation(Enum):
     Worst_CASE_ALLOW_EMPTY_TRACE = 0
@@ -46,11 +47,15 @@ def levenshtein_distance_no_substitution(s1, s2):
   # The Levenshtein distance is the value in the bottom-right cell of the matrix
   return dp[len_s1][len_s2]
 
+def levenshtein_distance_no_substitution_import(s1, s2):
+  distance = levenshtein_distance(s1, s2,weights=(1,1,len(s1) + len(s2) + 1))
+  return distance
+
 def distance_array(trace_variants):
     array = np.zeros((len(trace_variants), len(trace_variants)))
     for i in range(len(trace_variants)):
         for j in range(len(trace_variants)):
-            array[i][j] = levenshtein_distance_no_substitution(trace_variants[i], trace_variants[j])
+            array[i][j] = levenshtein_distance_no_substitution_import(trace_variants[i], trace_variants[j])
     return array
 
 def emd_distance_pyemd(trace_frequency_1,trace_frequency_2,trace_variants):
@@ -239,7 +244,7 @@ def parse_result_emd(trace_variants,distamce_df_emd, relative_trace_dic_P, relat
 
 def get_align_uppper_bound_for_trace(trace1, trace2, shortest_model_estimation = {}):
   result = {}
-  distance = levenshtein_distance_no_substitution(trace1, trace2)
+  distance = levenshtein_distance_no_substitution_import(trace1, trace2)
   if len(shortest_model_estimation) == 0:
     shortest_model_estimation.update({ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:0})
   
@@ -337,7 +342,10 @@ def show_EMD_correctness():
   trace2 = ("Start","b", "c","End")
   distance = levenshtein_distance_no_substitution(trace1, trace2)
   print(trace1, " with distance", distance, " -> ", trace2)
+  distance = levenshtein_distance_no_substitution_import(trace1, trace2)
+  print(trace1, " with distance_import", distance, " -> ", trace2)
   print()
+  
   
   trace_variants = get_union_trace_variants(relative_trace_dic_P.keys(), relative_trace_dic_M.keys())
   trace_frequency_1 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_P)
@@ -401,8 +409,8 @@ if __name__ == '__main__':
   
   warnings.filterwarnings("ignore")
   
-  # show_EMD_correctness()
-  run_upper_bound_alignment()
+  show_EMD_correctness()
+  # run_upper_bound_alignment()
   # run_upper_bound_traces()
   
   

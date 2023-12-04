@@ -110,9 +110,9 @@ def apply_variants(variants, parameters=None):
 
 
 @deprecation.deprecated('2.2.10', '3.0.0', details='use newer IM implementation (IM_CLEAN)')
-def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
+def get_sub_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False, time_comparison = False):
     """
-    Apply the IM algorithm to a log obtaining a process tree
+    Apply the IM algorithm to a log obtaining a subtree
 
     Parameters
     ----------
@@ -125,8 +125,8 @@ def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = N
 
     Returns
     ----------
-    process_tree
-        Process tree
+    subtree
+        tree
     """
     if parameters is None:
         parameters = {}
@@ -153,15 +153,41 @@ def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = N
     activitiesp = attributes_get.get_attribute_values(logp, activity_key)
     start_activitiesp = list(start_activities_get.get_start_activities(logp, parameters=parameters).keys())
     end_activitiesp = list(end_activities_get.get_end_activities(logp, parameters=parameters).keys())
-    contains_empty_traces = False
-    traces_length = [len(trace) for trace in logp]
-    if traces_length:
-        contains_empty_traces = min([len(trace) for trace in logp]) == 0
 
     recursion_depth = 0
     sub = subtree.make_tree(logp,logm, dfgp, dfgp, dfgp, activitiesp, c, recursion_depth, 0.0, start_activitiesp,
                             end_activitiesp,
-                            start_activitiesp, end_activitiesp, parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn)
+                            start_activitiesp, end_activitiesp, parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn,time_comparison = time_comparison)
+    return sub
+
+@deprecation.deprecated('2.2.10', '3.0.0', details='use newer IM implementation (IM_CLEAN)')
+def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = None, cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn = False):
+    """
+    Apply the IM algorithm to a log obtaining a process tree
+
+    Parameters
+    ----------
+    log
+        Log
+    parameters
+        Parameters of the algorithm, including:
+            Parameters.ACTIVITY_KEY -> attribute of the log to use as activity name
+            (default concept:name)
+
+    Returns
+    ----------
+    process_tree
+        Process tree
+    """
+    if parameters is None:
+        parameters = {}
+
+    sub = get_sub_tree(logp,logm, parameters, sup= sup, ratio = ratio, size_par = size_par, cost_Variant=cost_Variant, use_gnn = use_gnn)
+    
+    contains_empty_traces = False
+    traces_length = [len(trace) for trace in logp]
+    if traces_length:
+        contains_empty_traces = min([len(trace) for trace in logp]) == 0
 
     process_tree = get_tree_repr_implain.get_repr(sub, 0, contains_empty_traces=contains_empty_traces)
     # Ensures consistency to the parent pointers in the process tree

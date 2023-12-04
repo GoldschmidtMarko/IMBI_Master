@@ -6,6 +6,7 @@ sys.path.append(root_path)
 
 import random
 from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
+from local_pm4py.algo.discovery.inductive.variants.im_bi.algorithm import get_sub_tree as get_sub_tree_imbi
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import threading
 import warnings
@@ -395,24 +396,25 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
     foundFiles = set()
     
     # cut_types = ["loop", "exc","par", "seq"]
-    pathFiles = {key: [] for key in cut_types}
+    pathFiles = {key: {} for key in cut_types}
     currentPath = dataPath
     if os.path.exists(dataPath):
       for cut_type in cut_types:
         currentPath = os.path.join(dataPath, cut_type)
-        continue_running = True
         dirs_and_files = []
-        if os.path.exists(currentPath) and continue_running:
+        if os.path.exists(currentPath):
           for root, _ , files in os.walk(currentPath):
             dirs_and_files.append((root, _, files))
           
           dirs_and_files.sort(reverse=True)
           for root, _, files in dirs_and_files:
-            if min_number_node_size <= get_last_Data_number(root) <= max_node_size:
+            node_number = get_last_Data_number(root)
+            if node_number in pathFiles[cut_type]:
+              if len(pathFiles[cut_type][node_number]) >= num_data_per_category:
+                continue
+            
+            if min_number_node_size <= node_number <= max_node_size:
               for file in files:
-                if not continue_running:
-                  break
-                
                 if file.endswith(".json"):
                   found_file = os.path.join(root, file)
                   if "treeP" in found_file:
@@ -426,11 +428,10 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
                   if os.path.exists(data_txt_file):   
                     if file_P not in foundFiles and file_M not in foundFiles:
                       data = read_data_from_text_path(data_txt_file)
-                      pathFiles[cut_type].append((file_P, file_M, data))
-                  if len(pathFiles[cut_type]) >= num_data_per_category:
-                    continue_running = False
-                    break
-
+                      if node_number not in pathFiles[cut_type]:
+                        pathFiles[cut_type].update({node_number:[(file_P, file_M, data)]})
+                      else:
+                        pathFiles[cut_type][node_number].append((file_P, file_M, data))
   else:
     pathFiles = []
     currentPath = dataPath
@@ -452,26 +453,38 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
                 
               if not is_string_present(file_P, pathFiles) and not is_string_present(file_M, pathFiles):
                 pathFiles.append((file_P, file_M))
+  
   if use_synthetic:
-    for key in pathFiles:
-      pathFiles[key] = sorted(pathFiles[key], key=lambda x: x[0], reverse=True)
+    pathFiles_result = {key: {} for key in cut_types}
+    for cut_type, dic_data_cut in pathFiles.items():
+      for node_size, dataList in dic_data_cut.items():
+        if min_number_node_size <= node_size <= max_node_size:
+          pathFiles_result[cut_type].update({node_size : dataList[:num_data_per_category]})
+  
+    for cut_type, dic_data_cut in pathFiles_result.items():
+      print("Cut type: " + cut_type)
+      for node_size, dataList in dic_data_cut.items():
+        print("Node size: " + str(node_size) + " Number of files: " + str(len(dataList)))
+      
 
-    for cut_type, dataList in pathFiles.items():
-      print("Data")
-      print("Cut type: " + cut_type + " Number of files: " + str(len(dataList)))
-
-    return pathFiles
+    return pathFiles_result
   else:
     print("Data")
     print("Number of files: " + str(len(pathFiles)))
     return pathFiles
   
   
-def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False):
-  pathFiles = get_data_paths(True, dataPath, max_node_size, num_data_per_category)
+def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False, consider_ratio = False):
+  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=num_data_per_category, min_number_node_size=0)
+  for cut_type, dataList_dic in pathFiles.items():
+    highest_key = 0
+    for node_size, dataList in dataList_dic.items():
+      highest_key = max(highest_key, node_size)
+    pathFiles[cut_type] = dataList_dic[highest_key]
 
   for cut_type, dataList in pathFiles.items():
     print("Running: " + cut_type)
+    print("Number of files: " + str(len(dataList)))
     if parallel:
       num_processors_available = multiprocessing.cpu_count()
       print("Number of available processors:", num_processors_available)
@@ -489,7 +502,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
       for i in range(num_processors):
           batch_data = dataList[offset:offset + batch_size]
           df_temp = create_df()
-          input_data.append((df_temp, cut_type, batch_data, [False, True]))
+          input_data.append((df_temp, cut_type, batch_data, [False, True], consider_ratio))
           offset += batch_size
           
       TIMEOUT_SECONDS = 60 * batch_size
@@ -536,7 +549,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
             
       print("Timeout percentage: " + str(number_timesouts/len(input_data)))
     else: 
-      df = run_evaluation_category(df, cut_type, dataList, using_gnn)
+      df = run_evaluation_category(df, cut_type, dataList, using_gnn, consider_ratio)
   
   return df
 
@@ -764,20 +777,19 @@ def run_evaluation_category(df, cut_type, dataList, using_gnn, consider_ratio):
       logM_name = data["logM"]
       
     else:
-      support = data[1]["Support"]
-      ratio = data[1]["Ratio"]
+      support = data[2]["Support"]
+      ratio = data[2]["Ratio"]
       
-      tree_path = data[0]
-      treeP = load_tree(tree_path)
-      logP = get_log_from_tree(treeP, data[1]["random_seed_P"])
-      logP_name = tree_path
+      tree_pathP = data[0]
+      treeP = load_tree(tree_pathP)
+      logP = get_log_from_tree(treeP, data[2]["random_seed_P"])
+      logP_name = tree_pathP
       
       if consider_ratio:
-        raise Exception("Not implemented")
-        treeMpath = data[0]
-        treeM = load_tree(tree_path)
-        logM = get_log_from_tree(treeP, data[1]["random_seed_P"])
-        logM_name = tree_path
+        treeMpath = data[1]
+        treeM = load_tree(treeMpath)
+        logM = get_log_from_tree(treeM, data[2]["random_seed_M"])
+        logM_name = treeMpath
     
     for use_gnn in using_gnn:
       try:
@@ -958,7 +970,8 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
     if progress == 0:
       using_gnn = [False, True]
       num_data_per_category = 50
-      df = run_evaluation_delta_synthetic(df, synthetic_path, num_data_per_category, using_gnn, max_node_size=8, parallel = True)
+      consider_ratio = True
+      df = run_evaluation_delta_synthetic(df, synthetic_path, num_data_per_category, using_gnn, max_node_size=8, parallel = True, consider_ratio = consider_ratio)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
     elif progress == 1:
@@ -1262,61 +1275,114 @@ def run_show_data():
           log = get_log_from_tree(tree, data[2]["random_seed_P"])
           save_dfg(log,os.path.join(data_path_csv, "file"))
           print("Saved dfg.\n")
-        
-def compare_gnn_time(logP,logM,support,ratio):
-  start_time = time.time()
-  use_gnn = False
-  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
-  time_no_gnn = time.time() - start_time
+     
+def get_partition_times_from_tree(subTree):
+  runtime_reachability = 0
+  runtime_gnn = 0
+  if subTree.time_measurement_partitioning_reachability != None:
+    runtime_reachability += subTree.time_measurement_partitioning_reachability
+  if subTree.time_measurement_partitioning_gnn != None:
+    runtime_gnn += subTree.time_measurement_partitioning_gnn
+  for child in subTree.children:
+    runtime_reachability_cur, runtime_gnn_cur = get_partition_times_from_tree(child)
+    runtime_reachability += runtime_reachability_cur
+    runtime_gnn += runtime_gnn_cur
+  return runtime_reachability, runtime_gnn
+      
+def compare_gnn_time_star(input_data):
+  return compare_gnn_time_artif(input_data)
   
-  use_gnn = True
-  start_time = time.time()
-  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
-  time_gnn = time.time() - start_time
-  return (time_no_gnn, time_gnn)
+def compare_gnn_time_single_data(logP,logM,support,ratio):
+  subTree = get_sub_tree_imbi(logp=logP, logm=logM,parameters=None, sup=support, ratio=ratio, size_par = len(logP)/len(logM),cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn=False, time_comparison=True)
+  time_reachability, time_gnn = get_partition_times_from_tree(subTree)
+  return time_reachability, time_gnn
   
-          
+def compare_gnn_time_artif(list_Data):
+  result_dict = {}
+  for dataPair in list_Data:
+    data = dataPair[2]
+    treeP = load_tree(dataPair[0])
+    treeM = load_tree(dataPair[1])
+    logP = get_log_from_tree(treeP, data["random_seed_P"])
+    logM = get_log_from_tree(treeM, data["random_seed_M"])
+    support = data["Support"]
+    ratio = data["Ratio"]
+    number_nodes = len(data["PartitionA"]) + len(data["PartitionB"])
+    subTree = get_sub_tree_imbi(logp=logP, logm=logM,parameters=None, sup=support, ratio=ratio, size_par = len(logP)/len(logM),cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn=False, time_comparison=True)
+    time_reachability, time_gnn = get_partition_times_from_tree(subTree)
+    
+    if number_nodes not in result_dict:
+      result_dict[number_nodes] = (time_reachability, time_gnn, 1)
+    else:
+      result_dict[number_nodes] = (result_dict[number_nodes][0] + time_reachability, result_dict[number_nodes][1] + time_gnn, result_dict[number_nodes][2] + 1)
+
+  
+  return result_dict
+  
+
   
 def run_time_comparison_artificial():
   data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
   dataDict = get_data_paths(True, data_path_synthetic,True,100, 100, 2)
   
-  total_time_no_gnn = 0
-  total_time_gnn = 0
-  runs = 1
-  totalRuns = 0
-  for dataList in dataDict.values():
-    totalRuns += len(dataList)
+  res_dict = {}
+  dataList = []
+  
+  for dataList_temp in dataDict.values():
+    for dataList_temp_per_node in dataList_temp.values():
+      dataList += dataList_temp_per_node
     
-  for dataList in dataDict.values():
-    for dataPair in dataList:
-      print("Run: " + str(runs) + "/" + str(totalRuns))
-      runs += 1
-      data = dataPair[2]
-      treeP = load_tree(dataPair[0])
-      treeM = load_tree(dataPair[1])
-      logP = get_log_from_tree(treeP, data["random_seed_P"])
-      logM = get_log_from_tree(treeM, data["random_seed_M"])
-      time_no_gnn, time_gnn = compare_gnn_time(logP,logM,data["Support"],data["Ratio"])
-      total_time_no_gnn += time_no_gnn
-      total_time_gnn += time_gnn
+    
+  num_processors_available = multiprocessing.cpu_count()
+  print("Number of available processors:", num_processors_available)
+  if num_processors_available > 20:
+    num_processors = max(1,round(num_processors_available))
+  else:
+    num_processors = max(1,round(num_processors_available/2))
+  print("Number of used processors:", num_processors)
+
+  batch_size = math.ceil(len(dataList) / num_processors)
+  input_data = []
+  
+  offset = 0
+  for i in range(num_processors):
+      batch_data = dataList[offset:offset + batch_size]
+      input_data.append(batch_data)
+      offset += batch_size
+
+
+  warnings.filterwarnings("ignore")
+  pool_res = None
+  with multiprocessing.Pool(num_processors) as pool:
+      pool_res = tqdm(pool.imap(compare_gnn_time_star, input_data),total=len(input_data))
       
-  print("Total time no gnn: " + str(total_time_no_gnn))
-  print("Total time gnn: " + str(total_time_gnn))
+      for pool_result_dic in pool_res:
+        for key, value in pool_result_dic.items():
+          if key not in res_dict:
+            res_dict[key] = value
+          else:
+            res_dict[key] = (res_dict[key][0] + value[0], res_dict[key][1] + value[1], res_dict[key][2] + value[2])
+      
+  for key, value in res_dict.items():
+    average_time_reachability = value[0]/value[2]
+    average_time_gnn = value[1]/value[2]
+    print("Number of nodes: " + str(key))
+    print("Average time_reachability: " + str(average_time_reachability))
+    print("Average time_gnn: " + str(average_time_gnn))
   
 
 
   
 def run_runtime_comparison():
   data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
-  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
+  # data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
   pathFiles = get_data_paths(False, data_path_real, consider_ratio=True)
   for files in pathFiles:
     logP = get_log(files[0])
     logM = get_log(files[1])
     support = 0.3
     ratio = 1
-    time_no_gnn, time_gnn = compare_gnn_time(logP,logM,support,ratio)
+    time_no_gnn, time_gnn = compare_gnn_time_single_data(logP,logM,support,ratio)
     print("Time no gnn: " + str(time_no_gnn))
     print("Time gnn: " + str(time_gnn))
   

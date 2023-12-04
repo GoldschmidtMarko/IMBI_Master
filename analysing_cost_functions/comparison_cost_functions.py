@@ -33,6 +33,7 @@ import multiprocessing
 from tqdm import tqdm
 import upperBoundCalculation.upperBoundCalculation as ubc
 from matplotlib.lines import Line2D
+import shutil
 
 def get_original_log_paths(subString):
   pathP, pathM = get_data_paths()
@@ -748,6 +749,46 @@ def run_comparison(csv_filename, result_path, parallel = True):
     save_df(df, os.path.join(result_path,csv_filename))
     return df
   
+def save_petri_nets(df, result_path):
+  folder = "petri_nets"
+  folder_path = os.path.join(result_path,folder)
+  if not os.path.exists(folder_path):
+    os.mkdir(folder_path)
+  else:
+    shutil.rmtree(folder_path)
+    os.mkdir(folder_path)
+    
+  warnings.filterwarnings("ignore")
+  
+  for i in range(0,len(df.index)):
+    net = df.iloc[i]['net']
+    im = df.iloc[i]['im']
+    fm = df.iloc[i]['fm']
+    logPName = df.iloc[i]['logP_Name']
+    logMName = df.iloc[i]['logM_Name']
+    dataFolderName = logPName[:logPName.rfind(".")]
+    if not os.path.exists(os.path.join(folder_path, dataFolderName)):
+      os.mkdir(os.path.join(folder_path, dataFolderName))
+    
+    im_bi_sup = df.iloc[i]['im_bi_sup']
+    im_bi_ratio = df.iloc[i]['im_bi_ratio']
+    df_Variant = df.iloc[i]['miner']
+    if df_Variant == "IMbi_freq":
+      cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+    elif df_Variant == "IMbi_rel":
+      cost_Variant = custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE
+    elif df_Variant == "IMbi_aprox":
+      cost_Variant = custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE
+    
+    full_name_logP = get_original_log_paths(logPName)
+    full_name_logM = get_original_log_paths(logMName)
+    parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
+    logP = xes_importer.apply(full_name_logP, parameters = parameter)
+    logM = xes_importer.apply(full_name_logM, parameters = parameter)
+    
+    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=im_bi_sup, ratio=im_bi_ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant)
+    save_vis_petri_net(net,im,fm,os.path.join(folder_path, dataFolderName, "pr_" + df_Variant + "_"  + logPName + "_" + logMName + "_sup_"+ str(im_bi_sup) + "_ratio_"+ str(im_bi_ratio) + ".png"))
+  
 def get_comparison_df(csv_filename, result_path):
   if not os.path.exists(os.path.join(result_path,csv_filename)):
     df = run_comparison(csv_filename, result_path)
@@ -756,7 +797,9 @@ def get_comparison_df(csv_filename, result_path):
     
   displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
   df = filter_df_for_best_models(df)
+  save_petri_nets(df, result_path)
   displayDoubleLogSplitSingleBest(df, saveFig=True, file_path=result_path)
+  
   return df
    
 def filter_and_sort_dataframe(df, number_rows, get_mar_improved = True):
