@@ -140,11 +140,12 @@ def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "
     "im_bi_sup" : im_bi_sup,
     "im_bi_ratio" : im_bi_ratio,
     "use_gnn" : use_gnn,
-    # "acc_logs": mes['acc'],
-    "fitP" : mes['fitP'],
+    "acc_align": mes['acc'],
+    "acc_trace": mes['acc_perf'],
+    # "fitP" : mes['fitP'],
     # "fitM" : mes['fitM'],
     # "f1_fit_logs": mes['F1'],
-    "precision" : mes['precision'],
+    "precP" : mes['precision'],
     "net": net,
     "im" : im,
     "fm" : fm
@@ -259,7 +260,7 @@ def displayDoubleLog(df, saveFig = False):
     fig.savefig("plot" + ".pdf")
     
 def create_df():
-  columns = ["miner", "logP_Name", "logM_Name","imf_noise_thr","hm_depen_thr","im_bi_sup","im_bi_ratio", "use_gnn","acc_logs", "fitP", "fitM", "f1_fit_logs", "precision", "net", "im", "fm"]
+  columns = ["miner", "logP_Name", "logM_Name","imf_noise_thr","hm_depen_thr","im_bi_sup","im_bi_ratio", "use_gnn","acc_align","cut_type", "acc_trace", "precP", "net", "im", "fm"]
 
   df = pd.DataFrame(data=None, index=None, columns=columns, dtype=None, copy=None)
   df['use_gnn'] = df['use_gnn'].astype(bool)
@@ -463,8 +464,11 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
   
     for cut_type, dic_data_cut in pathFiles_result.items():
       print("Cut type: " + cut_type)
+      outputText = ""
+      print("|Nodesize : Number of files|")
       for node_size, dataList in dic_data_cut.items():
-        print("Node size: " + str(node_size) + " Number of files: " + str(len(dataList)))
+        outputText += " |" + str(node_size) + " : " + str(len(dataList)) + "| "
+      print(outputText)
       
 
     return pathFiles_result
@@ -481,8 +485,17 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
     for node_size, dataList in dataList_dic.items():
       highest_key = max(highest_key, node_size)
     pathFiles[cut_type] = dataList_dic[highest_key]
+   
+  aggregated_data_list = {}
+  for cut_type, dataList_dic in pathFiles.items():
+    if "" not in aggregated_data_list:
+      aggregated_data_list.update({"" : dataList_dic})
+    else:
+      aggregated_data_list[""].extend(dataList_dic)
+      
+  # print("aggregated_data_list: " + str(len(aggregated_data_list[""])))
 
-  for cut_type, dataList in pathFiles.items():
+  for cut_type, dataList in aggregated_data_list.items():
     print("Running: " + cut_type)
     print("Number of files: " + str(len(dataList)))
     if parallel:
@@ -505,7 +518,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
           input_data.append((df_temp, cut_type, batch_data, [False, True], consider_ratio))
           offset += batch_size
           
-      TIMEOUT_SECONDS = 60 * batch_size
+      TIMEOUT_SECONDS = 60 * batch_size * 4 * 10
       # TIMEOUT_SECONDS = 60 * 10
       print("Timeout: " + str(TIMEOUT_SECONDS))
       
@@ -815,13 +828,15 @@ def get_measurement_delta(df, columnList, column_feature):
   # print(columnList)
   
   def custom_agg(group):
-    precision_diff = group.loc[group['use_gnn'] == False, 'precision'].mean() - \
-                    group.loc[group['use_gnn'] == True, 'precision'].mean()
+    precision_diff = group.loc[group['use_gnn'] == False, 'precP'].mean() - \
+                    group.loc[group['use_gnn'] == True, 'precP'].mean()
 
-    fitP_diff = group.loc[group['use_gnn'] == False, 'fitP'].mean() - \
-                group.loc[group['use_gnn'] == True, 'fitP'].mean()
+    acc_align_diff = group.loc[group['use_gnn'] == False, 'acc_align'].mean() - \
+                group.loc[group['use_gnn'] == True, 'acc_align'].mean()
+    acc_trace_diff = group.loc[group['use_gnn'] == False, 'acc_trace'].mean() - \
+                group.loc[group['use_gnn'] == True, 'acc_trace'].mean()
 
-    return pd.Series({'precision': precision_diff, 'fitP': fitP_diff})
+    return pd.Series({'precP': precision_diff, 'acc_align': acc_align_diff, 'acc_trace': acc_trace_diff})
 
   # Apply the custom aggregation function and reset the index
   df_measurement = df.groupby(columnList).apply(custom_agg).reset_index()
@@ -1008,8 +1023,8 @@ def run_comparison():
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = False
-    column_feature = ["precision","fitP"]
+    use_synthetic = True
+    column_feature = ["precP","acc_align", "acc_trace"]
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
     column_prefix = "Δ "
@@ -1290,14 +1305,14 @@ def get_partition_times_from_tree(subTree):
   return runtime_reachability, runtime_gnn
       
 def compare_gnn_time_star(input_data):
-  return compare_gnn_time_artif(input_data)
+  return compare_gnn_time_artif_list(input_data)
   
 def compare_gnn_time_single_data(logP,logM,support,ratio):
   subTree = get_sub_tree_imbi(logp=logP, logm=logM,parameters=None, sup=support, ratio=ratio, size_par = len(logP)/len(logM),cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn=False, time_comparison=True)
   time_reachability, time_gnn = get_partition_times_from_tree(subTree)
   return time_reachability, time_gnn
   
-def compare_gnn_time_artif(list_Data):
+def compare_gnn_time_artif_list(list_Data):
   result_dict = {}
   for dataPair in list_Data:
     data = dataPair[2]
@@ -1319,11 +1334,33 @@ def compare_gnn_time_artif(list_Data):
   
   return result_dict
   
+  
+def compare_gnn_time_artif(dataPair):
+  result_dict = {}
+  data = dataPair[2]
+  treeP = load_tree(dataPair[0])
+  treeM = load_tree(dataPair[1])
+  logP = get_log_from_tree(treeP, data["random_seed_P"])
+  logM = get_log_from_tree(treeM, data["random_seed_M"])
+  support = data["Support"]
+  ratio = data["Ratio"]
+  number_nodes = len(data["PartitionA"]) + len(data["PartitionB"])
+  print("Running for process id " + str(os.getpid()) + " and number_nodes " + str(number_nodes))
+  subTree = get_sub_tree_imbi(logp=logP, logm=logM,parameters=None, sup=support, ratio=ratio, size_par = len(logP)/len(logM),cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn=False, time_comparison=True)
+  time_reachability, time_gnn = get_partition_times_from_tree(subTree)
+  
+  if number_nodes not in result_dict:
+    result_dict[number_nodes] = (time_reachability, time_gnn, 1)
+  else:
+    result_dict[number_nodes] = (result_dict[number_nodes][0] + time_reachability, result_dict[number_nodes][1] + time_gnn, result_dict[number_nodes][2] + 1)
+
+  return result_dict
 
   
 def run_time_comparison_artificial():
+  start_time = time.time()
   data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
-  dataDict = get_data_paths(True, data_path_synthetic,True,100, 100, 2)
+  dataDict = get_data_paths(True, data_path_synthetic,True,8, 50, 2)
   
   res_dict = {}
   dataList = []
@@ -1331,8 +1368,8 @@ def run_time_comparison_artificial():
   for dataList_temp in dataDict.values():
     for dataList_temp_per_node in dataList_temp.values():
       dataList += dataList_temp_per_node
-    
-    
+      
+
   num_processors_available = multiprocessing.cpu_count()
   print("Number of available processors:", num_processors_available)
   if num_processors_available > 20:
@@ -1350,18 +1387,19 @@ def run_time_comparison_artificial():
       input_data.append(batch_data)
       offset += batch_size
 
+  input_data = dataList
 
   warnings.filterwarnings("ignore")
   pool_res = None
+  #pool_res = tqdm(pool.imap(compare_gnn_time_star, input_data),total=len(input_data))
   with multiprocessing.Pool(num_processors) as pool:
-      pool_res = tqdm(pool.imap(compare_gnn_time_star, input_data),total=len(input_data))
-      
-      for pool_result_dic in pool_res:
-        for key, value in pool_result_dic.items():
-          if key not in res_dict:
-            res_dict[key] = value
-          else:
-            res_dict[key] = (res_dict[key][0] + value[0], res_dict[key][1] + value[1], res_dict[key][2] + value[2])
+    pool_res = tqdm(pool.imap(compare_gnn_time_artif, input_data),total=len(input_data))
+    for pool_result_dic in pool_res:
+      for key, value in pool_result_dic.items():
+        if key not in res_dict:
+          res_dict[key] = value
+        else:
+          res_dict[key] = (res_dict[key][0] + value[0], res_dict[key][1] + value[1], res_dict[key][2] + value[2])
       
   for key, value in res_dict.items():
     average_time_reachability = value[0]/value[2]
@@ -1370,6 +1408,7 @@ def run_time_comparison_artificial():
     print("Average time_reachability: " + str(average_time_reachability))
     print("Average time_gnn: " + str(average_time_gnn))
   
+  print("Time elapsed: " + str(time.time() - start_time) + " seconds")
 
 
   
@@ -1388,9 +1427,9 @@ def run_runtime_comparison():
   
   
 if __name__ == '__main__':
-  run_time_comparison_artificial()
+  # run_time_comparison_artificial()
   # run_runtime_comparison()
-  # run_comparison()
+  run_comparison()
   # run_show_data()
   # manual_run()
   
