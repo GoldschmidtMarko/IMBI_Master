@@ -479,11 +479,12 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
   
   
 def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False, consider_ratio = False):
-  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=num_data_per_category, min_number_node_size=0)
+  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=3, min_number_node_size=0)
   for cut_type, dataList_dic in pathFiles.items():
     highest_key = 0
     for node_size, dataList in dataList_dic.items():
       highest_key = max(highest_key, node_size)
+    print("Choose: " + str(highest_key) + " for " + cut_type)
     pathFiles[cut_type] = dataList_dic[highest_key]
    
   aggregated_data_list = {}
@@ -861,7 +862,7 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
   y_max = df_measurement[column_feature].max().max()
   if use_synthetic:
     df_grouped = df_measurement.groupby("cut_type")
-    number_columns = 4
+    number_columns = df_grouped.ngroups
   else:
     df_grouped = df_measurement.groupby("logP_Name")
     number_columns = df_grouped.ngroups
@@ -873,13 +874,15 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     
   fig, axes = plt.subplots(nrows=1, ncols=number_columns, figsize=(16, 10))
   fig.suptitle(title, fontproperties=custom_font_bold)
-  
+  # Ensure axes is always an array
+  axes = np.atleast_1d(axes)
 
 
   for i, (cut_type, group) in enumerate(df_grouped):
     ax = axes[i]  # Select the specific axis for this subplot
     if use_synthetic:
-      ax.set_title("Data folder: " + str(cut_type) + "\nDatasize: " + str(len(group)))  # Set title for the subplot
+      a = 3
+      # ax.set_title("Data folder: " + str(cut_type) + "\nDatasize: " + str(len(group)))  # Set title for the subplot
     else:
       ax.set_title("Data P: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nData M: " + str(os.path.basename(group.logM_Name.iloc[0])) + "\nDatasize: " + str(len(group)), fontproperties=custom_font)  # Set title for the subplot
     ax.set_ylabel("Delta percentage", fontproperties=custom_font)  # Set ylabel for the subplot
@@ -894,6 +897,9 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
                         capprops={'linewidth': 2},
                         whiskerprops={'linewidth': 2},
                         medianprops={'color': 'orange', 'linewidth': 2})
+      
+      # Add label on top of each boxplot
+      ax.text(j, group[col].max() + 0.01 * (group[col].max() - group[col].min()), 'n=' + str(len(group)), ha='center', va='bottom', color='black', fontproperties=custom_font)
       
       # Modify x-axis tick labels
       x_ticks.append(j)
@@ -1032,13 +1038,13 @@ def run_comparison():
       df = get_dataframe_delta(data_path_csv, synthetic_path=data_path_synthetic) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
       
-      output_path = os.path.join(data_path_csv, "df_delta_measurement_synthetic.png")
+      output_path = os.path.join(data_path_csv, "df_delta_measurement_synthetic.pdf")
       visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, output_path)
     else:
       df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
       
-      output_path = os.path.join(data_path_csv, "df_delta_measurement_real.png")
+      output_path = os.path.join(data_path_csv, "df_delta_measurement_real.pdf")
       visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, output_path)
       
   trace_variant_measurement = False
