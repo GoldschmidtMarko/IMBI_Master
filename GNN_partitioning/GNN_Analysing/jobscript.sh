@@ -2,7 +2,7 @@
 
 ### Ask for 10 GB memory
 #SBATCH --mem=10G
-#SBATCH --time=3:00:00
+#SBATCH --time=24:00:00
 
 ### Name the job
 #SBATCH --job-name=GNN-Data-Generation
@@ -19,4 +19,4 @@ export PATH="$CONDA_ROOT/bin:$PATH"
 conda activate base
 
 ### Begin of executable commands
-python -u ./comparison_synthetic_data.py
+python -u ./comparison_gnn.py

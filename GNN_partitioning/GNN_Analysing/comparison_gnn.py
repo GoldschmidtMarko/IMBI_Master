@@ -8,6 +8,7 @@ import random
 from local_pm4py.algo.discovery.inductive import algorithm as inductive_miner
 from local_pm4py.algo.discovery.inductive.variants.im_bi.algorithm import get_sub_tree as get_sub_tree_imbi
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from concurrent.futures import ProcessPoolExecutor, TimeoutError
 import threading
 import warnings
 import json
@@ -479,7 +480,7 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
   
   
 def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False, consider_ratio = False):
-  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=3, min_number_node_size=0)
+  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=2500, min_number_node_size=0)
   for cut_type, dataList_dic in pathFiles.items():
     highest_key = 0
     for node_size, dataList in dataList_dic.items():
@@ -510,49 +511,38 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
 
 
       batch_size = math.ceil(len(dataList) / num_processors)
-      # batch_size = 1
+      batch_size = 1
       input_data = []
       offset = 0
-      for i in range(num_processors):
+      for i in range(math.ceil(len(dataList) / batch_size)):
           batch_data = dataList[offset:offset + batch_size]
           df_temp = create_df()
           input_data.append((df_temp, cut_type, batch_data, [False, True], consider_ratio))
           offset += batch_size
           
-      TIMEOUT_SECONDS = 60 * batch_size * 4 * 10
-      # TIMEOUT_SECONDS = 60 * 10
+      TIMEOUT_SECONDS = 60 * batch_size * 3
       print("Timeout: " + str(TIMEOUT_SECONDS))
       
       pool_res = []
-      '''
-      pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
-      '''
       number_timesouts = 0
       futures = []
-      progress_bar = None
-      
-      # with ThreadPoolExecutor(max_workers=num_processors) as executor:
+      print("Number of input_data: " + str(len(input_data)))
+      progress_bar = tqdm(total=len(futures), desc="Processing", unit=" future")
       with ProcessPool(max_workers=num_processors) as pool:
-        
         futures = [pool.schedule(run_evaluation_category_star, args=(one,), timeout=TIMEOUT_SECONDS) for one in input_data]
-        # futures = [executor.submit(run_with_timeout, run_evaluation_category_star, (one,), TIMEOUT_SECONDS) for one in input_data]
         
-        # Create a tqdm progress bar to track the progress of futures
-        progress_bar = tqdm(total=len(futures), desc="Processing", unit="future")
-
-        
-      for future in futures:
-        try:
-          result = future.result()
-          pool_res.append(result)
-        except TimeoutError:
-          number_timesouts += 1
-        except Exception as exc:
-          import traceback
-          traceback.print_exc()  # Print the full traceback
-          print('%r generated an exception: %s' % (future, exc))
-          number_timesouts += 1
-        progress_bar.update(1)
+        for future in futures:
+          try:
+            result = future.result()
+            pool_res.append(result)
+          except TimeoutError:
+            number_timesouts += 1
+          except Exception as exc:
+            import traceback
+            traceback.print_exc()  # Print the full traceback
+            print('%r generated an exception: %s' % (future, exc))
+            number_timesouts += 1
+          progress_bar.update(1)
 
       # Close the progress bar after the loop finishes
       progress_bar.close()
@@ -812,6 +802,7 @@ def run_evaluation_category(df, cut_type, dataList, using_gnn, consider_ratio):
         import traceback
         traceback.print_exc()  # Print the full traceback
         print('%r generated an exception: %s' % (exc))
+    # print("ProcessorID done: " + str(os.getpid()))
   return df
 
 def get_measurement_delta(df, columnList, column_feature):
