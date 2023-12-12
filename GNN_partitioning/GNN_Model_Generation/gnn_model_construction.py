@@ -1028,7 +1028,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 10 - k dense with adj and weight
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
-    model_number = 13
+    model_number = 14
     cut_types = ["loop", "seq", "par", "exc"]
     # cut_types = ["seq", "loop"]
     num_epochs = 15

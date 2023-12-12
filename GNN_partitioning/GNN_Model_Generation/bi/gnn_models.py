@@ -648,6 +648,97 @@ def generate_Model_V13(input_dim, node_features, global_features, hidden_dim, ou
     
     return model
 
+# GCN with global variables weight matrix, and 2 graph convolution layers
+def generate_Model_V14(input_dim, node_features, global_features, hidden_dim, output_dim):
+    class GraphConvolutionLayer(nn.Module):
+        def __init__(self, node_features, global_features, out_features):
+            super(GraphConvolutionLayer, self).__init__()
+            self.linear = nn.Linear(2 * node_features + global_features, out_features)
+
+        def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
+            # First graph convolution
+            undirected_weight_matrix_1 = weight_matrix_1 + weight_matrix_1.t()
+            
+            output_conv_P = torch.matmul(undirected_weight_matrix_1, features_P)
+            
+            undirected_weight_matrix_2 = weight_matrix_2 + weight_matrix_2.t()
+            # Second graph convolution
+            output_conv_M = torch.matmul(undirected_weight_matrix_2, features_M)
+
+            # output = output_conv_P + output_conv_M
+            output = torch.cat((output_conv_P, output_conv_M), dim=1)
+            output = torch.cat((output, global_variables), dim=1)
+            
+            # n x (2*node_features + global variables)
+            output = self.linear(output)
+            
+            return output
+    
+    class SelfAttentionGCNLayer(nn.Module):
+        def __init__(self, in_features, out_features):
+            super(SelfAttentionGCNLayer, self).__init__()
+            self.in_features = in_features
+            self.out_features = out_features
+
+            self.W = nn.Parameter(torch.Tensor(in_features, out_features))
+            self.b = nn.Parameter(torch.Tensor(out_features))
+
+            nn.init.xavier_uniform_(self.W)
+            nn.init.zeros_(self.b)
+
+        def forward(self, node_features, weighted_adjacency_matrix):
+            """
+            node_features: Node feature matrix of shape (num_nodes, in_features)
+            weighted_adjacency_matrix: Weighted adjacency matrix of shape (num_nodes, num_nodes)
+            """
+            # Compute self-attention scores
+            attention_scores = torch.matmul(node_features, self.W) + self.b
+
+            # Compute attention weights using softmax
+            attention_weights = nn.functional.softmax(attention_scores, dim=1)
+
+            # Apply attention weights to input node features
+            updated_features = torch.matmul(weighted_adjacency_matrix, attention_weights)
+
+            return updated_features
+    
+    class GCNClassifier(nn.Module):
+        def __init__(self, input_dim,  node_Features, global_features, hidden_dim, output_dim):
+            super(GCNClassifier, self).__init__()
+            self.gc1 = GraphConvolutionLayer(node_Features, global_features, hidden_dim)
+            self.gc2 = GraphConvolutionLayer(hidden_dim, global_features, hidden_dim)
+            self.attention = SelfAttentionGCNLayer(hidden_dim, hidden_dim)
+            self.gcEnd = GraphConvolutionLayer(hidden_dim, global_features, output_dim)
+            self.global_attention = nn.Linear(hidden_dim, 1)
+            self.final_linear = nn.Linear(hidden_dim + input_dim, output_dim)
+
+
+        def forward(self, weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables):
+            hidden = F.relu(self.gc1(weight_matrix_1, weight_matrix_2, features_P, features_M, global_variables))
+            # splitIndex = int(hidden.shape[1]/2)
+            # hidden_left = hidden[:, :splitIndex]
+            # hidden_right = hidden[:, splitIndex:]
+            hidden = F.relu(self.gc2(weight_matrix_1, weight_matrix_2, hidden, hidden, global_variables))
+            
+            # Global attention mechanism
+            # hidden = (N x hidden_dim)
+            # global_attention_weights = (N x 1)
+            
+            global_attention_weights = torch.softmax(self.global_attention(hidden), dim=0)
+            global_embedding = torch.sum(global_attention_weights * hidden, dim=1)
+            # (N x 1)
+
+            global_embedding = global_embedding.unsqueeze(0).repeat(hidden.shape[0], 1)  # Repeat for all nodes
+
+            combined = torch.cat([hidden, global_embedding], dim=1)
+            
+            output = self.final_linear(combined)
+            return output
+    
+    # Create the GNN classifier model  
+    model = GCNClassifier(input_dim, node_features, global_features, hidden_dim, output_dim)
+    
+    return model
 
 
 def generate_model(model_args):
@@ -684,6 +775,8 @@ def generate_model(model_args):
         return generate_Model_V12(node_features, global_features, hidden_dim, output_dim)
     elif model_number == 13:
         return generate_Model_V13(input_dim, node_features, global_features, hidden_dim, output_dim)
+    elif model_number == 14:
+        return generate_Model_V14(input_dim, node_features, global_features, hidden_dim, output_dim)
     
 def generate_model_from_args(model_args):
     return generate_model(model_args)
@@ -791,6 +884,9 @@ def get_model_outcome(model_number, model, data):
         node_degree_P, node_degree_M = get_node_degree(torch_matrix_P, torch_matrix_M)
         return model(torch_matrix_P, torch_matrix_M, node_degree_P, node_degree_M, global_feature)
     elif model_number == 13:
+        node_degree_P, node_degree_M = get_node_degree(torch_matrix_P, torch_matrix_M)
+        return model(torch_matrix_P, torch_matrix_M, node_degree_P, node_degree_M, global_feature)
+    elif model_number == 14:
         node_degree_P, node_degree_M = get_node_degree(torch_matrix_P, torch_matrix_M)
         return model(torch_matrix_P, torch_matrix_M, node_degree_P, node_degree_M, global_feature)
    
