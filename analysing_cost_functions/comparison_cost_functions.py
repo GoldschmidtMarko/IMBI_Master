@@ -464,7 +464,7 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
     ub_trace = None
     
     if logP_name_org != None and logM_name_org != None:
-      ubs_align = ubc.run_upper_bound_align_on_logs(logP_name_org, logM_name_org)
+      ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
       ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
     
 
@@ -567,7 +567,7 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
     ub_trace = None
     
     if use_upper_bound and logP_name_org != None and logM_name_org != None:
-      ubs_align = ubc.run_upper_bound_align_on_logs(logP_name_org, logM_name_org)
+      ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
       ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
       
     axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + " LogM: " + logM_name)

@@ -11,9 +11,7 @@ from pm4py.objects.log import obj as log_instance
 from pm4py.objects.log.obj import EventLog
 import warnings
 import numpy as np
-import pandas as pd
-from pyemd import emd,emd_with_flow
-from pyemd import emd_with_flow
+import ot 
 from enum import Enum
 from Levenshtein import distance as levenshtein_distance
 
@@ -51,26 +49,41 @@ def levenshtein_distance_no_substitution_import(s1, s2):
   distance = levenshtein_distance(s1, s2,weights=(1,1,len(s1) + len(s2) + 1))
   return distance
 
-def distance_array(trace_variants):
+def get_distance_matrix_edit_distance(trace_variants):
     array = np.zeros((len(trace_variants), len(trace_variants)))
     for i in range(len(trace_variants)):
         for j in range(len(trace_variants)):
             array[i][j] = levenshtein_distance_no_substitution_import(trace_variants[i], trace_variants[j])
     return array
 
-def emd_distance_pyemd(trace_frequency_1,trace_frequency_2,trace_variants):
+def get_distance_matrix_upper_bound(trace_variants,set_traces_P, set_traces_M, shortest_model_estimation):
+  array = {}
+  for key in shortest_model_estimation.keys():
+    array[key] = np.zeros((len(trace_variants), len(trace_variants)))
+
+  for i in range(len(trace_variants)):
+    for j in range(len(trace_variants)):
+      res_upper_bound = {}
+      if trace_variants[i] in set_traces_P and trace_variants[j] in set_traces_M:
+        res_upper_bound = get_align_uppper_bound_for_trace(trace_variants[i], trace_variants[j], shortest_model_estimation)
+      elif trace_variants[i] in set_traces_M and trace_variants[j] in set_traces_P:
+        res_upper_bound = get_align_uppper_bound_for_trace(trace_variants[j], trace_variants[i], shortest_model_estimation)
+      else:
+        for key in shortest_model_estimation.keys():
+          res_upper_bound[key] = 0
+        
+      for key, value in res_upper_bound.items():
+        array[key][i][j] = value
+  return array
+  
+def emd_distance_pyemd(trace_frequency_1,trace_frequency_2, distance_matrix):
     trace_frequency_1 = np.array(trace_frequency_1)
     trace_frequency_2 = np.array(trace_frequency_2)
-
-    array = distance_array(trace_variants)
-
-    cost_lp = emd(trace_frequency_1, trace_frequency_2, array)
-
-    x = emd_with_flow(trace_frequency_1, trace_frequency_2, array)
-    distamce_df_emd = pd.DataFrame(x[1])
-    if cost_lp > 1:
-        cost_lp = 1
-    return cost_lp, distamce_df_emd
+  
+    transport_plan  = ot.emd(trace_frequency_1, trace_frequency_2, distance_matrix, numThreads=4, numItermax=1000000)
+    total_transport_cost = np.sum(transport_plan * distance_matrix)
+    #return cost_lp, distamce_df_emd
+    return total_transport_cost, transport_plan
 
 def artificial_start_end(log):
     st = 'start'
@@ -233,13 +246,17 @@ def parse_result_emd(trace_variants,distamce_df_emd, relative_trace_dic_P, relat
   for i in range(matrix_length):
     if trace_variants[i] in relative_trace_dic_P:
       for j in range(matrix_length):
-        if distamce_df_emd[i][j] > 0:
-          result.append(((trace_variants[i], trace_variants[j]),distamce_df_emd[i][j]))
-    elif trace_variants[i] in relative_trace_dic_M:
+        if trace_variants[j] in relative_trace_dic_M:
+          if distamce_df_emd[i][j] > 0:
+            result.append(((trace_variants[i], trace_variants[j]),distamce_df_emd[i][j]))
+        else:
+          if distamce_df_emd[i][j] > 0:
+            raise Exception("Wrong flow")
+    else:
       for j in range(matrix_length):
         if distamce_df_emd[i][j] > 0:
-          result.append(((trace_variants[j], trace_variants[i]),distamce_df_emd[i][j]))
-          
+          raise Exception("Wrong flow")
+
   return result
 
 def get_align_uppper_bound_for_trace(trace1, trace2, shortest_model_estimation = {}):
@@ -273,8 +290,7 @@ def get_align_uppper_bound_for_trace(trace1, trace2, shortest_model_estimation =
       # -2 because of artificial start and end
       denominator = len(trace2) - 2 + gamma
       
-    if nominator > denominator:
-       nominator = min(nominator, denominator)
+    nominator = min(nominator, denominator)
       
     result[estimate] = nominator / denominator
 
@@ -286,8 +302,7 @@ def print_result(result):
     print(result[i][0][0], " with ", result[i][1], " -> ", result[i][0][1])
   print()
 
-def run_upper_bound_align_on_logs(log_P_path, log_m_path, shortest_model_estimation = {}):
-  print("Loading logs")
+def run_upper_bound_align_on_logs_edit_distance(log_P_path, log_m_path, shortest_model_estimation = {}):
   log_P = load_log(log_P_path)
   log_M = load_log(log_m_path)
   log_P_art = artificial_start_end(log_P.__deepcopy__())
@@ -298,11 +313,13 @@ def run_upper_bound_align_on_logs(log_P_path, log_m_path, shortest_model_estimat
   relative_trace_dic_M = get_relative_traces_from_log(log_M_art)
   
   trace_variants = get_union_trace_variants(relative_trace_dic_P.keys(), relative_trace_dic_M.keys())
+  
   trace_frequency_1 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_P)
   trace_frequency_2 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_M)
   
-  print("Running EMD calculation")
-  _, distamce_df_emd = emd_distance_pyemd(trace_frequency_1,trace_frequency_2,trace_variants)
+  distance_matrix = get_distance_matrix_edit_distance(trace_variants)
+  
+  _, distamce_df_emd = emd_distance_pyemd(trace_frequency_1,trace_frequency_2,distance_matrix)
   
   result_emd = parse_result_emd(trace_variants, distamce_df_emd, relative_trace_dic_P, relative_trace_dic_M)
 
@@ -313,8 +330,6 @@ def run_upper_bound_align_on_logs(log_P_path, log_m_path, shortest_model_estimat
     longest_prefix = get_longest_prefix(log_P)
     shortest_model_estimation[ShorestModelPathEstimation.ALLOW_LONGEST_PREFIX] = longest_prefix
     
-
-  print("Running align upper bound calculation")
   result = {}
   for (trace1, trace2), distance in result_emd:
     res_estimates_t1_t2 = get_align_uppper_bound_for_trace(trace1, trace2, shortest_model_estimation)
@@ -326,6 +341,40 @@ def run_upper_bound_align_on_logs(log_P_path, log_m_path, shortest_model_estimat
         
   return result
     
+# Current state of the art upper bound calculation
+def run_upper_bound_align_on_logs_upper_bound_trace_distance(log_P_path, log_m_path, shortest_model_estimation = {}):
+  # Data preparation
+  log_P = load_log(log_P_path)
+  log_M = load_log(log_m_path)
+  log_P_art = artificial_start_end(log_P.__deepcopy__())
+  log_M_art = artificial_start_end(log_M.__deepcopy__())
+  
+  
+  relative_trace_dic_P = get_relative_traces_from_log(log_P_art)
+  relative_trace_dic_M = get_relative_traces_from_log(log_M_art)
+  
+  trace_variants = get_union_trace_variants(relative_trace_dic_P.keys(), relative_trace_dic_M.keys())
+  
+  trace_frequency_1 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_P)
+  trace_frequency_2 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_M)
+  
+  # Create distance matrix
+  if len(shortest_model_estimation) == 0:
+    shortest_model_estimation[ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE] = 0
+    min_trace_length = get_min_trace_length_from_log(log_P)
+    shortest_model_estimation[ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH] = min_trace_length
+    longest_prefix = get_longest_prefix(log_P)
+    shortest_model_estimation[ShorestModelPathEstimation.ALLOW_LONGEST_PREFIX] = longest_prefix
+    
+  distances_matrix_upper_bound = get_distance_matrix_upper_bound(trace_variants,set(relative_trace_dic_P.keys()),set(relative_trace_dic_M.keys()), shortest_model_estimation)
+  
+  upper_bound_result_dict = {}
+  for estimation, distance_matrix in distances_matrix_upper_bound.items():
+    upper_bound, _ = emd_distance_pyemd(trace_frequency_1, trace_frequency_2, distance_matrix)
+    upper_bound_result_dict[estimation] = upper_bound
+
+  return upper_bound_result_dict
+   
   
   
 def show_EMD_correctness():
@@ -351,7 +400,8 @@ def show_EMD_correctness():
   trace_frequency_1 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_P)
   trace_frequency_2 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_M)
   
-  _, distamce_df_emd = emd_distance_pyemd(trace_frequency_1,trace_frequency_2,trace_variants)
+  distance_matrix = get_distance_matrix_edit_distance(trace_variants)
+  _, distamce_df_emd = emd_distance_pyemd(trace_frequency_1,trace_frequency_2,distance_matrix)
   result_emd = parse_result_emd(trace_variants, distamce_df_emd, relative_trace_dic_P, relative_trace_dic_M)
   print("EMD distribution result: ")
   print("Log p: ", relative_trace_dic_P)
@@ -372,6 +422,14 @@ def show_EMD_correctness():
         result[estimate] = distance * value
         
   print("Align upper bound for result", result)
+  
+  print("Running align upper bound calculation directly")
+  distances_matrix_upper_bound = get_distance_matrix_upper_bound(trace_variants, shortest_model_estimation)
+  upper_bound_result_dict = {}
+  for estimation, distance_matrix in distances_matrix_upper_bound.items():
+    upper_bound, _ = emd_distance_pyemd(trace_frequency_1, trace_frequency_2, distance_matrix)
+    upper_bound_result_dict[estimation] = upper_bound
+  print("Align upper bound for result", upper_bound_result_dict)
   
 
 
@@ -398,9 +456,17 @@ def run_upper_bound_alignment():
     log_P_path = os.path.join(rootPath, lpNames[i])
     log_M_path = os.path.join(rootPath, lMNames[i])
     print("Running align upper bound on data ", lpNames[i], " and ", lMNames[i])
-    upper_bound = run_upper_bound_align_on_logs(log_P_path, log_M_path)
-    print("Align upper bound for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
+    upper_bound = run_upper_bound_align_on_logs_upper_bound_trace_distance(log_P_path, log_M_path)
+    print("Align upper bound for ", lpNames[i], " and ", lMNames[i], " is:")
+    for key, value in upper_bound.items():
+      print(value, " for ", key)
     print()
+    
+    # upper_bound = run_upper_bound_align_on_logs_edit_distance(log_P_path, log_M_path)
+    # print("Align upper bound edit distance for ", lpNames[i], " and ", lMNames[i], " is:")
+    # for key, value in upper_bound.items():
+    #   print(value, " for ", key)
+    # print()
 
 
 if __name__ == '__main__':
@@ -409,8 +475,8 @@ if __name__ == '__main__':
   
   warnings.filterwarnings("ignore")
   
-  show_EMD_correctness()
-  # run_upper_bound_alignment()
+  # show_EMD_correctness()
+  run_upper_bound_alignment()
   # run_upper_bound_traces()
   
   
