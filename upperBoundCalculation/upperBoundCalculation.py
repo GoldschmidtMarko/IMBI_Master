@@ -14,12 +14,13 @@ import numpy as np
 import ot 
 from enum import Enum
 from Levenshtein import distance as levenshtein_distance
+import networkx as nx
 
 class ShorestModelPathEstimation(Enum):
     Worst_CASE_ALLOW_EMPTY_TRACE = 0
     ALLOW_MIN_TRACE_LENGTH = 1
     ALLOW_AVERAGE_TRACE_LENGTH = 2
-    ALLOW_LONGEST_PREFIX = 3
+    ALLOW_LONGEST_SEQUENCE_PART = 3
 
 def levenshtein_distance_no_substitution(s1, s2):
   len_s1, len_s2 = len(s1), len(s2)
@@ -131,16 +132,26 @@ def get_min_trace_length_from_log(log):
     min = len(trace_tuple) if len(trace_tuple) < min else min
   return min
 
-def get_longest_prefix(log):
-  size = 0
-  max_prefix_length = get_min_trace_length_from_log(log)
-  for i in range(max_prefix_length):
-    size += 1
-    prefix_label = log[0][i][xes_constants.DEFAULT_NAME_KEY]
-    for trace in log:
-      if prefix_label != trace[i][xes_constants.DEFAULT_NAME_KEY]:
-        return size - 1
-  return size
+def generate_nx_graph_from_dfg(dfg):
+    dfg_acts = set()
+    for x in dfg:
+        dfg_acts.add(x[0])
+        dfg_acts.add(x[1])
+    G = nx.DiGraph()
+    for act in dfg_acts:
+        G.add_node(act)
+    for edge in dfg:
+        G.add_edge(edge[0], edge[1])
+    return G
+
+def get_longest_Sequence_part(log):
+  log_art = artificial_start_end(log.__deepcopy__())
+  dfg_art = dfg_discovery.apply(log_art, variant=dfg_discovery.Variants.FREQUENCY)
+  nx_graph_art = generate_nx_graph_from_dfg(dfg_art)
+  shortest_path = nx.shortest_path(nx_graph_art, source="start", target="end")
+  # 2 because of artificial start and end
+  result = len(shortest_path) - 2
+  return result
 
 def get_small_subset_of_dict(dic, size):
   res_dic = {}
@@ -274,7 +285,7 @@ def get_align_uppper_bound_for_trace(trace1, trace2, shortest_model_estimation =
       gamma = value
     elif estimate == ShorestModelPathEstimation.ALLOW_AVERAGE_TRACE_LENGTH:
       gamma = value
-    elif estimate == ShorestModelPathEstimation.ALLOW_LONGEST_PREFIX:
+    elif estimate == ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
       gamma = value
     else:
       raise Exception("Unknown shortest model estimation")
@@ -327,8 +338,8 @@ def run_upper_bound_align_on_logs_edit_distance(log_P_path, log_m_path, shortest
     shortest_model_estimation[ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE] = 0
     min_trace_length = get_min_trace_length_from_log(log_P)
     shortest_model_estimation[ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH] = min_trace_length
-    longest_prefix = get_longest_prefix(log_P)
-    shortest_model_estimation[ShorestModelPathEstimation.ALLOW_LONGEST_PREFIX] = longest_prefix
+    longest_Sequence =  get_longest_Sequence_part(log_P)
+    shortest_model_estimation[ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART] = longest_Sequence
     
   result = {}
   for (trace1, trace2), distance in result_emd:
@@ -363,8 +374,8 @@ def run_upper_bound_align_on_logs_upper_bound_trace_distance(log_P_path, log_m_p
     shortest_model_estimation[ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE] = 0
     min_trace_length = get_min_trace_length_from_log(log_P)
     shortest_model_estimation[ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH] = min_trace_length
-    longest_prefix = get_longest_prefix(log_P)
-    shortest_model_estimation[ShorestModelPathEstimation.ALLOW_LONGEST_PREFIX] = longest_prefix
+    longest_Sequence =  get_longest_Sequence_part(log_P)
+    shortest_model_estimation[ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART] = longest_Sequence
     
   distances_matrix_upper_bound = get_distance_matrix_upper_bound(trace_variants,set(relative_trace_dic_P.keys()),set(relative_trace_dic_M.keys()), shortest_model_estimation)
   
