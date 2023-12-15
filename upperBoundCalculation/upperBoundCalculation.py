@@ -107,7 +107,21 @@ def load_log(file_path):
   return log
 
 def get_dfg_from_log(log):
-  dfg = dfg_discovery.apply(log, variant=dfg_discovery.Variants.FREQUENCY)
+  dfg = {}
+  for trace in log:
+    found_edges = set()
+    last_activity = None
+    for activity in trace:
+      if last_activity is not None:
+        edge = (last_activity[xes_constants.DEFAULT_NAME_KEY], activity[xes_constants.DEFAULT_NAME_KEY])
+        if edge in found_edges:
+          continue
+        if edge in dfg:
+          dfg[edge] += 1
+        else:
+          dfg[edge] = 1
+        found_edges.add(edge) 
+      last_activity = activity
   return dfg
 
 def get_relative_traces_from_log(log):
@@ -233,13 +247,10 @@ def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
   
   original_p_size = len(log_P)
   original_m_size = len(log_M)
-  
-  sum_valueP = sum(get_dfg_from_log(log_P).values())
-  sum_valueM = sum(get_dfg_from_log(log_M).values())
 
   print("Running trace upper bound calculation")
   while True:
-    max_gain_edge = get_maximum_gain_edge(log_P, log_M, sum_valueP, sum_valueM)
+    max_gain_edge = get_maximum_gain_edge(log_P, log_M, original_p_size, original_m_size)
     if max_gain_edge is None:
       break
     log_P = remove_traces_with_edge_from_log(log_P, max_gain_edge)
@@ -487,8 +498,8 @@ if __name__ == '__main__':
   warnings.filterwarnings("ignore")
   
   # show_EMD_correctness()
-  run_upper_bound_alignment()
-  # run_upper_bound_traces()
+  # run_upper_bound_alignment()
+  run_upper_bound_traces()
   
   
   
