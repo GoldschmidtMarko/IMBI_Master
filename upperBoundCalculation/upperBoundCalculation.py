@@ -366,6 +366,7 @@ def run_upper_bound_align_on_logs_edit_distance(log_P_path, log_m_path, shortest
 # Current state of the art upper bound calculation
 def run_upper_bound_align_on_logs_upper_bound_trace_distance(log_P_path, log_m_path, shortest_model_estimation = {}):
   # Data preparation
+  print("Loading logs")
   log_P = load_log(log_P_path)
   log_M = load_log(log_m_path)
   log_P_art = artificial_start_end(log_P.__deepcopy__())
@@ -380,6 +381,7 @@ def run_upper_bound_align_on_logs_upper_bound_trace_distance(log_P_path, log_m_p
   trace_frequency_1 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_P)
   trace_frequency_2 = get_relative_trace_frequency_from_union(trace_variants, relative_trace_dic_M)
   
+  print("Running align upper bound calculation")
   # Create distance matrix
   if len(shortest_model_estimation) == 0:
     shortest_model_estimation[ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE] = 0

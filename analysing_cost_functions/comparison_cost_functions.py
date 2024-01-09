@@ -555,86 +555,94 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
   fig.tight_layout(pad=18.0)
   cur_Row = 0
   cur_Col = 0
-
-
-  for group_keys, group_df in df_group:
-    logP_name = group_df['logP_Name'].iloc[0]
-    logM_name = group_df['logM_Name'].iloc[0]
-
-    logP_name_org = get_original_log_paths(logP_name)
-    logM_name_org = get_original_log_paths(logM_name)
-    ubs_align = None
-    ub_trace = None
+  
+  output_file_name = "plot_Summary_logs"
+  
+  if os.path.exists(os.path.join(file_path, output_file_name +".txt")):
+    os.remove(os.path.join(file_path, output_file_name +".txt"))
     
-    if use_upper_bound and logP_name_org != None and logM_name_org != None:
-      ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
-      ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
-      
-    axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + " LogM: " + logM_name)
-    axs[cur_Row,cur_Col].set_xlabel("Miners")
-    j = 0
-    xTickLabel = []
-    idx = []
-    minValue = 0
-    best_miner = ""
+  with open(os.path.join(file_path, output_file_name +".txt"), "a") as util_para_file:
+    for group_keys, group_df in df_group:
+      logP_name = group_df['logP_Name'].iloc[0]
+      logM_name = group_df['logM_Name'].iloc[0]
 
-    for miner, use_gnn, precP, acc_align, acc_trace in zip(group_df.miner, group_df.use_gnn, group_df.precP, group_df.acc_align, group_df.acc_trace):
-      minValue = min([minValue, precP, acc_align, acc_trace])
-      axs[cur_Row,cur_Col].bar(j,precP, color="r", label="$prec(L^{+},M)$")
-      axs[cur_Row,cur_Col].bar(j+1,acc_align, color="g", label="$acc_{align}(L^{+},L^{-},M)$")
-      axs[cur_Row,cur_Col].bar(j+2,acc_trace, color="b", label="$acc_{trace}(L^{+},L^{-},M)$")
+      logP_name_org = get_original_log_paths(logP_name)
+      logM_name_org = get_original_log_paths(logM_name)
+      ubs_align = None
+      ub_trace = None
       
-      if ubs_align != None and ub_trace != None:
-        # ubs trace
-        # Add a horizontal dotted line above the specific bar
-        axs[cur_Row,cur_Col].hlines(ub_trace, xmin=j+1.5, xmax=j+2.5, colors='b', linestyles='dotted', linewidth=2)
+      if use_upper_bound and logP_name_org != None and logM_name_org != None:
+        ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
+        ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
         
-        for enum, ub_align in ubs_align.items():
-          # ubs align
+      axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + " LogM: " + logM_name)
+      axs[cur_Row,cur_Col].set_xlabel("Miners")
+      j = 0
+      xTickLabel = []
+      idx = []
+      minValue = 0
+      best_miner = ""
+
+      for miner, use_gnn, precP, acc_align, acc_trace, sup, ratio in zip(group_df.miner, group_df.use_gnn, group_df.precP, group_df.acc_align, group_df.acc_trace, group_df.im_bi_sup, group_df.im_bi_ratio):
+        
+        util_para_file.write("Miner: " + miner + " | LogP: " + logP_name + " | LogM: " + logM_name + " | Sup: " + str(sup) + " | Ratio: " + str(ratio) + " | GNN:" + str(use_gnn) + "\n")
+        
+        minValue = min([minValue, precP, acc_align, acc_trace])
+        axs[cur_Row,cur_Col].bar(j,precP, color="r", label="$prec(L^{+},M)$")
+        axs[cur_Row,cur_Col].bar(j+1,acc_align, color="g", label="$acc_{align}(L^{+},L^{-},M)$")
+        axs[cur_Row,cur_Col].bar(j+2,acc_trace, color="b", label="$acc_{trace}(L^{+},L^{-},M)$")
+        
+        if ubs_align != None and ub_trace != None:
+          # ubs trace
           # Add a horizontal dotted line above the specific bar
-          axs[cur_Row,cur_Col].hlines(ub_align, xmin=j+0.5, xmax=j+1.5, colors='g', linestyles='dotted', linewidth=2)
+          axs[cur_Row,cur_Col].hlines(ub_trace, xmin=j+1.5, xmax=j+2.5, colors='b', linestyles='dotted', linewidth=2)
           
-      if ub_trace != None and acc_trace > ub_trace:
-        print("Trace: " + str(acc_trace) + " > " + str(ub_trace))
-        print("Data: " + str(logP_name) + " " + str(logM_name) + " " + str(miner) + " " + str(use_gnn))
-      
-      # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
-      miner_text = ""
-      if miner == "IMbi_freq":
-        miner_text = "Cost-Func"
-      elif miner == "IMbi_rel":
-        miner_text = "Reward-Func"
-      elif miner == "IMbi_aprox":
-        miner_text = "Aprox-Func"
+          for enum, ub_align in ubs_align.items():
+            # ubs align
+            # Add a horizontal dotted line above the specific bar
+            axs[cur_Row,cur_Col].hlines(ub_align, xmin=j+0.5, xmax=j+1.5, colors='g', linestyles='dotted', linewidth=2)
+            
+        if ub_trace != None and acc_trace > ub_trace:
+          print("Trace: " + str(acc_trace) + " > " + str(ub_trace))
+          print("Data: " + str(logP_name) + " " + str(logM_name) + " " + str(miner) + " " + str(use_gnn))
         
-      if miner == best_miner:
-        miner_text = "$\\bf{" + miner_text + "}$"
-      xTickLabel.append(miner_text)
+        # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+        miner_text = ""
+        if miner == "IMbi_freq":
+          miner_text = "Cost-Func"
+        elif miner == "IMbi_rel":
+          miner_text = "Reward-Func"
+        elif miner == "IMbi_aprox":
+          miner_text = "Aprox-Func"
+          
+        if miner == best_miner:
+          miner_text = "$\\bf{" + miner_text + "}$"
+        xTickLabel.append(miner_text)
+          
+        idx.append(j + 1.5)
+        j += 4
         
-      idx.append(j + 1.5)
-      j += 4
       
-    
-    axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
-    axs[cur_Row,cur_Col].set_xticks(idx)
-    axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=90)
-    
-    legend_elements = [
-        Line2D([0], [0], color='r', lw=2, label="$prec(L^{+},M)$"),
-        Line2D([0], [0], color='g', lw=2, label="$acc_{align}(L^{+},L^{-},M)$"),
-        Line2D([0], [0], color='b', lw=2, label="$acc_{trace}(L^{+},L^{-},M)$")
-    ]
+      axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
+      axs[cur_Row,cur_Col].set_xticks(idx)
+      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=90)
+      
+      legend_elements = [
+          Line2D([0], [0], color='r', lw=2, label="$prec(L^{+},M)$"),
+          Line2D([0], [0], color='g', lw=2, label="$acc_{align}(L^{+},L^{-},M)$"),
+          Line2D([0], [0], color='b', lw=2, label="$acc_{trace}(L^{+},L^{-},M)$")
+      ]
 
-    # Add the legend to the subplot
-    axs[cur_Row, cur_Col].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.2, 0.5))
-    cur_Col += 1
-    
-    if cur_Col == numberOfPlotPerRow:
-      cur_Row += 1
-      cur_Col = 0
+      # Add the legend to the subplot
+      axs[cur_Row, cur_Col].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.2, 0.5))
+      cur_Col += 1
+      
+      if cur_Col == numberOfPlotPerRow:
+        cur_Row += 1
+        cur_Col = 0
     
   if saveFig:
-    fig.savefig(os.path.join(file_path,"plot_Summary_logs.pdf"))
+    fig.savefig(os.path.join(file_path, output_file_name +".pdf"))
   else:
     plt.show()
 
