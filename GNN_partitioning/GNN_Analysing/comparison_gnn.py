@@ -480,7 +480,7 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
   
   
 def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gnn, max_node_size = 100, parallel = False, consider_ratio = False):
-  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=2500, min_number_node_size=0)
+  pathFiles = get_data_paths(use_synthetic=True, consider_ratio=consider_ratio, dataPath=dataPath, max_node_size=max_node_size, num_data_per_category=num_data_per_category, min_number_node_size=0)
   for cut_type, dataList_dic in pathFiles.items():
     highest_key = 0
     for node_size, dataList in dataList_dic.items():
@@ -520,7 +520,7 @@ def run_evaluation_delta_synthetic(df, dataPath, num_data_per_category, using_gn
           input_data.append((df_temp, cut_type, batch_data, [False, True], consider_ratio))
           offset += batch_size
           
-      TIMEOUT_SECONDS = 60 * batch_size * 3
+      TIMEOUT_SECONDS = 60 * batch_size * 60
       print("Timeout: " + str(TIMEOUT_SECONDS))
       
       pool_res = []
@@ -864,7 +864,7 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
   custom_font = fm.FontProperties(family='Arial', size=24)
     
   fig, axes = plt.subplots(nrows=1, ncols=number_columns, figsize=(16, 10))
-  fig.suptitle(title, fontproperties=custom_font_bold)
+  fig.suptitle(title, fontproperties=custom_font)
   # Ensure axes is always an array
   axes = np.atleast_1d(axes)
 
@@ -900,7 +900,7 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
         x_labels.append(column_prefix + column_feature_plot_name[j])
       
     ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_labels, rotation=45, fontproperties=custom_font)
+    ax.set_xticklabels(x_labels, rotation=0, fontproperties=custom_font)
     ax.tick_params(axis='x', labelsize=20)
     ax.tick_params(axis='y', labelsize=20)
     
