@@ -70,13 +70,13 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
         
         import matplotlib.font_manager as fm
         # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
-        custom_font_bold = fm.FontProperties(family='Arial', size=16, weight='bold')
-        custom_font = fm.FontProperties(family='Arial', size=16)
+        custom_font_bold = fm.FontProperties(family='Arial', size=28, weight='bold')
+        custom_font = fm.FontProperties(family='Arial', size=24)
         
         # Add a global title
-        measurement_string = 'ACC_Node: ' + str(round(accuracy,2)) + " | " + "ACC_Full: " + str(round(full_accuracy,2))
+        measurement_string = 'ACC-Node: ' + str(round(accuracy,2)) + " | " + "ACC-Full: " + str(round(full_accuracy,2))
         
-        fig.suptitle('Cut type: ' + data_settings["Cut_type"] + " | Dataset size: " + str(len(df)) + " | Model: " + str(data_settings["model_number"]) + " | Epochs: " + str(data_settings["num_epochs"]) + " | Batch size: " + str(data_settings["batch_size"]) + "\n\n" + measurement_string, fontproperties=custom_font_bold)
+        fig.suptitle('Cut-operator: ' + data_settings["Cut_type"] + " | Samples: " + str(len(df)) + "\n\n" + measurement_string, fontproperties=custom_font)
         
         axes[0].boxplot(data_accuracy_list, patch_artist=True,    # Fill boxes with color
                         showfliers=False,     # Hide outliers
@@ -84,12 +84,12 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
                         capprops={'linewidth': 2},
                         whiskerprops={'linewidth': 2},
                         medianprops={'color': 'orange', 'linewidth': 2})
-        axes[0].set_title('GNN Accuracy for Different Graph Sizes', fontproperties=custom_font)
+        axes[0].set_title('GNN Accuracy', fontproperties=custom_font)
         axes[0].set_ylabel('Prediction Accuracy', fontproperties=custom_font)
         axes[0].set_xlabel("Graph Size", fontproperties=custom_font)
         axes[0].set_xticklabels(data_Label_list)
-        axes[0].tick_params(axis='x', labelsize=16)
-        axes[0].tick_params(axis='y', labelsize=16)
+        axes[0].tick_params(axis='x', labelsize=20)
+        axes[0].tick_params(axis='y', labelsize=20)
         
         axes[1].boxplot(data_missClass_list, patch_artist=True,    # Fill boxes with color
                         showfliers=False,     # Hide outliers
@@ -97,12 +97,12 @@ def analyse_dataframe_result(df, data_settings = None, detailed = False, file_pa
                         capprops={'linewidth': 2},
                         whiskerprops={'linewidth': 2},
                         medianprops={'color': 'orange', 'linewidth': 2})
-        axes[1].set_title('Misclassified Nodes for Different Graph Sizes', fontproperties=custom_font)
+        axes[1].set_title('Misclassified Nodes', fontproperties=custom_font)
         axes[1].set_ylabel('Misclassified Nodes', fontproperties=custom_font)
         axes[1].set_xlabel("Graph Size", fontproperties=custom_font)
         axes[1].set_xticklabels(data_Label_list)
-        axes[1].tick_params(axis='x', labelsize=16)
-        axes[1].tick_params(axis='y', labelsize=16)
+        axes[1].tick_params(axis='x', labelsize=20)
+        axes[1].tick_params(axis='y', labelsize=20)
         
         # axes[2].boxplot(data_distance_list)
         # axes[2].set_title('Difference actual to predicted score')
@@ -1193,9 +1193,9 @@ if __name__ == '__main__':
     relative_path_results = root_path + "/GNN_partitioning/GNN_Accuracy_results"
     relative_path_data = root_path + "/GNN_partitioning/GNN_Data"
     
-    # run_performance_plot(relative_path_results, relative_path_data)
+    run_performance_plot(relative_path_results, relative_path_data)
     
-    generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
+    # generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
 
 
 
