@@ -848,7 +848,7 @@ def show_duplicates(df):
   print(filtered_rows)  
   print("Number of duplicates: " + str(len(filtered_rows)))  
 
-def visualize_measurement(df_measurement, column_feature, use_synthetic, title = "", column_prefix = "", file_name = None):
+def visualize_measurement(df_measurement, column_feature, use_synthetic, title = "", column_prefix = "", column_feature_plot_name = None, file_name = None):
   y_min = df_measurement[column_feature].min().min()
   y_max = df_measurement[column_feature].max().max()
   if use_synthetic:
@@ -860,8 +860,8 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     
   import matplotlib.font_manager as fm
   # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
-  custom_font_bold = fm.FontProperties(family='Arial', size=16, weight='bold')
-  custom_font = fm.FontProperties(family='Arial', size=16)
+  custom_font_bold = fm.FontProperties(family='Arial', size=28, weight='bold')
+  custom_font = fm.FontProperties(family='Arial', size=24)
     
   fig, axes = plt.subplots(nrows=1, ncols=number_columns, figsize=(16, 10))
   fig.suptitle(title, fontproperties=custom_font_bold)
@@ -894,12 +894,15 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
       
       # Modify x-axis tick labels
       x_ticks.append(j)
-      x_labels.append(column_prefix + col)
+      if column_feature_plot_name == None:
+        x_labels.append(column_prefix + col)
+      else:
+        x_labels.append(column_prefix + column_feature_plot_name[j])
       
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, rotation=45, fontproperties=custom_font)
-    ax.tick_params(axis='x', labelsize=16)
-    ax.tick_params(axis='y', labelsize=16)
+    ax.tick_params(axis='x', labelsize=20)
+    ax.tick_params(axis='y', labelsize=20)
     
     ax.grid(True, linestyle='--', alpha=0.6)
     ax.set_axisbelow(True)
@@ -1022,6 +1025,7 @@ def run_comparison():
   if delta_measurement:
     use_synthetic = True
     column_feature = ["precP","acc_align", "acc_trace"]
+    column_feature_plot_name = ['$\operatorname{prec(L^+, M)}$','$\operatorname{acc_{align}}(L^+, L^-, M)$','$\operatorname{acc_{trace}}(L^+, L^-, M)$']
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
     column_prefix = "Δ "
@@ -1030,13 +1034,13 @@ def run_comparison():
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
       
       output_path = os.path.join(data_path_csv, "df_delta_measurement_synthetic.pdf")
-      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, output_path)
+      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
     else:
       df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
       
       output_path = os.path.join(data_path_csv, "df_delta_measurement_real.pdf")
-      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, output_path)
+      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
       
   trace_variant_measurement = False
   if trace_variant_measurement:
@@ -1049,12 +1053,12 @@ def run_comparison():
       df = get_dataframe_trace_Variants(data_path_csv, synthetic_path=data_path_synthetic)
       
       output_path = os.path.join(data_path_csv, "df_measurement_trace_variants_synthetic.png")
-      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, output_path)
+      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
     else:
       df = get_dataframe_trace_Variants(data_path_csv, real_path=data_path_real)
       
       output_path = os.path.join(data_path_csv, "df_measurement_trace_variants_real.png")
-      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, output_path)
+      visualize_measurement(df, column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
       
   print("Time elapsed: " + str(time.time() - time_start) + " seconds")
   
