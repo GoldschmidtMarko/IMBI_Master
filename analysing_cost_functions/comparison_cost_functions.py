@@ -47,12 +47,14 @@ def get_original_log_paths(subString):
   
 def get_data_paths():
   # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
-  lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
-  # lpNames = ["2012_O_lp.xes"]
-
-  lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
-  # lMNames = ["2012_O_lm.xes"]
+  # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
+  # lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
+  # lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  lpNames = ["RTFM-LP.xes","BPIC-2012-LP.xes","BPIC-2017-LP.xes"]
+  lMNames = ["RTFM-LM.xes","BPIC-2012-LM.xes","BPIC-2017-LM.xes"]
+  
+  
   lpPaths = []
   lmPaths = []
 
@@ -442,6 +444,10 @@ def displayDoubleLog(df, saveFig = False):
 def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
   df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True).apply(lambda x : x)
   
+  import matplotlib.font_manager as fm
+  # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
+  custom_font = fm.FontProperties(family='Arial', size=24)
+  
   for logGroup_index in df_group.index.unique():
     logP_name = logGroup_index[df_group.index.names.index('logP_Name')]
     logM_name = logGroup_index[df_group.index.names.index('logM_Name')]
@@ -474,8 +480,8 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
       im_bi_sup = logGroup[df_grouped.index.names.index('im_bi_sup')]
       im_bi_ratio = logGroup[df_grouped.index.names.index('im_bi_ratio')]
       
-      axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + " LogM: " + logM_name + "\n" + "Sup: " + str(im_bi_sup) + " ratio: " + str(im_bi_ratio))
-      axs[cur_Row,cur_Col].set_xlabel("Miners")
+      axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + " LogM: " + logM_name + "\n" + "Sup: " + str(im_bi_sup) + " ratio: " + str(im_bi_ratio), fontproperties=custom_font)
+      axs[cur_Row,cur_Col].set_xlabel("Miners", fontproperties=custom_font)
       j = 0
       xTickLabel = []
       idx = []
@@ -509,7 +515,7 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
         elif miner == "IMbi_rel":
           miner_text = "Reward-Func"
         elif miner == "IMbi_aprox":
-          miner_text = "Aprox-Func"
+          miner_text = "Approx-Func"
           
         if miner == best_miner:
           miner_text = "$\\bf{" + miner_text + "}$"
@@ -521,7 +527,9 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
       
       axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
       axs[cur_Row,cur_Col].set_xticks(idx)
-      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=90)
+      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=0, fontsize=20)
+      axs[cur_Row,cur_Col].tick_params(axis='x', labelsize=20)
+      axs[cur_Row,cur_Col].tick_params(axis='y', labelsize=20)
       
       legend_elements = [
           Line2D([0], [0], color='r', lw=2, label="$prec(L^{+},M)$"),
@@ -595,12 +603,12 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
         if ubs_align != None and ub_trace != None:
           # ubs trace
           # Add a horizontal dotted line above the specific bar
-          axs[cur_Row,cur_Col].hlines(ub_trace, xmin=j+1.5, xmax=j+2.5, colors='b', linestyles='dotted', linewidth=2)
+          axs[cur_Row,cur_Col].hlines(ub_trace, xmin=j+1.5, xmax=j+2.5, colors='k', linestyles='dotted', linewidth=2)
           
           for enum, ub_align in ubs_align.items():
             # ubs align
             # Add a horizontal dotted line above the specific bar
-            axs[cur_Row,cur_Col].hlines(ub_align, xmin=j+0.5, xmax=j+1.5, colors='g', linestyles='dotted', linewidth=2)
+            axs[cur_Row,cur_Col].hlines(ub_align, xmin=j+0.5, xmax=j+1.5, colors='k', linestyles='dotted', linewidth=2)
             
         if ub_trace != None and acc_trace > ub_trace:
           print("Trace: " + str(acc_trace) + " > " + str(ub_trace))
