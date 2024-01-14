@@ -890,8 +890,15 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
                         medianprops={'color': 'orange', 'linewidth': 2})
       
       # Add label on top of each boxplot
-      ax.text(j, group[col].max() + 0.01 * (group[col].max() - group[col].min()), 'n=' + str(len(group)), ha='center', va='bottom', color='black', fontproperties=custom_font)
+      Q3 = group[col].quantile(0.75)
+      IQR = group[col].quantile(0.75) - group[col].quantile(0.25)
+      upper_whisker_end = Q3 + 1.5 * IQR
+
+      # Get the exact coordinates of the upper whisker
+      upper_whisker_data = (group[col][group[col] <= upper_whisker_end].values).max()
       
+      # Add label directly above the upper whisker of each boxplot
+      ax.text(j, upper_whisker_data+0.1, 'n=' + str(len(group)), ha='center', va='bottom', color='black', fontproperties=custom_font)
       # Modify x-axis tick labels
       x_ticks.append(j)
       if column_feature_plot_name == None:
@@ -1025,7 +1032,7 @@ def run_comparison():
   if delta_measurement:
     use_synthetic = True
     column_feature = ["precP","acc_align", "acc_trace"]
-    column_feature_plot_name = ['$\operatorname{prec(L^+, M)}$','$\operatorname{acc_{align}}(L^+, L^-, M)$','$\operatorname{acc_{trace}}(L^+, L^-, M)$']
+    column_feature_plot_name = ['$\operatorname{prec(L^+, M_1, M_2)}$','$\operatorname{acc_{align}}(L^+, L^-, M_1, M_2)$','$\operatorname{acc_{trace}}(L^+, L^-, M_1, M_2)$']
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
     column_prefix = "Δ "
