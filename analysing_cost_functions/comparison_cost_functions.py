@@ -595,6 +595,8 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
         
         util_para_file.write("Miner: " + miner + " | LogP: " + logP_name + " | LogM: " + logM_name + " | Sup: " + str(sup) + " | Ratio: " + str(ratio) + " | GNN:" + str(use_gnn) + "\n")
         
+        
+        
         minValue = min([minValue, precP, acc_align, acc_trace])
         axs[cur_Row,cur_Col].bar(j,precP, color="r", label="$prec(L^{+},M)$")
         axs[cur_Row,cur_Col].bar(j+1,acc_align, color="g", label="$acc_{align}(L^{+},L^{-},M)$")
@@ -672,11 +674,11 @@ def filter_df_for_best_models(df):
     for i in range(0,len(group.index)):
       cur_score = group.iloc[i]['acc_align'] + group.iloc[i]['acc_trace']
       best_score = group.iloc[best_index]['acc_align'] + group.iloc[best_index]['acc_trace']
-      if group.iloc[i]['precP'] >= 0.75 and group.iloc[best_index]['precP'] >= 0.75:
+      if group.iloc[i]['precP'] >= 0.6 and group.iloc[best_index]['precP'] >= 0.6:
         if cur_score > best_score:
           best_index = i
         continue
-      if group.iloc[i]['precP'] >= 0.75 and group.iloc[best_index]['precP'] < 0.75:
+      if group.iloc[i]['precP'] >= 0.6 and group.iloc[best_index]['precP'] < 0.6:
         best_index = i
         continue
       cur_score += group.iloc[i]['precP']
