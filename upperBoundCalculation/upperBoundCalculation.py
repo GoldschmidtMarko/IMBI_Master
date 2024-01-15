@@ -11,7 +11,6 @@ from pm4py.objects.log import obj as log_instance
 from pm4py.objects.log.obj import EventLog
 import warnings
 import numpy as np
-import ot 
 from enum import Enum
 from Levenshtein import distance as levenshtein_distance
 import networkx as nx
@@ -78,6 +77,7 @@ def get_distance_matrix_upper_bound(trace_variants,set_traces_P, set_traces_M, s
   return array
   
 def emd_distance_pyemd(trace_frequency_1,trace_frequency_2, distance_matrix):
+    import ot 
     trace_frequency_1 = np.array(trace_frequency_1)
     trace_frequency_2 = np.array(trace_frequency_2)
   

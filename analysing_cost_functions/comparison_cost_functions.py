@@ -50,7 +50,8 @@ def get_data_paths():
   # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
   # lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
   # lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  rootPath = os.path.join(root_path,"analysing_cost_functions","comparison-data")
   lpNames = ["RTFM-LP.xes","BPIC-2012-LP.xes","BPIC-2017-LP.xes"]
   lMNames = ["RTFM-LM.xes","BPIC-2012-LM.xes","BPIC-2017-LM.xes"]
   
@@ -59,9 +60,9 @@ def get_data_paths():
   lmPaths = []
 
   for lp in lpNames:
-    lpPaths.append((lp,rootPath + lp))
+    lpPaths.append((lp,os.path.join(rootPath,lp)))
   for lm in lMNames:
-    lmPaths.append((lm,rootPath + lm))
+    lmPaths.append((lm,os.path.join(rootPath,lm)))
     
   return lpPaths, lmPaths
 
