@@ -110,18 +110,17 @@ def get_dfg_from_log(log):
   dfg = {}
   for trace in log:
     found_edges = set()
-    last_activity = None
-    for activity in trace:
-      if last_activity is not None:
-        edge = (last_activity[xes_constants.DEFAULT_NAME_KEY], activity[xes_constants.DEFAULT_NAME_KEY])
-        if edge in found_edges:
-          continue
-        if edge in dfg:
-          dfg[edge] += 1
-        else:
-          dfg[edge] = 1
-        found_edges.add(edge) 
-      last_activity = activity
+    for i in range(len(trace)-1):
+      from_concept_name = trace[i][xes_constants.DEFAULT_NAME_KEY]
+      to_concept_name = trace[i+1][xes_constants.DEFAULT_NAME_KEY]
+      edge = (from_concept_name, to_concept_name)
+      if edge in found_edges:
+        continue
+      if edge in dfg:
+        dfg[edge] += 1
+      else:
+        dfg[edge] = 1
+      found_edges.add(edge) 
   return dfg
 
 def get_relative_traces_from_log(log):
@@ -176,9 +175,9 @@ def get_small_subset_of_dict(dic, size):
   return res_dic
 
 def remove_traces_with_edge_from_log(log, edge):
-  log_filtered = log.__deepcopy__()
+  # log_filtered = log.__deepcopy__()
   log_res = EventLog()
-  for trace in log_filtered:
+  for trace in log:
     can_include = True
     for i in range(len(trace)-1):
       
@@ -251,12 +250,17 @@ def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
   print("Running trace upper bound calculation")
   while True:
     max_gain_edge = get_maximum_gain_edge(log_P, log_M, original_p_size, original_m_size)
+    size_P = len(log_P)
+    size_M = len(log_M)
     if max_gain_edge is None:
       break
+    
     log_P = remove_traces_with_edge_from_log(log_P, max_gain_edge)
     log_M = remove_traces_with_edge_from_log(log_M, max_gain_edge)
-    # print("log_P: ", len(log_P), " log_M: ", len(log_M))
     
+    if size_P == len(log_P) and size_M == len(log_M):
+      raise Exception("Error, No more gain")
+
   fit_p = len(log_P) / original_p_size
   fit_m = len(log_M) / original_m_size
   upper_bround = fit_p - fit_m

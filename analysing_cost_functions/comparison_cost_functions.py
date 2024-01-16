@@ -50,10 +50,10 @@ def get_data_paths():
   # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
   # lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
   # lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
-  # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
-  rootPath = os.path.join(root_path,"analysing_cost_functions","comparison-data")
-  lpNames = ["RTFM-LP.xes","BPIC-2012-LP.xes","BPIC-2017-LP.xes"]
-  lMNames = ["RTFM-LM.xes","BPIC-2012-LM.xes","BPIC-2017-LM.xes"]
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  # rootPath = os.path.join(root_path,"analysing_cost_functions","new-data")
+  lpNames = ["RTFM-SAMP-LP.xes", "BPIC2012-O-LP.xes", "BPIC2017-SAMP-O-LP.xes"]
+  lMNames = ["RTFM-SAMP-LM.xes", "BPIC2012-O-LM.xes", "BPIC2017-SAMP-O-LM.xes"]
   
   
   lpPaths = []
@@ -429,7 +429,7 @@ def displayDoubleLog(df, saveFig = False):
     
     axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
     axs[cur_Row,cur_Col].set_xticks(idx)
-    axs[cur_Row,cur_Col].set_xticklabels(xTickLabel)
+    axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, fontsize=20)
     axs[cur_Row,cur_Col].legend(loc='center left', ncols=1, labels=["precP","acc", "fitP", "fitM", "f1_fit"], bbox_to_anchor=(1, 0.5))
     cur_Col += 1
     
@@ -556,14 +556,17 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
   df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
   use_upper_bound = True
   
-  numberOfPlotPerRow = 2
+  numberOfPlotPerRow = 1
   rows = math.ceil(float(df_group.ngroups)/numberOfPlotPerRow)
   cols = min(df_group.ngroups,numberOfPlotPerRow)
   # fig, axs = plt.subplots(rows, cols, figsize=(17 * (cols / numberOfPlotPerRow), 10 * rows), squeeze=False)
-  fig, axs = plt.subplots(rows, cols, figsize=(17 , 10), squeeze=False)
-  fig.tight_layout(pad=18.0)
+  fig, axs = plt.subplots(rows, cols, figsize=(40 , 44), squeeze=False)
+  # fig.tight_layout(pad=18.0)
   cur_Row = 0
   cur_Col = 0
+  
+  import matplotlib.font_manager as fm
+  custom_font = fm.FontProperties(family='Arial', size=36)
   
   output_file_name = "plot_Summary_logs"
   
@@ -584,8 +587,8 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
         ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
         ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
         
-      axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + " LogM: " + logM_name)
-      axs[cur_Row,cur_Col].set_xlabel("Miners")
+      axs[cur_Row,cur_Col].set_title("LogP: " + logP_name + "\nLogM: " + logM_name, fontproperties=custom_font)
+      axs[cur_Row,cur_Col].set_xlabel("Miners", fontproperties=custom_font)
       j = 0
       xTickLabel = []
       idx = []
@@ -636,7 +639,9 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
       
       axs[cur_Row,cur_Col].set_yticks(setupYTickList(minValue, 0.25))
       axs[cur_Row,cur_Col].set_xticks(idx)
-      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=90)
+      axs[cur_Row,cur_Col].set_xticklabels(xTickLabel, rotation=0, fontsize=30)
+      axs[cur_Row,cur_Col].tick_params(axis='x', labelsize=30)
+      axs[cur_Row,cur_Col].tick_params(axis='y', labelsize=30)
       
       legend_elements = [
           Line2D([0], [0], color='r', lw=2, label="$prec(L^{+},M)$"),
@@ -645,7 +650,7 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
       ]
 
       # Add the legend to the subplot
-      axs[cur_Row, cur_Col].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.2, 0.5))
+      axs[cur_Row, cur_Col].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.00, 0.5),prop={'size': 30})
       cur_Col += 1
       
       if cur_Col == numberOfPlotPerRow:
@@ -656,6 +661,156 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
     fig.savefig(os.path.join(file_path, output_file_name +".pdf"))
   else:
     plt.show()
+
+def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = ""):
+  df.reset_index(drop=True, inplace=True)
+  df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
+  use_upper_bound = True
+  
+  numberOfPlotPerRow = 1
+  rows = math.ceil(float(df_group.ngroups)/numberOfPlotPerRow)
+  cols = min(df_group.ngroups,numberOfPlotPerRow)
+  
+  import matplotlib.font_manager as fm
+  custom_font = fm.FontProperties(family='Arial', size=24)
+  
+  output_file_name = "plot_Summary_logs"
+  
+  if os.path.exists(os.path.join(file_path, output_file_name +".txt")):
+    os.remove(os.path.join(file_path, output_file_name +".txt"))
+    
+  with open(os.path.join(file_path, output_file_name +".txt"), "a") as util_para_file:
+    for group_keys, group_df in df_group:
+      logP_name = group_df['logP_Name'].iloc[0]
+      logM_name = group_df['logM_Name'].iloc[0]
+
+      logP_name_org = get_original_log_paths(logP_name)
+      logM_name_org = get_original_log_paths(logM_name)
+      ubs_align = None
+      ub_trace = None
+      
+      if use_upper_bound and logP_name_org != None and logM_name_org != None:
+        ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
+        ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
+        
+      fig, axs = plt.subplots(figsize=(14 , 12))
+      # fig.tight_layout(pad=18.0)
+        
+      axs.set_title("LogP: " + logP_name + "\nLogM: " + logM_name, fontproperties=custom_font)
+      axs.set_xlabel("Miners", fontproperties=custom_font)
+      j = 0
+      xTickLabel = []
+      idx = []
+      minValue = 0
+      best_miner = ""
+
+      pointA_X = []
+      pointA_Y = []
+      pointB_X = []
+      pointB_Y = []
+      pointC_X = []
+      pointC_Y = []
+      pointD_X = []
+      pointD_Y = []
+
+      for miner, use_gnn, precP, acc_align, acc_trace, sup, ratio in zip(group_df.miner, group_df.use_gnn, group_df.precP, group_df.acc_align, group_df.acc_trace, group_df.im_bi_sup, group_df.im_bi_ratio):
+        
+        util_para_file.write("Miner: " + miner + " | LogP: " + logP_name + " | LogM: " + logM_name + " | Sup: " + str(sup) + " | Ratio: " + str(ratio) + " | GNN:" + str(use_gnn) + "\n")
+        
+        
+        bar_width = 0.8
+        minValue = min([minValue, precP, acc_align, acc_trace])
+        axs.bar(j,precP, color="r", label="$prec(L^{+},M)$", width=bar_width)
+        axs.bar(j+1,acc_align, color="g", label="$acc_{align}(L^{+},L^{-},M)$", width=bar_width)
+        axs.bar(j+2,acc_trace, color="b", label="$acc_{trace}(L^{+},L^{-},M)$", width=bar_width)
+        
+        if ubs_align != None and ub_trace != None:
+          # ubs trace
+          # Add a horizontal dotted line above the specific bar
+          axs.hlines(ub_trace, xmin=j+1.5, xmax=j+2.5, colors='k', linestyles='dotted', linewidth=4)
+          text = "A"  # Replace with your desired text
+          text_x = j + 2  # Adjust x-coordinate as needed
+          text_y = ub_trace + 0.02  # Adjust y-coordinate as needed
+          pointA_X.append(text_x)
+          pointA_Y.append(text_y)
+          # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
+
+          
+          for enum, ub_align in ubs_align.items():
+            # ubs align
+            # Add a horizontal dotted line above the specific bar
+            axs.hlines(ub_align, xmin=j+0.5, xmax=j+1.5, colors='k', linestyles='dotted', linewidth=4)
+            text_x = j + 1  # Adjust x-coordinate as needed
+            text_y = ub_align + 0.02  # Adjust y-coordinate as needed
+            if enum == ubc.ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:
+              text = "B"
+              pointB_X.append(text_x)
+              pointB_Y.append(text_y)
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
+              text = "C"
+              pointC_X.append(text_x)
+              pointC_Y.append(text_y)
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
+              text = "D"
+              pointD_X.append(text_x)
+              pointD_Y.append(text_y)
+
+            # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
+            
+            
+            
+        if ub_trace != None and acc_trace > ub_trace:
+          print("Trace: " + str(acc_trace) + " > " + str(ub_trace))
+          print("Data: " + str(logP_name) + " " + str(logM_name) + " " + str(miner) + " " + str(use_gnn))
+        
+        # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+        miner_text = ""
+        if miner == "IMbi_freq":
+          miner_text = "Cost-Func"
+        elif miner == "IMbi_rel":
+          miner_text = "Reward-Func"
+        elif miner == "IMbi_aprox":
+          miner_text = "Approx-Func"
+          
+        if miner == best_miner:
+          miner_text = "$\\bf{" + miner_text + "}$"
+        xTickLabel.append(miner_text)
+          
+        idx.append(j + 1.5)
+        j += 4
+        
+      
+      axs.set_yticks(setupYTickList(minValue, 0.25))
+      axs.set_xticks(idx)
+      axs.set_xticklabels(xTickLabel, rotation=0, fontsize=24)
+      axs.tick_params(axis='x', labelsize=24)
+      axs.tick_params(axis='y', labelsize=24)
+      
+      
+      legend_elements = [
+        Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec}$"),
+        Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{acc_{\operatorname{align}}}$"),
+        Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{acc_{\operatorname{trace}}}$"),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'A $\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$', markerfacecolor='white'),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'B $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$', markerfacecolor='white'),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'C $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$', markerfacecolor='white'),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'D $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$', markerfacecolor='white'),
+      ]
+      
+      scatter1 = axs.scatter(pointA_X, pointA_Y, marker=r'$\operatorname{A}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$')
+      scatter2 = axs.scatter(pointB_X, pointB_Y, marker=r'$\operatorname{B}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$')
+      scatter3 = axs.scatter(pointC_X, pointC_Y, marker=r'$\operatorname{C}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$')
+      scatter4 = axs.scatter(pointD_X, pointD_Y, marker=r'$\operatorname{D}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$')
+
+
+      # Add the legend to the subplot
+      lgd = axs.legend(handles=legend_elements + [scatter1, scatter2, scatter3, scatter4], loc='center left', bbox_to_anchor=(1.00, 0.5),prop={'size': 24})
+
+      
+      if saveFig:
+        fig.savefig(os.path.join(file_path, output_file_name + "-" + logP_name +".pdf"), bbox_extra_artists=(lgd,), bbox_inches='tight')
+      else:
+        plt.show()
 
 
 def create_df():
@@ -814,10 +969,10 @@ def get_comparison_df(csv_filename, result_path):
   else:
     df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
     
-  displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
+  # displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
   df = filter_df_for_best_models(df)
   save_petri_nets(df, result_path)
-  displayDoubleLogSplitSingleBest(df, saveFig=True, file_path=result_path)
+  displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig=True, file_path=result_path)
   
   return df
    
@@ -916,8 +1071,8 @@ def create_petri_net_model(file_name, result_path, logP_path, logM_path, sup, ra
   write_pnml(net, im, fm, os.path.join(result_path,file_name + ".pnml"))
   
 def generate_manual_models(result_path):
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
-  lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  lpNames = ["RTFM-SAMP-LP.xes", "2017_O_lp.xes"]
   lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
   
   create_petri_net_model("petriNet1",result_path, rootPath + lpNames[0], rootPath + lMNames[0], 0.2, 0.5, custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE)
