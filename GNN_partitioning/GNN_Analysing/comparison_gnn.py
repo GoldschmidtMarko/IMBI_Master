@@ -135,7 +135,7 @@ def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "
     "miner" : name,
     "cut_type" : cut_Type,
     "logP_Name": logPName[:logPName.rfind(".")],
-    "logM_Name": "",
+    "logM_Name": logMName[:logMName.rfind(".")],
     "imf_noise_thr" : imf_noiseThreshold,
     "hm_depen_thr" : hm_dependency_threshold,
     "im_bi_sup" : im_bi_sup,
@@ -443,12 +443,12 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
             if file.endswith(".xes"):  # Filter for text files
               found_file = os.path.join(root, file)
               if consider_ratio:
-                if "lp" in found_file:
-                  file_M = found_file.replace("lp", "lm")
+                if "LP" in found_file:
+                  file_M = found_file.replace("LP", "LM")
                   file_P = found_file
                 else:
                   file_M = found_file
-                  file_P = found_file.replace("lm", "lp")
+                  file_P = found_file.replace("LM", "LP")
               else:
                 file_M = found_file
                 file_P = found_file
@@ -476,6 +476,9 @@ def get_data_paths(use_synthetic, dataPath, consider_ratio = False, max_node_siz
   else:
     print("Data")
     print("Number of files: " + str(len(pathFiles)))
+    print("Files:")
+    for file in pathFiles:
+      print(file)
     return pathFiles
   
   
@@ -673,12 +676,39 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, con
     '''
     pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
     '''
-    with multiprocessing.Pool(num_processors) as pool:
-      pool_res = tqdm(pool.imap(run_evaluation_category_star, input_data),total=len(input_data))
+    
+    batch_size = 1
+    TIMEOUT_SECONDS = 60 * batch_size * 5
+    print("Timeout: " + str(TIMEOUT_SECONDS))
+    
+    pool_res = []
+    number_timesouts = 0
+    futures = []
+    print("Number of input_data: " + str(len(input_data)))
+    progress_bar = tqdm(total=len(futures), desc="Processing", unit=" future")
+    with ProcessPool(max_workers=num_processors) as pool:
+      futures = [pool.schedule(run_evaluation_category_star, args=(one,), timeout=TIMEOUT_SECONDS) for one in input_data]
+      
+      for future in futures:
+        try:
+          result = future.result()
+          pool_res.append(result)
+        except TimeoutError:
+          number_timesouts += 1
+        except Exception as exc:
+          import traceback
+          traceback.print_exc()  # Print the full traceback
+          print('%r generated an exception: %s' % (future, exc))
+          number_timesouts += 1
+        progress_bar.update(1)
 
-      for result in pool_res:
-          # Process individual evaluation result
-          df = pd.concat([df, result])
+    # Close the progress bar after the loop finishes
+    progress_bar.close()
+    for result in pool_res:
+        # Process individual evaluation result
+        df = pd.concat([df, result])
+          
+    print("Timeout percentage: " + str(number_timesouts/len(input_data)))
      
   else: 
     iterator = 0
@@ -771,6 +801,7 @@ def load_tree(file_name):
 def run_evaluation_category(df, cut_type, dataList, using_gnn, consider_ratio):
   for data in dataList:
     if len(data) == 4:
+      # print("Using logs")
       support = data["Support"]
       ratio = data["Ratio"]
 
@@ -827,8 +858,10 @@ def get_measurement_delta(df, columnList, column_feature):
                 group.loc[group['use_gnn'] == True, 'acc_align'].mean()
     acc_trace_diff = group.loc[group['use_gnn'] == False, 'acc_trace'].mean() - \
                 group.loc[group['use_gnn'] == True, 'acc_trace'].mean()
+    im_bi_sup = group['im_bi_sup'].iloc[0]
+    im_bi_ratio = group['im_bi_ratio'].iloc[0]
 
-    return pd.Series({'precP': precision_diff, 'acc_align': acc_align_diff, 'acc_trace': acc_trace_diff})
+    return pd.Series({'precP': precision_diff, 'acc_align': acc_align_diff, 'acc_trace': acc_trace_diff, 'im_bi_sup': im_bi_sup, 'im_bi_ratio': im_bi_ratio})
 
   # Apply the custom aggregation function and reset the index
   df_measurement = df.groupby(columnList).apply(custom_agg).reset_index()
@@ -860,26 +893,26 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     
   import matplotlib.font_manager as fm
   # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
-  custom_font_bold = fm.FontProperties(family='Arial', size=28, weight='bold')
   custom_font = fm.FontProperties(family='Arial', size=24)
     
-  fig, axes = plt.subplots(nrows=1, ncols=number_columns, figsize=(16, 10))
-  fig.suptitle(title, fontproperties=custom_font)
-  # Ensure axes is always an array
-  axes = np.atleast_1d(axes)
-
-
   for i, (cut_type, group) in enumerate(df_grouped):
-    ax = axes[i]  # Select the specific axis for this subplot
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(14, 10))
+    if use_synthetic:
+      fig.suptitle(title, fontproperties=custom_font)
+    # Ensure axes is always an array
+    axes = np.atleast_1d(axes)
+    ax = axes[0]  # Select the specific axis for this subplot
     if use_synthetic:
       a = 3
       # ax.set_title("Data folder: " + str(cut_type) + "\nDatasize: " + str(len(group)))  # Set title for the subplot
     else:
-      ax.set_title("Data P: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nData M: " + str(os.path.basename(group.logM_Name.iloc[0])) + "\nDatasize: " + str(len(group)), fontproperties=custom_font)  # Set title for the subplot
-    ax.set_ylabel("Delta percentage", fontproperties=custom_font)  # Set ylabel for the subplot
+      ax.set_title("LogP: " + str(os.path.basename(group.logP_Name.iloc[0])) + "\nLogM: " + str(os.path.basename(group.logM_Name.iloc[0])), fontproperties=custom_font)  # Set title for the subplot
+      
+    ax.set_ylabel("Delta", fontproperties=custom_font)  # Set ylabel for the subplot
     
     x_ticks = []
     x_labels = []
+    print(group)
     
     for j, col in enumerate(column_feature):
       group.boxplot(column=col,positions=[j],widths=0.5, ax=ax, patch_artist=True,    # Fill boxes with color
@@ -898,7 +931,7 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
       upper_whisker_data = (group[col][group[col] <= upper_whisker_end].values).max()
       
       # Add label directly above the upper whisker of each boxplot
-      ax.text(j, upper_whisker_data+0.1, 'n=' + str(len(group)), ha='center', va='bottom', color='black', fontproperties=custom_font)
+      ax.text(j, upper_whisker_data+0.05, 'n=' + str(len(group)), ha='center', va='bottom', color='black', fontproperties=custom_font)
       # Modify x-axis tick labels
       x_ticks.append(j)
       if column_feature_plot_name == None:
@@ -907,7 +940,10 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
         x_labels.append(column_prefix + column_feature_plot_name[j])
       
     ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_labels, rotation=0, fontproperties=custom_font)
+    if use_synthetic == False:
+      ax.set_xticklabels(x_labels, rotation=0, fontproperties=custom_font)
+    else:
+      ax.set_xticklabels(x_labels, rotation=0, fontproperties=custom_font)
     ax.tick_params(axis='x', labelsize=20)
     ax.tick_params(axis='y', labelsize=20)
     
@@ -924,11 +960,11 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     # ax.set_ylim(-1, 1)
     # ax.set_yticks([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
 
-  plt.tight_layout()
-  if file_name != None:
-    plt.savefig(file_name)
-  else:
-    plt.show()
+    plt.tight_layout()
+    if file_name != None:
+      plt.savefig(file_name + "_"  + str(os.path.basename(group.logP_Name.iloc[0])) + ".pdf")
+    else:
+      plt.show()
       
    
 def validate_data_results(df, columns_to_check, interval):
@@ -998,8 +1034,8 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
       df.to_csv(csv_filename, index=False)
     elif progress == 1:
       using_gnn = [False, True]
-      sup_list = [0, 0.2, 0.4, 0.6]
-      ratio_list = [0, 0.5, 1]
+      sup_list = [0, 0.2, 0.4, 0.6, 0.8, 1]
+      ratio_list = [0, 0.3, 0.6, 1]
       consider_ratio = False
       if len(ratio_list) > 1:
         consider_ratio = True
@@ -1015,13 +1051,48 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
     
   return df
     
+def save_petri_net_biggest_prec(df_measurement, use_synthetic, output_folder):
+  if use_synthetic:
+    df_grouped = df_measurement.groupby("cut_type")
+  else:
+    df_grouped = df_measurement.groupby("logP_Name")
+    
+  import matplotlib.font_manager as fm
+  custom_font = fm.FontProperties(family='Arial', size=24)
+  for i, (cut_type, group) in enumerate(df_grouped):
+    max_test_row = group['acc_trace'].idxmax()
+    # Get the corresponding row
+    result_row = group.loc[max_test_row]
+
+    logPPath = result_row["logP_Name"]
+    logMPath = result_row["logM_Name"]
+    sup = np.float32(result_row["im_bi_sup"])
+    ratio = np.float32(result_row["im_bi_ratio"])
+    
+    cost_Variant = custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE
+    use_gnn = False
+    log = get_log(logPPath + ".xes")
+    logM = get_log(logMPath + ".xes")
+    
+    net, im, fm = inductive_miner.apply_bi(log,logM, variant=inductive_miner.Variants.IMbi, sup=sup, ratio=ratio, size_par=len(log)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
+    use_gnn = True
+    net_gnn, im_gnn, fm_gnn = inductive_miner.apply_bi(log,logM, variant=inductive_miner.Variants.IMbi, sup=sup, ratio=ratio, size_par=len(log)/len(logM), cost_Variant=cost_Variant,use_gnn=use_gnn)
+    save_vis_petri_net(net,im,fm,os.path.join(output_folder, "Petri_" + str(os.path.basename(logPPath)) + "_gnn_False" + ".png"))
+    save_vis_petri_net(net_gnn,im_gnn,fm_gnn,os.path.join(output_folder, "Petri_" + str(os.path.basename(logPPath)) + "_gnn_True" + ".png"))
+    
+    
+    
+    
+    
+  
+    
 def run_comparison():
   time_start = time.time()
   
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
   # data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
-  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
   data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
   data_path_csv = os.path.join(root_path, "GNN_partitioning", "GNN_Analysing", "Results")
   
@@ -1030,24 +1101,27 @@ def run_comparison():
   
   delta_measurement = True
   if delta_measurement:
-    use_synthetic = True
-    column_feature = ["precP","acc_align", "acc_trace"]
-    column_feature_plot_name = ['$\operatorname{prec(L^+, M_1, M_2)}$','$\operatorname{acc_{align}}(L^+, L^-, M_1, M_2)$','$\operatorname{acc_{trace}}(L^+, L^-, M_1, M_2)$']
+    use_synthetic = False
+    column_feature = ["precP","acc_align", "acc_trace","im_bi_sup", "im_bi_ratio"]
+    plot_column_feature = ["precP","acc_align", "acc_trace"]
+    column_feature_plot_name = ['$\operatorname{prec}$','$\operatorname{align{-}acc}$','$\operatorname{trace{-}acc}$']
     
     title = 'Data Delta Measurement\nDelta = (No GNN) - (GNN)'
     column_prefix = "Δ "
     if use_synthetic:
       df = get_dataframe_delta(data_path_csv, synthetic_path=data_path_synthetic) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
+      save_petri_net_biggest_prec(df_measurement, use_synthetic, data_path_csv)
       
-      output_path = os.path.join(data_path_csv, "df_delta_measurement_synthetic.pdf")
-      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
+      output_path = os.path.join(data_path_csv, "df_delta_measurement_synthetic")
+      visualize_measurement(df_measurement, plot_column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
     else:
       df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
+      save_petri_net_biggest_prec(df_measurement, use_synthetic, data_path_csv)
       
-      output_path = os.path.join(data_path_csv, "df_delta_measurement_real.pdf")
-      visualize_measurement(df_measurement, column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
+      output_path = os.path.join(data_path_csv, "df_delta_measurement_real")
+      visualize_measurement(df_measurement, plot_column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)
       
   trace_variant_measurement = False
   if trace_variant_measurement:
