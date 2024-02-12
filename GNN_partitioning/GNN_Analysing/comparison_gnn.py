@@ -886,14 +886,15 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
   y_max = df_measurement[column_feature].max().max()
   if use_synthetic:
     df_grouped = df_measurement.groupby("cut_type")
-    number_columns = df_grouped.ngroups
   else:
     df_grouped = df_measurement.groupby("logP_Name")
-    number_columns = df_grouped.ngroups
     
   import matplotlib.font_manager as fm
-  # print(fm.findSystemFonts(fontpaths=None, fontext='ttf'))
-  custom_font = fm.FontProperties(family='Arial', size=24)
+  
+  font_size_ui = 36
+  
+  
+  custom_font = fm.FontProperties(family='Arial', size=font_size_ui)
     
   for i, (cut_type, group) in enumerate(df_grouped):
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(14, 10))
@@ -912,7 +913,6 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
     
     x_ticks = []
     x_labels = []
-    print(group)
     
     for j, col in enumerate(column_feature):
       group.boxplot(column=col,positions=[j],widths=0.5, ax=ax, patch_artist=True,    # Fill boxes with color
@@ -944,8 +944,8 @@ def visualize_measurement(df_measurement, column_feature, use_synthetic, title =
       ax.set_xticklabels(x_labels, rotation=0, fontproperties=custom_font)
     else:
       ax.set_xticklabels(x_labels, rotation=0, fontproperties=custom_font)
-    ax.tick_params(axis='x', labelsize=20)
-    ax.tick_params(axis='y', labelsize=20)
+    ax.tick_params(axis='x', labelsize=font_size_ui)
+    ax.tick_params(axis='y', labelsize=font_size_ui)
     
     ax.grid(True, linestyle='--', alpha=0.6)
     ax.set_axisbelow(True)
@@ -1515,15 +1515,3 @@ if __name__ == '__main__':
   # run_show_data()
   # manual_run()
   
-
-    
-
-  
-
-  
-
-  
-    
-    
-    
-    

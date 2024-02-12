@@ -143,6 +143,8 @@ def runDoubleLogEvaluation(df,log,logM, name,net, im, fm, logPName = "",logMName
     "use_gnn" : use_gnn,
     "acc_align": mes['acc'],
     "acc_trace": mes['acc_perf'],
+    "f1_align" : mes['F1'],
+    "f1_trace" : mes['F1_perf'],
     "precP" : mes['precision'],
     "net": net,
     "im" : im,
@@ -713,7 +715,7 @@ def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = "
       pointD_X = []
       pointD_Y = []
 
-      for miner, use_gnn, precP, acc_align, acc_trace, sup, ratio in zip(group_df.miner, group_df.use_gnn, group_df.precP, group_df.acc_align, group_df.acc_trace, group_df.im_bi_sup, group_df.im_bi_ratio):
+      for miner, use_gnn, precP, acc_align, acc_trace, f1_align, f1_trace , sup, ratio in zip(group_df.miner, group_df.use_gnn, group_df.precP, group_df.acc_align, group_df.acc_trace, group_df.f1_align, group_df.f1_trace, group_df.im_bi_sup, group_df.im_bi_ratio):
         
         util_para_file.write("Miner: " + miner + " | LogP: " + logP_name + " | LogM: " + logM_name + " | Sup: " + str(sup) + " | Ratio: " + str(ratio) + " | GNN:" + str(use_gnn) + "\n")
         
@@ -723,16 +725,17 @@ def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = "
         axs.bar(j,precP, color="r", label="$prec(L^{+},M)$", width=bar_width)
         axs.bar(j+1,acc_align, color="g", label="$acc_{align}(L^{+},L^{-},M)$", width=bar_width)
         axs.bar(j+2,acc_trace, color="b", label="$acc_{trace}(L^{+},L^{-},M)$", width=bar_width)
+        axs.bar(j+3,f1_align, color="m", label="$acc_{align}(L^{+},L^{-},M)$", width=bar_width)
+        axs.bar(j+4,f1_trace, color="tab:orange", label="$acc_{trace}(L^{+},L^{-},M)$", width=bar_width)
         
         if ubs_align != None and ub_trace != None:
           # ubs trace
           # Add a horizontal dotted line above the specific bar
           axs.hlines(ub_trace, xmin=j+1.5, xmax=j+2.5, colors='k', linestyles='dotted', linewidth=4)
-          text = "A"  # Replace with your desired text
           text_x = j + 2  # Adjust x-coordinate as needed
           text_y = ub_trace + 0.02  # Adjust y-coordinate as needed
-          pointA_X.append(text_x)
-          pointA_Y.append(text_y)
+          pointD_X.append(text_x)
+          pointD_Y.append(text_y)
           # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
 
           
@@ -743,17 +746,14 @@ def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = "
             text_x = j + 1  # Adjust x-coordinate as needed
             text_y = ub_align + 0.02  # Adjust y-coordinate as needed
             if enum == ubc.ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:
-              text = "B"
+              pointA_X.append(text_x)
+              pointA_Y.append(text_y)
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
               pointB_X.append(text_x)
               pointB_Y.append(text_y)
-            if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
-              text = "C"
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
               pointC_X.append(text_x)
               pointC_Y.append(text_y)
-            if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
-              text = "D"
-              pointD_X.append(text_x)
-              pointD_Y.append(text_y)
 
             # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
             
@@ -776,8 +776,8 @@ def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = "
           miner_text = "$\\bf{" + miner_text + "}$"
         xTickLabel.append(miner_text)
           
-        idx.append(j + 1.5)
-        j += 4
+        idx.append(j + 2.5)
+        j += 6
         
       
       axs.set_yticks(setupYTickList(minValue, 0.25))
@@ -789,18 +789,214 @@ def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = "
       
       legend_elements = [
         Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec}$"),
-        Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{acc_{\operatorname{align}}}$"),
-        Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{acc_{\operatorname{trace}}}$"),
+        Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{align{-}acc}$"),
+        Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{trace{-}acc}$"),
+        Line2D([0], [0], color='m', lw=4, label=r"$\operatorname{align{-}F1{-}score}$"),
+        Line2D([0], [0], color='c', lw=4, label=r"$\operatorname{trace{-}F1{-}score}$"),
         # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'A $\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$', markerfacecolor='white'),
         # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'B $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$', markerfacecolor='white'),
         # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'C $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$', markerfacecolor='white'),
         # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'D $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$', markerfacecolor='white'),
       ]
+      scatter1 = axs.scatter(pointA_X, pointA_Y, marker=r'$\operatorname{A}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_1)$')
+      scatter2 = axs.scatter(pointB_X, pointB_Y, marker=r'$\operatorname{B}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_2)$')
+      scatter3 = axs.scatter(pointC_X, pointC_Y, marker=r'$\operatorname{C}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_3)$')
+      scatter4 = axs.scatter(pointD_X, pointD_Y, marker=r'$\operatorname{D}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{trace{-}acc}}$')
+
+
+      # Add the legend to the subplot
+      lgd = axs.legend(handles=legend_elements + [scatter1, scatter2, scatter3, scatter4], loc='center left', bbox_to_anchor=(1.00, 0.5),prop={'size': 24})
+
       
-      scatter1 = axs.scatter(pointA_X, pointA_Y, marker=r'$\operatorname{A}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$')
-      scatter2 = axs.scatter(pointB_X, pointB_Y, marker=r'$\operatorname{B}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$')
-      scatter3 = axs.scatter(pointC_X, pointC_Y, marker=r'$\operatorname{C}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$')
-      scatter4 = axs.scatter(pointD_X, pointD_Y, marker=r'$\operatorname{D}$', color='white', s=200, edgecolors='black', label=r'$\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$')
+      if saveFig:
+        fig.savefig(os.path.join(file_path, output_file_name + "-" + logP_name +".pdf"), bbox_extra_artists=(lgd,), bbox_inches='tight')
+      else:
+        plt.show()
+
+
+def calculate_difference_without_outliers(data):
+
+    # Calculate quartiles
+    Q1 = data.quantile(0.25)
+    Q3 = data.quantile(0.75)
+    
+    # Calculate IQR
+    IQR = Q3 - Q1
+    return IQR
+
+def displayDoubleLogSplitBoxplot_TrueSplit(df, saveFig = False, file_path = ""):
+  df.reset_index(drop=True, inplace=True)
+  df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
+  use_upper_bound = True
+  
+  numberOfPlotPerRow = 1
+  rows = math.ceil(float(df_group.ngroups)/numberOfPlotPerRow)
+  cols = min(df_group.ngroups,numberOfPlotPerRow)
+  
+  import matplotlib.font_manager as fm
+  custom_font = fm.FontProperties(family='Arial', size=24)
+  
+  output_file_name = "plot_Summary_logs"
+  
+  if os.path.exists(os.path.join(file_path, output_file_name +".txt")):
+    os.remove(os.path.join(file_path, output_file_name +".txt"))
+    
+  with open(os.path.join(file_path, output_file_name +".txt"), "a") as util_para_file:
+    for group_keys, group_df in df_group:
+      logP_name = group_df['logP_Name'].iloc[0]
+      logM_name = group_df['logM_Name'].iloc[0]
+
+      logP_name_org = get_original_log_paths(logP_name)
+      logM_name_org = get_original_log_paths(logM_name)
+      ubs_align = None
+      ub_trace = None
+      
+      if use_upper_bound and logP_name_org != None and logM_name_org != None:
+        ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
+        ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
+        
+      fig, axs = plt.subplots(figsize=(14 , 12))
+      # fig.tight_layout(pad=18.0)
+        
+      axs.set_title("LogP: " + logP_name + "\nLogM: " + logM_name, fontproperties=custom_font)
+      axs.set_xlabel("Miners", fontproperties=custom_font)
+      j = 0
+      xTickLabel = []
+      idx = []
+      minValue = 0
+      best_miner = ""
+
+      pointA_X = []
+      pointA_Y = []
+      pointB_X = []
+      pointB_Y = []
+      pointC_X = []
+      pointC_Y = []
+      pointD_X = []
+      pointD_Y = []
+      
+      boxplot_width = 0.3
+      boxplot_distance = 0.4
+      
+      difference_to_switch_color = 0.02
+      
+      df_group_on_miners = group_df.groupby(by=["miner"], group_keys=True)
+      for group_keys, group_df_miner in df_group_on_miners:
+        
+        util_para_file.write("LogP: " + logP_name + " | Miner: " + group_keys + " | Dataitems: " + str(len(group_df_miner)) + "\n")
+        difference = calculate_difference_without_outliers(group_df_miner.precP)
+        axs.boxplot(group_df_miner.precP,positions=[j],widths=boxplot_width, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': '#FFCCCC', 'linewidth': 2,'edgecolor': 'r'},
+                        capprops={'linewidth': 2, "color" : 'r'},
+                        whiskerprops={'linewidth': 2,'color': 'r'},
+                        medianprops={'color': 'r' if difference <= difference_to_switch_color else 'black', 'linewidth': 2},
+                        notch=False)
+        
+        difference = calculate_difference_without_outliers(group_df_miner.acc_align)
+        axs.boxplot(group_df_miner.acc_align,positions=[j+boxplot_distance],widths=boxplot_width, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lightgreen', 'linewidth': 2,'edgecolor': 'g'},
+                        capprops={'linewidth': 2,'color': 'g'},
+                        whiskerprops={'linewidth': 2,'color': 'g'},
+                        medianprops={'color': 'g' if difference <= difference_to_switch_color else 'black', 'linewidth': 2},
+                        notch=False)
+        
+        difference = calculate_difference_without_outliers(group_df_miner.acc_trace)
+        axs.boxplot(group_df_miner.acc_trace,positions=[j+2*boxplot_distance],widths=boxplot_width, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lightblue', 'linewidth': 2,'edgecolor': 'b'},
+                        capprops={'linewidth': 2,'color': 'b'},
+                        whiskerprops={'linewidth': 2,'color': 'b'},
+                        medianprops={'color': 'b' if difference <= difference_to_switch_color else 'black', 'linewidth': 2},
+                        notch=False)
+        
+        difference = calculate_difference_without_outliers(group_df_miner.f1_align)
+        axs.boxplot(group_df_miner.f1_align,positions=[j+3*boxplot_distance],widths=boxplot_width, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lavenderblush', 'linewidth': 2,'edgecolor': 'm'},
+                        capprops={'linewidth': 2,'color': 'm'},
+                        whiskerprops={'linewidth': 2,'color': 'm'},
+                        medianprops={'color': 'm' if difference <= difference_to_switch_color else 'black', 'linewidth': 2},
+                        notch=False)
+        
+        difference = calculate_difference_without_outliers(group_df_miner.f1_trace)
+        axs.boxplot(group_df_miner.f1_trace,positions=[j+4*boxplot_distance],widths=boxplot_width, patch_artist=True,    # Fill boxes with color
+                        showfliers=False,     # Hide outliers
+                        boxprops={'facecolor': 'lightcyan', 'linewidth': 2,'edgecolor': 'c'},
+                        capprops={'linewidth': 2,'color': 'c'},
+                        whiskerprops={'linewidth': 2,'color': 'c'},
+                        medianprops={'color': 'c' if difference <= difference_to_switch_color else 'black', 'linewidth': 2},
+                        notch=False)
+        
+        if ubs_align != None and ub_trace != None:
+          # ubs trace
+          # Add a horizontal dotted line above the specific bar
+          axs.hlines(ub_trace, xmin=j+2*boxplot_distance - boxplot_width/2, xmax=j+2*boxplot_distance + boxplot_width/2, colors='k', linestyles='dotted', linewidth=4)
+          text_x = j + 2*boxplot_distance   # Adjust x-coordinate as needed
+          text_y = ub_trace + 0.02  # Adjust y-coordinate as needed
+          pointD_X.append(text_x)
+          pointD_Y.append(text_y)
+          # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
+
+          
+          for enum, ub_align in ubs_align.items():
+            # ubs align
+            # Add a horizontal dotted line above the specific bar
+            axs.hlines(ub_align, xmin=j+ boxplot_distance - boxplot_width/2, xmax=j+boxplot_distance + boxplot_width/2, colors='k', linestyles='dotted', linewidth=4)
+            text_x = j + boxplot_distance  # Adjust x-coordinate as needed
+            text_y = ub_align + 0.02  # Adjust y-coordinate as needed
+            if enum == ubc.ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:
+              pointA_X.append(text_x)
+              pointA_Y.append(text_y)
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
+              pointB_X.append(text_x)
+              pointB_Y.append(text_y)
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
+              pointC_X.append(text_x)
+              pointC_Y.append(text_y)
+
+            # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
+            
+        # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+        miner_text = ""
+        if group_keys == "IMbi_freq":
+          miner_text = "Cost-Func"
+        elif group_keys == "IMbi_rel":
+          miner_text = "Reward-Func"
+        elif group_keys == "IMbi_aprox":
+          miner_text = "Approx-Func"
+          
+        if group_keys == best_miner:
+          miner_text = "$\\bf{" + miner_text + "}$"
+        xTickLabel.append(miner_text)
+          
+        idx.append(j + 2.5*boxplot_distance)
+        j += 6*boxplot_distance
+        
+      
+      axs.set_yticks(setupYTickList(minValue, 0.25))
+      axs.set_xticks(idx)
+      axs.set_xticklabels(xTickLabel, rotation=0, fontsize=24)
+      axs.tick_params(axis='x', labelsize=24)
+      axs.tick_params(axis='y', labelsize=24)
+      
+      
+      legend_elements = [
+        Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec}$"),
+        Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{align{-}acc}$"),
+        Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{trace{-}acc}$"),
+        Line2D([0], [0], color='m', lw=4, label=r"$\operatorname{align{-}F1{-}score}$"),
+        Line2D([0], [0], color='c', lw=4, label=r"$\operatorname{trace{-}F1{-}score}$"),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'A $\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$', markerfacecolor='white'),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'B $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$', markerfacecolor='white'),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'C $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$', markerfacecolor='white'),
+        # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'D $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$', markerfacecolor='white'),
+      ]
+      scatter1 = axs.scatter(pointA_X, pointA_Y, marker=r'$\operatorname{A}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_1)$')
+      scatter2 = axs.scatter(pointB_X, pointB_Y, marker=r'$\operatorname{B}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_2)$')
+      scatter3 = axs.scatter(pointC_X, pointC_Y, marker=r'$\operatorname{C}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_3)$')
+      scatter4 = axs.scatter(pointD_X, pointD_Y, marker=r'$\operatorname{D}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{trace{-}acc}}$')
 
 
       # Add the legend to the subplot
@@ -865,9 +1061,9 @@ def run_comparison(csv_filename, result_path, parallel = True):
     ali_better_runs = 0
     aprox_better_runs = 0
     
+    ratios = [1]
     ratios = [1, 0.8, 0.5]
-    # ratios = [1]
-    sups = [0, 0.2, 0.3, 0.4]
+    sups = [0, 0.2, 0.4, 0.6, 0.8, 1]
     # sups = [0, 0.2]
     
     dataList = []
@@ -970,9 +1166,14 @@ def get_comparison_df(csv_filename, result_path):
     df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
     
   # displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
-  df = filter_df_for_best_models(df)
-  save_petri_nets(df, result_path)
-  displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig=True, file_path=result_path)
+  use_single_best = False
+  
+  if use_single_best:
+    df = filter_df_for_best_models(df)
+    save_petri_nets(df, result_path)
+    displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig=True, file_path=result_path)
+  else:
+    displayDoubleLogSplitBoxplot_TrueSplit(df, saveFig=True, file_path=result_path)
   
   return df
    
