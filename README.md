@@ -12,4 +12,6 @@ Chair of Process and Data Science (PADS - Informatik 9), RWTH Aachen University
 
 - analysing_cost_functions: contains all code for the comparision of the different evaluation functions
 
+- local_pm4py: adaptation of the IM-BI with additional score functions and a GNN framework
+
 - upperBoundCalculation: contains the upper bound calculation
