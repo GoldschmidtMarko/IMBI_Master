@@ -194,6 +194,27 @@ def remove_traces_with_edge_from_log(log, edge):
       
   return log_res
 
+def add_traces_with_edge_from_log(log_checking, log_to_add, edge):
+  # log_filtered = log.__deepcopy__()
+  log_res = log_to_add
+  for trace in log_checking:
+    can_include = False
+    for i in range(len(trace)-1):
+      
+      from_concept_name = trace[i][xes_constants.DEFAULT_NAME_KEY]
+      to_concept_name = trace[i+1][xes_constants.DEFAULT_NAME_KEY]
+      
+      if from_concept_name == edge[0] and to_concept_name == edge[1]:
+        can_include = True
+        break
+    
+    if can_include:
+      log_res.append(trace)
+      
+      
+  return log_res
+
+
 def transform_dfg_to_relative(dfg, sum_values):
   dfg_relative = {}
   for edge, value in dfg.items():
@@ -217,28 +238,51 @@ def get_relative_trace_frequency_from_union(union, variants):
       relative_trace_frequency.append(0)
   return relative_trace_frequency
 
+
+
 def get_maximum_gain_edge(logP, logM, sum_valueP, sum_valueM):
   
-  dfgP = transform_dfg_to_relative(get_dfg_from_log(logP), sum_valueP)
-  dfgM = transform_dfg_to_relative(get_dfg_from_log(logM), sum_valueM)
+  relative_dfgP = transform_dfg_to_relative(get_dfg_from_log(logP), sum_valueP)
+  relative_dfgM = transform_dfg_to_relative(get_dfg_from_log(logM), sum_valueM)
   max_gain_edge = None
   max_gain_value = 0
-  for edge, value in dfgM.items():
-    if edge in dfgP:
-      if dfgP[edge] < value:
-        gain = value - dfgP[edge]
-        if gain > max_gain_value:
+  for edge, value in relative_dfgM.items():
+    if edge in relative_dfgP:
+      if relative_dfgP[edge] < value:
+        gain = value - relative_dfgP[edge]
+        if max_gain_value is None or gain > max_gain_value:
           max_gain_value = gain
           max_gain_edge = edge
     else:
       gain = value
-      if gain > max_gain_value:
+      if max_gain_value is None or gain > max_gain_value:
         max_gain_value = gain
         max_gain_edge = edge
-  return max_gain_edge
+  return max_gain_edge, max_gain_value
 
+
+def get_maximum_gain_edge_any_value(logP, logM, sum_valueP, sum_valueM):
+  
+  relative_dfgP = transform_dfg_to_relative(get_dfg_from_log(logP), sum_valueP)
+  relative_dfgM = transform_dfg_to_relative(get_dfg_from_log(logM), sum_valueM)
+  max_gain_edge = None
+  max_gain_value = None
+  for edge, value in relative_dfgM.items():
+    if edge in relative_dfgP:
+      gain = value - relative_dfgP[edge]
+      if max_gain_value is None or gain > max_gain_value:
+        max_gain_value = gain
+        max_gain_edge = edge
+    else:
+      gain = value
+      if max_gain_value is None or gain > max_gain_value:
+        max_gain_value = gain
+        max_gain_edge = edge
+  return max_gain_edge, max_gain_value
+
+
+# current callable state of the art upper bound calculation
 def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
-  print("Loading logs")
   log_P = load_log(log_P_path)
   log_M = load_log(log_m_path)
   log_P = artificial_start_end(log_P.__deepcopy__())
@@ -249,7 +293,7 @@ def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
 
   print("Running trace upper bound calculation")
   while True:
-    max_gain_edge = get_maximum_gain_edge(log_P, log_M, original_p_size, original_m_size)
+    max_gain_edge, _ = get_maximum_gain_edge(log_P, log_M, original_p_size, original_m_size)
     size_P = len(log_P)
     size_M = len(log_M)
     if max_gain_edge is None:
@@ -265,6 +309,53 @@ def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
   fit_m = len(log_M) / original_m_size
   upper_bround = fit_p - fit_m
   return upper_bround
+
+def reduce_log_by_non_replayable_traces(log_M_unsure_art, log_P_accept_art):
+  log_M_unsure_art_new = EventLog()
+  dfgP = get_dfg_from_log(log_P_accept_art)
+  for trace in log_M_unsure_art:
+    included = True
+    for i in range(len(trace)-1):
+      if (trace[i][xes_constants.DEFAULT_NAME_KEY], trace[i+1][xes_constants.DEFAULT_NAME_KEY]) not in dfgP:
+        included = False
+        break
+    if included:
+      log_M_unsure_art_new.append(trace)
+  return log_M_unsure_art_new
+      
+# current callable state of the art upper bound calculation (using algorithm 2, starts by ub 1 and goes down)
+def run_upper_bound_traces_on_logs_algo_2(log_P_path, log_m_path):
+  log_P_accept = load_log(log_P_path)
+  log_M_unsure = load_log(log_m_path)
+  log_P_accept_art = artificial_start_end(log_P_accept.__deepcopy__())
+  log_M_unsure_art = artificial_start_end(log_M_unsure.__deepcopy__())
+  log_M_accept_art = EventLog()
+  
+  original_p_size = len(log_P_accept_art)
+  original_m_size = len(log_M_unsure_art)
+  
+  trace_upper_bound = 1
+  while len(log_M_unsure_art) > 0:
+    len_log_M_unsure_art = len(log_M_unsure_art)
+    log_M_unsure_art = reduce_log_by_non_replayable_traces(log_M_unsure_art, log_P_accept_art)
+    
+    max_gain_edge, max_gain_value = get_maximum_gain_edge_any_value(log_P_accept_art, log_M_unsure_art, original_p_size, original_m_size)
+    
+    if max_gain_edge is not None:
+      if max_gain_value > 0:
+        log_P_accept_art = remove_traces_with_edge_from_log(log_P_accept_art, max_gain_edge)
+      else:
+        log_M_accept_art = add_traces_with_edge_from_log(log_M_unsure_art, log_M_accept_art, max_gain_edge)
+        
+      log_M_unsure_art = remove_traces_with_edge_from_log(log_M_unsure_art, max_gain_edge)
+      
+    if len_log_M_unsure_art == len(log_M_unsure_art):
+      raise Exception("Error, No more gain")
+    
+    trace_upper_bound = len(log_P_accept_art) / original_p_size - len(log_M_accept_art) / original_m_size
+
+  return trace_upper_bound
+
 
 def parse_result_emd(trace_variants,distamce_df_emd, relative_trace_dic_P, relative_trace_dic_M):
   matrix_length = len(distamce_df_emd)
@@ -323,10 +414,12 @@ def get_align_uppper_bound_for_trace(trace1, trace2, shortest_model_estimation =
   return result
   
 
+
 def print_result(result):
   for i in range(len(result)):
     print(result[i][0][0], " with ", result[i][1], " -> ", result[i][0][1])
   print()
+
 
 def run_upper_bound_align_on_logs_edit_distance(log_P_path, log_m_path, shortest_model_estimation = {}):
   log_P = load_log(log_P_path)
@@ -367,10 +460,9 @@ def run_upper_bound_align_on_logs_edit_distance(log_P_path, log_m_path, shortest
         
   return result
     
-# Current state of the art upper bound calculation
+# Current callable state of the art upper bound calculation
 def run_upper_bound_align_on_logs_upper_bound_trace_distance(log_P_path, log_m_path, shortest_model_estimation = {}):
   # Data preparation
-  print("Loading logs")
   log_P = load_log(log_P_path)
   log_M = load_log(log_m_path)
   log_P_art = artificial_start_end(log_P.__deepcopy__())
@@ -472,8 +564,50 @@ def run_upper_bound_traces():
     print("Running trace upper bound on data ", lpNames[i], " and ", lMNames[i])
     upper_bound = run_upper_bound_traces_on_logs(log_P_path, log_M_path)
     print("Trace upper bound for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
+    upper_bound = run_upper_bound_traces_on_logs_algo_2(log_P_path, log_M_path)
+    print("Trace upper bound for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
+    print()
+    
+def extract_and_sort_files(root_path):
+  lp_files = []
+  lm_files = []
+
+  # List all files in the root path
+  files = os.listdir(root_path)
+
+  # Filter files with 'lp' or 'lm' in their names
+  lp_files = [file for file in files if 'lp' in file]
+  lm_files = [file for file in files if 'lm' in file]
+
+  # Sort files
+  lp_files.sort()
+  lm_files.sort()
+
+  return lp_files, lm_files
+  
+  
+def run_upper_bound_traces_stress_test():
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/testUpperBoundFolder"
+  lp_files, lm_files = extract_and_sort_files(rootPath)
+  print("List of LP files:", lp_files)
+  print("List of LM files:", lm_files)
+  
+  
+  lpNames = lp_files
+  lMNames = lm_files
+  
+  for i in range(len(lpNames)):
+    log_P_path = os.path.join(rootPath, lpNames[i])
+    log_M_path = os.path.join(rootPath, lMNames[i])
+    print("Running trace upper bound on data ", lpNames[i], " and ", lMNames[i])
+    upper_bound = run_upper_bound_traces_on_logs(log_P_path, log_M_path)
+    print("Trace upper bound algo 1 for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
+    upper_bound = run_upper_bound_traces_on_logs_algo_2(log_P_path, log_M_path)
+    print("Trace upper bound algo 2for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
     print()
   
+  
+
      
 def run_upper_bound_alignment():
   rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
@@ -503,9 +637,9 @@ if __name__ == '__main__':
   
   warnings.filterwarnings("ignore")
   
-  # show_EMD_correctness()
+  show_EMD_correctness()
   # run_upper_bound_alignment()
-  run_upper_bound_traces()
+  run_upper_bound_traces_stress_test()
   
   
   
