@@ -1,5 +1,17 @@
-# InductiveMiner_bi
+# IMBI_Master
 
-When you run the code, a simple GUI appears and asks for a desirable event log, an undesirable event log, support, and ratio parameters. Then the algorithm runs and shows the discovered Petri net model and calculated evaluation metrics.
+This repo is part of the master thesis:
 
-![image](https://user-images.githubusercontent.com/81296367/177995449-3ac38efa-3bfc-4d11-94fa-c9504941494f.png)
+Chair of Process and Data Science (PADS - Informatik 9), RWTH Aachen University
+
+"Process discovery with desirable and undesirable event logs: an extension of current inductive mining techniques" 
+
+## Folder structure
+
+- GNN_partitioning: contains all Graph neural network related code
+
+- analysing_cost_functions: contains all code for the comparision of the different evaluation functions
+
+- local_pm4py: adaptation of the IM-BI with additional score functions and a GNN framework
+
+- upperBoundCalculation: contains the upper bound calculation
