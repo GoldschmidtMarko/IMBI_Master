@@ -474,7 +474,7 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
     
     if logP_name_org != None and logM_name_org != None:
       ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
-      ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
+      ub_trace = ubc.run_upper_bound_traces_simple(logP_name_org, logM_name_org)
     
 
     for logGroup in df_grouped.index.unique():
