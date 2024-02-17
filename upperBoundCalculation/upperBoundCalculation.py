@@ -281,7 +281,7 @@ def get_maximum_gain_edge_any_value(logP, logM, sum_valueP, sum_valueM):
   return max_gain_edge, max_gain_value
 
 
-# current callable state of the art upper bound calculation
+# Non correct current callable upper bound calculation
 def run_upper_bound_traces_on_logs(log_P_path, log_m_path):
   log_P = load_log(log_P_path)
   log_M = load_log(log_m_path)
@@ -323,7 +323,7 @@ def reduce_log_by_non_replayable_traces(log_M_unsure_art, log_P_accept_art):
       log_M_unsure_art_new.append(trace)
   return log_M_unsure_art_new
       
-# current callable state of the art upper bound calculation (using algorithm 2, starts by ub 1 and goes down)
+# Non correct current callable upper bound calculation (using algorithm 2, starts by ub = 1 and goes down)
 def run_upper_bound_traces_on_logs_algo_2(log_P_path, log_m_path):
   log_P_accept = load_log(log_P_path)
   log_M_unsure = load_log(log_m_path)
@@ -355,6 +355,39 @@ def run_upper_bound_traces_on_logs_algo_2(log_P_path, log_m_path):
     trace_upper_bound = len(log_P_accept_art) / original_p_size - len(log_M_accept_art) / original_m_size
 
   return trace_upper_bound
+
+def getTraceDictioanry(log):
+  trace_dict = {}
+  for trace in log:
+    trace_tuple = tuple([event[xes_constants.DEFAULT_NAME_KEY] for event in trace])
+    if trace_tuple in trace_dict:
+      trace_dict[trace_tuple] += 1
+    else:
+      trace_dict[trace_tuple] = 1
+  return trace_dict
+
+# current callable less precise upper bound calculation
+def run_upper_bound_traces_simple(log_P_path, log_m_path):
+  log_P = load_log(log_P_path)
+  log_M = load_log(log_m_path)
+  
+
+  trace_dict_P = getTraceDictioanry(log_P)
+  trace_dict_M = getTraceDictioanry(log_M)
+  
+  trace_frequencies_OnlyP = 0
+  trace_frequencies_Intersect = 0
+  
+  for traceTuple in trace_dict_P.keys():
+    if traceTuple in trace_dict_M:
+      if trace_dict_P[traceTuple] / len(log_P) > trace_dict_M[traceTuple] / len(log_M):
+        trace_frequencies_Intersect += trace_dict_P[traceTuple] / len(log_P) - trace_dict_M[traceTuple] / len(log_M)
+    else:
+      trace_frequencies_OnlyP += trace_dict_P[traceTuple]
+   
+  upper_bound_trace = trace_frequencies_OnlyP / len(log_P) + trace_frequencies_Intersect
+  
+  return upper_bound_trace
 
 
 def parse_result_emd(trace_variants,distamce_df_emd, relative_trace_dic_P, relative_trace_dic_M):
@@ -603,11 +636,29 @@ def run_upper_bound_traces_stress_test():
     upper_bound = run_upper_bound_traces_on_logs(log_P_path, log_M_path)
     print("Trace upper bound algo 1 for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
     upper_bound = run_upper_bound_traces_on_logs_algo_2(log_P_path, log_M_path)
-    print("Trace upper bound algo 2for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
+    print("Trace upper bound algo 2 for ", lpNames[i], " and ", lMNames[i], " is ", upper_bound)
     print()
   
   
-
+def run_upper_bound_traces_stress_test_simple():
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/testUpperBoundFolder"
+  lp_files, lm_files = extract_and_sort_files(rootPath)
+  print("List of LP files:", lp_files)
+  print("List of LM files:", lm_files)
+  
+  
+  lpNames = lp_files
+  lMNames = lm_files
+  
+  for i in range(len(lpNames)):
+    log_P_path = os.path.join(rootPath, lpNames[i])
+    log_M_path = os.path.join(rootPath, lMNames[i])
+    print("Running trace upper bound on data ", lpNames[i], " and ", lMNames[i])
+    upper_bound = run_upper_bound_traces_on_logs(log_P_path, log_M_path)
+    upper_bound_simple = run_upper_bound_traces_simple(log_P_path, log_M_path)
+    print("Trace upper bound: algo1: ", upper_bound, " algoSimple: ", upper_bound_simple)
+  
+  
      
 def run_upper_bound_alignment():
   rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
@@ -637,9 +688,9 @@ if __name__ == '__main__':
   
   warnings.filterwarnings("ignore")
   
-  show_EMD_correctness()
+  # show_EMD_correctness()
   # run_upper_bound_alignment()
-  run_upper_bound_traces_stress_test()
+  run_upper_bound_traces_stress_test_simple()
   
   
   
