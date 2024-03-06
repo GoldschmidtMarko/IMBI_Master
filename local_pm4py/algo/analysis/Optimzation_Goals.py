@@ -126,6 +126,8 @@ def apply_petri_silent(LPlus, LMinus, net, i_m, i_f):
     measures['precision'] = round(prec_Plus,2)
     measures['fitP'] = round(fp,2)
     measures['fitM'] = round(fm,2)
+    measures['fitPTrace'] = round(fp_pef,2)
+    measures['fitMTrace'] = round(fm_pef,2)
     measures['acc_perf'] = round(fp_pef - fm_pef,2)
     measures['F1_perf'] = round(2 * ((fp_pef*(1-fm_pef))/(fp_pef+(1-fm_pef))),2)
 

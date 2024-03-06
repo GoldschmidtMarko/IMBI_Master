@@ -22,6 +22,8 @@ import pandas as pd
 from pm4py.algo.discovery.inductive.algorithm import Variants as ind_Variants
 from pm4py.algo.evaluation.precision import algorithm as precision_evaluator
 from local_pm4py.algo.analysis import Optimzation_Goals
+from pm4py.algo.conformance.alignments.petri_net import algorithm as alignments
+from pm4py.algo.evaluation.replay_fitness import algorithm as replay_fitness
 import matplotlib.pyplot as plt
 import numpy as np
 import math
@@ -51,9 +53,10 @@ def get_data_paths():
   # lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
   # lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
   rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
   # rootPath = os.path.join(root_path,"analysing_cost_functions","new-data")
-  lpNames = ["RTFM-SAMP-LP.xes", "BPIC2012-O-LP.xes", "BPIC2017-SAMP-O-LP.xes"]
-  lMNames = ["RTFM-SAMP-LM.xes", "BPIC2012-O-LM.xes", "BPIC2017-SAMP-O-LM.xes"]
+  lpNames = ["RTFM-LP.xes", "BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes"]
+  lMNames = ["RTFM-LM.xes", "BPIC12-A-O-LM.xes", "BPIC17-A-O-LM.xes"]
   
   
   lpPaths = []
@@ -141,6 +144,10 @@ def runDoubleLogEvaluation(df,log,logM, name,net, im, fm, logPName = "",logMName
     "im_bi_sup" : im_bi_sup,
     "im_bi_ratio" : im_bi_ratio,
     "use_gnn" : use_gnn,
+    "fitP-Align": mes['fitP'],
+    "fitM-Align": mes['fitM'],
+    "fitP-Trace": mes['fitPTrace'],
+    "fitM-Trace": mes['fitMTrace'],
     "acc_align": mes['acc'],
     "acc_trace": mes['acc_perf'],
     "f1_align" : mes['F1'],
@@ -154,48 +161,39 @@ def runDoubleLogEvaluation(df,log,logM, name,net, im, fm, logPName = "",logMName
 
 def runSingleLogEvaluation(df,log,logM, name, net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
   
-  # if isRowPresent(df, name, logPName, logMName, imf_noiseThreshold, hm_dependency_threshold, im_bi_sup, im_bi_ratio) == True:
-  #   print ("Skipped because present")
-  #   return df
-  
-  parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT:"pdf"}
-  gviz = pn_visualizer.apply(net, im, fm, parameters=parameters)
+  parameter = {alignments.Parameters.SHOW_PROGRESS_BAR: False}
 
   try:
-    fitness_token = replay_fitness_evaluator.apply(log, net, im, fm, variant=replay_fitness_evaluator.Variants.TOKEN_BASED)["log_fitness"]
+    prec = precision_evaluator.apply(log, net, im, fm,parameters=parameter,
+                                          variant=precision_evaluator.Variants.ALIGN_ETCONFORMANCE)
   except:
-    fitness_token = 0
-  try:
-    fitness_align = replay_fitness_evaluator.apply(log, net, im, fm, variant=replay_fitness_evaluator.Variants.ALIGNMENT_BASED)["log_fitness"]
-  except:
-    fitness_align = 0
+    prec = 0
     
   try:
-    prec_token = precision_token_based_replay(log, net, im, fm)
+    alp = alignments.apply_log(log, net, im, fm,parameters=parameter)
+    fp_inf = replay_fitness.evaluate(alp,parameters=parameter, variant=replay_fitness.Variants.ALIGNMENT_BASED)
+    align_fit = fp_inf['averageFitness']
+    trace_fit = fp_inf['percentage_of_fitting_traces']/100
   except:
-    prec_token = 0
+    align_fit = 0
+    trace_fit = 0
     
-  try:
-    prec_alignment = precision_alignments(log, net, im, fm)
-  except:
-    prec_alignment = 0
-    
-
   df = pd.concat([df, pd.DataFrame.from_records([{
       "miner" : name,
       "logP_Name": logPName,
-      "logM_Name": logMName,
+      "logM_Name": "",
       "imf_noise_thr" : imf_noiseThreshold,
       "hm_depen_thr" : hm_dependency_threshold,
       "im_bi_sup" : im_bi_sup,
       "im_bi_ratio" : im_bi_ratio,
       "use_gnn" : use_gnn,
-      "fit_tok": fitness_token,
-      "fit_alig": fitness_align,
-      "prec_tok": prec_token,
-      "prec_alig": prec_alignment,
-      "f1_tok": f1_score(fitness_token, prec_token),
-      "f1_alig": f1_score(fitness_align, prec_alignment),
+      "fitP-Align": align_fit,
+      "fitM-Align": 0,
+      "fitP-Trace": trace_fit,
+      "fitM-Trace": 0,
+      "acc_align": 0,
+      "acc_trace": 0,
+      "precP" : prec,
       "net": net,
       "im" : im,
       "fm" : fm
@@ -1062,7 +1060,7 @@ def run_comparison(csv_filename, result_path, parallel = True):
     aprox_better_runs = 0
     
     ratios = [1]
-    ratios = [1, 0.8, 0.5]
+    # ratios = [1, 0.8, 0.5]
     sups = [0, 0.2, 0.4, 0.6, 0.8, 1]
     # sups = [0, 0.2]
     
@@ -1116,7 +1114,6 @@ def run_comparison(csv_filename, result_path, parallel = True):
         df_temp, _ = applyMinerToLog(*input)
         df = pd.concat([df, df_temp])
     txt_file.write("Time: " + str(time.time() - start_time) + "\n")
-    save_df(df, os.path.join(result_path,csv_filename))
     return df
   
 def save_petri_nets(df, result_path):
@@ -1159,14 +1156,108 @@ def save_petri_nets(df, result_path):
     net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=im_bi_sup, ratio=im_bi_ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant)
     save_vis_petri_net(net,im,fm,os.path.join(folder_path, dataFolderName, "pr_" + df_Variant + "_"  + logPName + "_" + logMName + "_sup_"+ str(im_bi_sup) + "_ratio_"+ str(im_bi_ratio) + ".png"))
   
+def getBaseLineInductiveMinerDfStarArg(arg):
+  return getBaseLineInductiveMinerDfStar(*arg)
+  
+def getBaseLineInductiveMinerDfStar(logs_name, logpath):
+  df = create_df()
+  warnings.filterwarnings("ignore")
+  print(str(os.getpid()) + " Loading log: " + logs_name)
+  parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
+  
+  log = xes_importer.apply(logpath, parameters=parameter)
+
+  print(str(os.getpid()) + " Running IM")
+  pt = pm4py_algorithm.apply(log,variant=ind_Variants.IM)
+  net, im, fm = convert_to_petri_net(pt)
+  
+  print(str(os.getpid()) + " Eval IM")
+  df = runSingleLogEvaluation(df, log, None, "IM", net, im, fm, logs_name, logs_name, 0, 0, 0, 0, False) 
+  
+  noiseThreshold = 0.2
+  #imf 
+  print(str(os.getpid()) + " Running IMF")
+  parameters = {pm4py_imf.IMFParameters.NOISE_THRESHOLD : noiseThreshold}
+  pt = pm4py_algorithm.apply(log,variant=ind_Variants.IMf, parameters=parameters)
+  net, im, fm = convert_to_petri_net(pt)
+  print(str(os.getpid()) + " Eval IMF")
+  
+  df = runSingleLogEvaluation(df, log, None, "IMF", net, im, fm, logs_name, logs_name, noiseThreshold, 0, 0, 0, False) 
+  print(str(os.getpid()) + " Done")
+  return df
+  
+def getBaseLineInductiveMinerDf(df):
+  logs_path_root =  "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
+  logs_name = ["BPIC12-A-O.xes", "BPIC17-A-O.xes", "RTFM.xes"]
+  # logs_name = ["BPIC12-A-O.xes", "RTFM.xes"]
+  
+  parallel = True
+  if parallel:
+    num_processors_available = multiprocessing.cpu_count()
+    print("Number of available processors:", num_processors_available)
+    if num_processors_available > 20:
+      num_processors = max(1,round(num_processors_available))
+    else:
+      num_processors = max(1,round(num_processors_available/2))
+    print("Number of used processors:", num_processors)
+
+    input_data = []
+    for i in range(0,len(logs_name)):
+      input_data.append((logs_name[i],logs_path_root + logs_name[i]))
+
+    warnings.filterwarnings("ignore")
+    pool_res = None
+    with multiprocessing.Pool(num_processors) as pool:
+        pool_res = tqdm(pool.imap(getBaseLineInductiveMinerDfStarArg, input_data),total=len(input_data))
+        
+        for result in pool_res:
+            # Process individual evaluation result
+            df = pd.concat([df, result])
+            
+    return df
+    
+  else:
+    for i in range(0,len(logs_name)):
+      logpath = logs_path_root + logs_name[i]
+      print("Running log: " + logs_name[i])
+      parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
+      
+      log = xes_importer.apply(logpath, parameters=parameter)
+
+      print("Running IM")
+      pt = pm4py_algorithm.apply(log,variant=ind_Variants.IM)
+      net, im, fm = convert_to_petri_net(pt)
+      
+      print("Eval IM")
+      df = runSingleLogEvaluation(df, log, None, "IM", net, im, fm, logs_name[i], logs_name[i], 0, 0, 0, 0, False) 
+      
+      noiseThreshold = 0.2
+      #imf 
+      print("Running IMF")
+      parameters = {pm4py_imf.IMFParameters.NOISE_THRESHOLD : noiseThreshold}
+      pt = pm4py_algorithm.apply(log,variant=ind_Variants.IMf, parameters=parameters)
+      net, im, fm = convert_to_petri_net(pt)
+      print("Eval IMF")
+      
+      df = runSingleLogEvaluation(df, log, None, "IMF", net, im, fm, logs_name[i], logs_name[i], noiseThreshold, 0, 0, 0, False) 
+    
+  return df
+  
 def get_comparison_df(csv_filename, result_path):
   if not os.path.exists(os.path.join(result_path,csv_filename)):
     df = run_comparison(csv_filename, result_path)
+    df = getBaseLineInductiveMinerDf(df)
+    save_df(df, os.path.join(result_path,csv_filename))
   else:
     df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
     
   # displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
   use_single_best = False
+  
+  print(df)
+  return
+  
+  # save_petri_nets(df, result_path)
   
   if use_single_best:
     df = filter_df_for_best_models(df)
@@ -1272,7 +1363,7 @@ def create_petri_net_model(file_name, result_path, logP_path, logM_path, sup, ra
   write_pnml(net, im, fm, os.path.join(result_path,file_name + ".pnml"))
   
 def generate_manual_models(result_path):
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
   lpNames = ["RTFM-SAMP-LP.xes", "2017_O_lp.xes"]
   lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
   
@@ -1290,53 +1381,3 @@ if __name__ == '__main__':
   # create_comparison_petri_nets(result_path, "lp_2017_f.xes","lm_2017_f.xes",0.4,0.8)
 
   
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
