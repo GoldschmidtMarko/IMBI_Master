@@ -47,13 +47,14 @@ def get_original_log_paths(subString):
       return m[1]
   return None
   
-def get_data_paths():
+def get_data_paths(file_path):
   # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
   # rootPath = "C:/Users/Marko/Desktop/IMbi_Data/FilteredLowActivity/"
   # lpNames = ["2012_O_lp.xes", "2017_O_lp.xes"]
   # lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
+  data_folder = "comparison-data"
+  logs_path_root = os.path.join(file_path,data_folder)
+  
   # rootPath = os.path.join(root_path,"analysing_cost_functions","new-data")
   lpNames = ["RTFM-LP.xes", "BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes"]
   lMNames = ["RTFM-LM.xes", "BPIC12-A-O-LM.xes", "BPIC17-A-O-LM.xes"]
@@ -63,9 +64,9 @@ def get_data_paths():
   lmPaths = []
 
   for lp in lpNames:
-    lpPaths.append((lp,os.path.join(rootPath,lp)))
+    lpPaths.append((lp,os.path.join(logs_path_root,lp)))
   for lm in lMNames:
-    lmPaths.append((lm,os.path.join(rootPath,lm)))
+    lmPaths.append((lm,os.path.join(logs_path_root,lm)))
     
   return lpPaths, lmPaths
 
@@ -159,16 +160,24 @@ def runDoubleLogEvaluation(df,log,logM, name,net, im, fm, logPName = "",logMName
   }])])
   return df
 
-def runSingleLogEvaluation(df,log,logM, name, net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0, hm_dependency_threshold = 0,im_bi_sup = 0, im_bi_ratio = 0, use_gnn = False):
+def runSingleLogEvaluation(df,log,logM, name, net, im, fm, logPName = "",logMName = "", imf_noiseThreshold = 0.0, hm_dependency_threshold = 0.0,im_bi_sup = 0.0, im_bi_ratio = 0.0, use_gnn = False):
   
-  parameter = {alignments.Parameters.SHOW_PROGRESS_BAR: False}
-
+  from pm4py.algo.evaluation.precision.variants.align_etconformance import Parameters as align_etconformance_parameters
+  from pm4py.util import constants
+  
+  constants.ENABLE_MULTIPROCESSING_DEFAULT = True
+  parameter = {alignments.Parameters.SHOW_PROGRESS_BAR: True}
+  
+  parametersAlign = {align_etconformance_parameters.SHOW_PROGRESS_BAR: True, align_etconformance_parameters.MULTIPROCESSING: True}
+  
+  print("Running precision")
   try:
-    prec = precision_evaluator.apply(log, net, im, fm,parameters=parameter,
+    prec = precision_evaluator.apply(log, net, im, fm,parameters=parametersAlign,
                                           variant=precision_evaluator.Variants.ALIGN_ETCONFORMANCE)
   except:
     prec = 0
     
+  print("Running alignment")
   try:
     alp = alignments.apply_log(log, net, im, fm,parameters=parameter)
     fp_inf = replay_fitness.evaluate(alp,parameters=parameter, variant=replay_fitness.Variants.ALIGNMENT_BASED)
@@ -1046,7 +1055,7 @@ def filter_df_for_best_models(df):
   
 def run_comparison(csv_filename, result_path, parallel = True):
   df = create_df()
-  lpPaths, lmPaths = get_data_paths()
+  lpPaths, lmPaths = get_data_paths(result_path)
 
   if not os.path.exists(result_path):
     os.mkdir(result_path)
@@ -1186,12 +1195,15 @@ def getBaseLineInductiveMinerDfStar(logs_name, logpath):
   print(str(os.getpid()) + " Done")
   return df
   
-def getBaseLineInductiveMinerDf(df):
-  logs_path_root =  "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
-  logs_name = ["BPIC12-A-O.xes", "BPIC17-A-O.xes", "RTFM.xes"]
+def getBaseLineInductiveMinerDf(df, file_path):
+  # logs_path_root =  "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
+  data_folder = "comparison-data"
+  logs_path_root = os.path.join(file_path,data_folder)
+  
+  logs_name = ["BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes", "RTFM-LP.xes"]
   # logs_name = ["BPIC12-A-O.xes", "RTFM.xes"]
   
-  parallel = True
+  parallel = False
   if parallel:
     num_processors_available = multiprocessing.cpu_count()
     print("Number of available processors:", num_processors_available)
@@ -1203,7 +1215,7 @@ def getBaseLineInductiveMinerDf(df):
 
     input_data = []
     for i in range(0,len(logs_name)):
-      input_data.append((logs_name[i],logs_path_root + logs_name[i]))
+      input_data.append((logs_name[i], os.path.join(logs_path_root,logs_name[i])))
 
     warnings.filterwarnings("ignore")
     pool_res = None
@@ -1218,7 +1230,7 @@ def getBaseLineInductiveMinerDf(df):
     
   else:
     for i in range(0,len(logs_name)):
-      logpath = logs_path_root + logs_name[i]
+      logpath = os.path.join(logs_path_root,logs_name[i])
       print("Running log: " + logs_name[i])
       parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
       
@@ -1244,13 +1256,17 @@ def getBaseLineInductiveMinerDf(df):
   return df
   
 def get_comparison_df(csv_filename, result_path):
-  if not os.path.exists(os.path.join(result_path,csv_filename)):
-    df = run_comparison(csv_filename, result_path)
-    df = getBaseLineInductiveMinerDf(df)
-    save_df(df, os.path.join(result_path,csv_filename))
-  else:
-    df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
+  if False:
+    if not os.path.exists(os.path.join(result_path,csv_filename)):
+      df = run_comparison(csv_filename, result_path)
+      save_df(df, os.path.join(result_path,csv_filename))
+    else:
+      df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
     
+  df = create_df()
+  df = getBaseLineInductiveMinerDf(df, result_path)
+  save_df(df, os.path.join(result_path,csv_filename + 2))
+  
   # displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
   use_single_best = False
   
@@ -1374,7 +1390,9 @@ if __name__ == '__main__':
   result_path = os.path.join(data_path, "results")
   
   # generate_manual_models(result_path)
+  time_cur = time.time()
   df = get_comparison_df("df.csv", result_path)
+  print("Time: " + str(time.time() - time_cur))
 
 
   # df_measurement = filter_and_sort_dataframe(df, 10, get_mar_improved = True)
