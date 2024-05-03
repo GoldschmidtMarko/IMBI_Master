@@ -1028,7 +1028,7 @@ def generate_Models(file_path_models, save_results = False, file_path_results = 
     # 10 - k dense with adj and weight
     # 11 - 3 dense with adj and weight and node frequency
     # 12 - conv with node degree as node feature
-    model_number = 14
+    model_number = 15
     cut_types = ["loop", "seq", "par", "exc"]
     # cut_types = ["seq", "loop"]
     num_epochs = 15
@@ -1191,11 +1191,11 @@ if __name__ == '__main__':
 
     relative_path_model = root_path + "/GNN_partitioning/GNN_Model"
     relative_path_results = root_path + "/GNN_partitioning/GNN_Accuracy_results"
-    relative_path_data = root_path + "/GNN_partitioning/GNN_Data"
+    relative_path_data = root_path + "/GNN_partitioning/GNN_Data_bi_high_noise"
     
-    run_performance_plot(relative_path_results, relative_path_data)
+    # run_performance_plot(relative_path_results, relative_path_data)
     
-    # generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
+    generate_Models(relative_path_model, True, relative_path_results, relative_path_data)
 
 
 

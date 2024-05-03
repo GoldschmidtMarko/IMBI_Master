@@ -286,10 +286,11 @@ def generate_mutated_process_tree_from_process_tree(activites_list, process_tree
   return new_process_tree 
 
 def get_percentage_of_noise():
+  return 0
   # Parameters
-  mean = 0.2
-  sigma = 0.1
-  max_noise_factor = 0.4
+  mean = 0.1
+  sigma = 0.05
+  max_noise_factor = 0.1
 
   # Generate random samples
   samples = []

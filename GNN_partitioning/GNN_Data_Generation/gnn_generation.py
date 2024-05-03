@@ -308,7 +308,7 @@ def generate_data(file_path, sup_step, ratio_step, unique_identifier, number_new
   
 
   list_data_pool = []
-  balancing_work = True
+  balancing_work = False
   if balancing_work:
     result_distribution = get_distribution_dictionary(relative_path, 0.2, 0.2)
     worklist = get_number_work_per_graph_size_per_category(result_distribution, list_grap_node_sizes, cut_types, number_new_data_instances_per_category)
@@ -473,7 +473,7 @@ def log_runtime_of_imbi():
     # net, initial_marking, final_marking = inductive_miner.apply_bi(logP,logM, variant= inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, use_gnn=False)
     get_best_cut_with_cut_type(logP,logM,sup=support, ratio=ratio, cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE)
     
-    # print("Runtime of IMBI: " + str(time.time() - cur_time))
+    print("Runtime of IMBI: " + str(time.time() - cur_time))
 
 
   print("Runtime overall: " + str(time.time() - overall_runtime))
@@ -489,7 +489,7 @@ if __name__ == '__main__':
 
   print()
   run_generate_data()
-  # log_runtime_of_imbi()
+  # log_runtime_of_imbi() 
   # get_labeled_data_cut_type_distribution(relative_path, 0.2, 0.2)
   
   print("Runtime: " + str(time.time() - cur_time))

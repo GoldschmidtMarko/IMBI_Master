@@ -193,6 +193,7 @@ def generate_random_process_tree_for_cut_type(activites_list, cut_type):
   return generated_ProcessTrees[0] 
 
 def get_percentage_of_noise():
+  return 0
   # Parameters
   mean = 0.2
   sigma = 0.1

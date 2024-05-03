@@ -1,11 +1,11 @@
 # Data Settings
 Cut_type: loop
-model_number: 14
+model_number: 15
 num_epochs: 15
 batch_size: 10
 
 # Model Settings
-model_number: 14
+model_number: 15
 input_dim: 12
 hidden_dim: 32
 output_dim: 1
