@@ -97,8 +97,13 @@ def apply_petri(LPlus, LMinus, net, i_m, i_f):
 
 def apply_petri_silent(LPlus, LMinus, net, i_m, i_f):
     measures = {}
-
-    parameter = {alignments.Parameters.SHOW_PROGRESS_BAR: False}
+    
+    from pm4py.algo.evaluation.precision.variants.align_etconformance import Parameters as align_etconformance_parameters
+    from pm4py.util import constants
+    constants.ENABLE_MULTIPROCESSING_DEFAULT = True
+    parameter = {alignments.Parameters.SHOW_PROGRESS_BAR: True}
+    parametersAlign = {align_etconformance_parameters.SHOW_PROGRESS_BAR: True, align_etconformance_parameters.MULTIPROCESSING: True}
+    
     alp = alignments.apply_log(LPlus, net, i_m, i_f,parameters=parameter)
     
     
@@ -109,7 +114,7 @@ def apply_petri_silent(LPlus, LMinus, net, i_m, i_f):
 
 
     ################################################################################
-    prec_Plus = precision_evaluator.apply(LPlus, net, i_m, i_f,parameters=parameter,
+    prec_Plus = precision_evaluator.apply(LPlus, net, i_m, i_f,parameters=parametersAlign,
                                           variant=precision_evaluator.Variants.ALIGN_ETCONFORMANCE)
     ################################################################################
 

@@ -501,8 +501,8 @@ def get_cuts(log, logM,log_art, logM_art, self_start_activities, self_end_activi
                     possible_partitions = dfg_functions.find_possible_partitions(netP)
                     
                 
-                if len(possible_partitions) >= 1000:
-                    print("Warning: Length of possible partitions is " + str(len(possible_partitions)))
+                # if len(possible_partitions) >= 1000:
+                    ## print("Warning: Length of possible partitions is " + str(len(possible_partitions)))
                 
                 # recalculate and assign since net pruning in find_possible_partitions change them
                 start_acts_P = set([x[1] for x in dfgP if (x[0] == 'start')])-{'end'}

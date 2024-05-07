@@ -188,24 +188,26 @@ def runSingleLogEvaluation(df,log,logM, name, net, im, fm, logPName = "",logMNam
     trace_fit = 0
     
   df = pd.concat([df, pd.DataFrame.from_records([{
-      "miner" : name,
-      "logP_Name": logPName,
-      "logM_Name": "",
-      "imf_noise_thr" : imf_noiseThreshold,
-      "hm_depen_thr" : hm_dependency_threshold,
-      "im_bi_sup" : im_bi_sup,
-      "im_bi_ratio" : im_bi_ratio,
-      "use_gnn" : use_gnn,
-      "fitP-Align": align_fit,
-      "fitM-Align": 0,
-      "fitP-Trace": trace_fit,
-      "fitM-Trace": 0,
-      "acc_align": 0,
-      "acc_trace": 0,
-      "precP" : prec,
-      "net": net,
-      "im" : im,
-      "fm" : fm
+    "miner" : name,
+    "logP_Name": logPName,
+    "logM_Name": "",
+    "imf_noise_thr" : imf_noiseThreshold,
+    "hm_depen_thr" : hm_dependency_threshold,
+    "im_bi_sup" : im_bi_sup,
+    "im_bi_ratio" : im_bi_ratio,
+    "use_gnn" : use_gnn,
+    "fitP-Align": align_fit,
+    "fitM-Align": 0,
+    "fitP-Trace": 0,
+    "fitM-Trace": 0,
+    "acc_align": 0,
+    "acc_trace": 0,
+    "f1_align" : 0,
+    "f1_trace" : 0,
+    "precP" : prec,
+    "net": net,
+    "im" : im,
+    "fm" : fm
   }])])
   return df
 
@@ -1053,7 +1055,7 @@ def filter_df_for_best_models(df):
   # Displaying the resulting DataFrame
   return filtered_df
   
-def run_comparison(csv_filename, result_path, parallel = True):
+def run_comparison(ratio_list, sup_list, result_path, parallel = True):
   df = create_df()
   lpPaths, lmPaths = get_data_paths(result_path)
 
@@ -1068,10 +1070,8 @@ def run_comparison(csv_filename, result_path, parallel = True):
     ali_better_runs = 0
     aprox_better_runs = 0
     
-    ratios = [1]
-    # ratios = [1, 0.8, 0.5]
-    sups = [0, 0.2, 0.4, 0.6, 0.8, 1]
-    # sups = [0, 0.2]
+    ratios = ratio_list
+    sups = sup_list
     
     dataList = []
     for ratio in ratios:
@@ -1081,8 +1081,7 @@ def run_comparison(csv_filename, result_path, parallel = True):
           dataList.append((df_temp, result_path, lpPaths[i][1], lmPaths[i][1], lpPaths[i][0],lmPaths[i][0], 0.2, 0.99, sup, ratio))
 
     start_time = time.time()
-    
-    parallel = True
+
     if parallel:
       num_processors_available = multiprocessing.cpu_count()
       print("Number of available processors:", num_processors_available)
@@ -1116,10 +1115,13 @@ def run_comparison(csv_filename, result_path, parallel = True):
             
             
     else:
+      print("Running in single process mode")
       warnings.filterwarnings("ignore")
       df = create_df()
-      for input in dataList:
-        txt_file.write("Running: " + str(input) + "\n")
+      for index, input in enumerate(dataList):
+        print("Running log: " + input[2] + " " + input[3])
+        print("Run " + str(index) + " of " + str(len(dataList)))
+        
         df_temp, _ = applyMinerToLog(*input)
         df = pd.concat([df, df_temp])
     txt_file.write("Time: " + str(time.time() - start_time) + "\n")
@@ -1176,13 +1178,6 @@ def getBaseLineInductiveMinerDfStar(logs_name, logpath):
   
   log = xes_importer.apply(logpath, parameters=parameter)
 
-  print(str(os.getpid()) + " Running IM")
-  pt = pm4py_algorithm.apply(log,variant=ind_Variants.IM)
-  net, im, fm = convert_to_petri_net(pt)
-  
-  print(str(os.getpid()) + " Eval IM")
-  df = runSingleLogEvaluation(df, log, None, "IM", net, im, fm, logs_name, logs_name, 0, 0, 0, 0, False) 
-  
   noiseThreshold = 0.2
   #imf 
   print(str(os.getpid()) + " Running IMF")
@@ -1195,13 +1190,10 @@ def getBaseLineInductiveMinerDfStar(logs_name, logpath):
   print(str(os.getpid()) + " Done")
   return df
   
-def getBaseLineInductiveMinerDf(df, file_path):
+def getBaseLineInductiveMinerDf(df, logs_name, file_path):
   # logs_path_root =  "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
   data_folder = "comparison-data"
   logs_path_root = os.path.join(file_path,data_folder)
-  
-  logs_name = ["BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes", "RTFM-LP.xes"]
-  # logs_name = ["BPIC12-A-O.xes", "RTFM.xes"]
   
   parallel = False
   if parallel:
@@ -1254,34 +1246,185 @@ def getBaseLineInductiveMinerDf(df, file_path):
       df = runSingleLogEvaluation(df, log, None, "IMF", net, im, fm, logs_name[i], logs_name[i], noiseThreshold, 0, 0, 0, False) 
     
   return df
+
+def plot_line_chart(df, highlight_support, saveFig = False, file_path = ""):
+  import matplotlib.font_manager as fm
+  custom_font = fm.FontProperties(family='Arial', size=24)
   
-def get_comparison_df(csv_filename, result_path):
-  if False:
+  df.reset_index(drop=True, inplace=True)
+  df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
+  
+  use_upper_bound = False
+  output_file_name = "plot_linechart"
+
+  for group_keys, group_df in df_group:
+    logP_name = group_df['logP_Name'].iloc[0]
+    logM_name = group_df['logM_Name'].iloc[0]
+
+    logP_name_org = get_original_log_paths(logP_name)
+    logM_name_org = get_original_log_paths(logM_name)
+    ubs_align = None
+    ub_trace = None
+      
+    if use_upper_bound and logP_name_org != None and logM_name_org != None:
+      ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
+      ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
+      
+    df_group_on_miners = group_df.groupby(by=["miner"], group_keys=True)
+    for group_keys, group_df_miner in df_group_on_miners:
+      fig, axs = plt.subplots(figsize=(14 , 12))
+      # fig.tight_layout(pad=18.0)
+        
+      axs.set_title("LogP: " + logP_name + "\nLogM: " + logM_name, fontproperties=custom_font)
+      axs.set_xlabel("Miners: " + group_keys, fontproperties=custom_font)
+      boxplot_width = 0.3
+      boxplot_distance = 0.4
+
+      support_values = group_df_miner['im_bi_sup'].tolist()
+      precision_values = group_df_miner['precP'].tolist()
+      fitness_values = group_df_miner['fitP-Align'].tolist()
+
+      from scipy.stats import hmean
+      harmonic_means = [hmean([precision_values[i], fitness_values[i]]) for i in range(len(precision_values))]
+      
+      
+      # Plot precision values (red)
+      axs.plot(support_values, precision_values, label='Precision', color='red')
+
+      # Plot fitness values (blue)
+      axs.plot(support_values, fitness_values, label='Fitness', color='blue')
+
+      # Plot harmonic means (green)
+      axs.plot(support_values, harmonic_means, label='Harmonic Means', color='green')
+      
+      return 3
+      if ubs_align != None and ub_trace != None:
+        # ubs trace
+        # Add a horizontal dotted line above the specific bar
+        axs.hlines(ub_trace, xmin=j+2*boxplot_distance - boxplot_width/2, xmax=j+2*boxplot_distance + boxplot_width/2, colors='k', linestyles='dotted', linewidth=4)
+        text_x = j + 2*boxplot_distance   # Adjust x-coordinate as needed
+        text_y = ub_trace + 0.02  # Adjust y-coordinate as needed
+        pointD_X.append(text_x)
+        pointD_Y.append(text_y)
+        # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
+
+        
+        for enum, ub_align in ubs_align.items():
+          # ubs align
+          # Add a horizontal dotted line above the specific bar
+          axs.hlines(ub_align, xmin=j+ boxplot_distance - boxplot_width/2, xmax=j+boxplot_distance + boxplot_width/2, colors='k', linestyles='dotted', linewidth=4)
+          text_x = j + boxplot_distance  # Adjust x-coordinate as needed
+          text_y = ub_align + 0.02  # Adjust y-coordinate as needed
+          if enum == ubc.ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:
+            pointA_X.append(text_x)
+            pointA_Y.append(text_y)
+          if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
+            pointB_X.append(text_x)
+            pointB_Y.append(text_y)
+          if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
+            pointC_X.append(text_x)
+            pointC_Y.append(text_y)
+
+          # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
+          
+      # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
+      miner_text = ""
+      if group_keys == "IMbi_freq":
+        miner_text = "Cost-Func"
+      elif group_keys == "IMbi_rel":
+        miner_text = "Reward-Func"
+      elif group_keys == "IMbi_aprox":
+        miner_text = "Approx-Func"
+        
+      if group_keys == best_miner:
+        miner_text = "$\\bf{" + miner_text + "}$"
+      xTickLabel.append(miner_text)
+        
+      idx.append(j + 2.5*boxplot_distance)
+      j += 6*boxplot_distance
+      
+    
+    axs.set_yticks(setupYTickList(minValue, 0.25))
+    axs.set_xticks(idx)
+    axs.set_xticklabels(xTickLabel, rotation=0, fontsize=24)
+    axs.tick_params(axis='x', labelsize=24)
+    axs.tick_params(axis='y', labelsize=24)
+    
+    
+    legend_elements = [
+      Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec}$"),
+      Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{align{-}acc}$"),
+      Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{trace{-}acc}$"),
+      Line2D([0], [0], color='m', lw=4, label=r"$\operatorname{align{-}F1{-}score}$"),
+      Line2D([0], [0], color='c', lw=4, label=r"$\operatorname{trace{-}F1{-}score}$"),
+      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'A $\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$', markerfacecolor='white'),
+      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'B $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$', markerfacecolor='white'),
+      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'C $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$', markerfacecolor='white'),
+      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'D $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$', markerfacecolor='white'),
+    ]
+    scatter1 = axs.scatter(pointA_X, pointA_Y, marker=r'$\operatorname{A}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_1)$')
+    scatter2 = axs.scatter(pointB_X, pointB_Y, marker=r'$\operatorname{B}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_2)$')
+    scatter3 = axs.scatter(pointC_X, pointC_Y, marker=r'$\operatorname{C}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_3)$')
+    scatter4 = axs.scatter(pointD_X, pointD_Y, marker=r'$\operatorname{D}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{trace{-}acc}}$')
+
+
+    # Add the legend to the subplot
+    lgd = axs.legend(handles=legend_elements + [scatter1, scatter2, scatter3, scatter4], loc='center left', bbox_to_anchor=(1.00, 0.5),prop={'size': 24})
+
+    
+    if saveFig:
+      fig.savefig(os.path.join(file_path, output_file_name + "-" + logP_name +".pdf"), bbox_extra_artists=(lgd,), bbox_inches='tight')
+    else:
+      plt.show()
+
+
+
+
+  
+def get_comparison_df(result_path):
+  get_sup_parameter = True
+  
+  
+  if get_sup_parameter:
+    csv_filename = "comparison.csv"
+    ratio_list = [0]
+    sup_list = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+  
     if not os.path.exists(os.path.join(result_path,csv_filename)):
-      df = run_comparison(csv_filename, result_path)
+      df = run_comparison(ratio_list, sup_list, result_path, parallel=False)
       save_df(df, os.path.join(result_path,csv_filename))
     else:
       df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
+      
+    csv_filename2 = "comparison2.csv"
+    if not os.path.exists(os.path.join(result_path,csv_filename2)):
+      df2 = create_df()
+      logs_name = ["BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes", "RTFM-LP.xes"]
+      df2 = getBaseLineInductiveMinerDf(df2, logs_name, result_path)
+      save_df(df, os.path.join(result_path,csv_filename2))
+    else:
+      df = pd.read_csv(os.path.join(result_path,csv_filename2),index_col=0)
+
+    df = pd.concat([df, df2])
+    print(df)
+    return
+  
+  
+  if False:
+    # displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
+    use_single_best = False
+    # save_petri_nets(df, result_path)
+    if use_single_best:
+      df = filter_df_for_best_models(df)
+      save_petri_nets(df, result_path)
+      displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig=True, file_path=result_path)
+    else:
+      displayDoubleLogSplitBoxplot_TrueSplit(df, saveFig=True, file_path=result_path)
     
-  df = create_df()
-  df = getBaseLineInductiveMinerDf(df, result_path)
-  save_df(df, os.path.join(result_path,csv_filename + 2))
   
-  # displayDoubleLogSplit(df, saveFig=True, file_path=result_path)
-  use_single_best = False
+  plot_line_chart(df, get_sup_parameter, saveFig=True, file_path=result_path)
   
-  print(df)
-  return
-  
-  # save_petri_nets(df, result_path)
-  
-  if use_single_best:
-    df = filter_df_for_best_models(df)
-    save_petri_nets(df, result_path)
-    displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig=True, file_path=result_path)
-  else:
-    displayDoubleLogSplitBoxplot_TrueSplit(df, saveFig=True, file_path=result_path)
-  
+    
   return df
    
 def filter_and_sort_dataframe(df, number_rows, get_mar_improved = True):
@@ -1391,7 +1534,7 @@ if __name__ == '__main__':
   
   # generate_manual_models(result_path)
   time_cur = time.time()
-  df = get_comparison_df("df.csv", result_path)
+  df = get_comparison_df(result_path)
   print("Time: " + str(time.time() - time_cur))
 
 
