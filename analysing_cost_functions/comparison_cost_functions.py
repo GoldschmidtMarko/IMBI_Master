@@ -377,6 +377,32 @@ def applyMinerToLog(df, result_path, logPathP, logPathM,logPName, logMName = "",
   result = 0
   return df, result
 
+def applySingleMinerToLog(df, miner, result_path, logPathP, logPathM, logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
+  parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
+  logP = xes_importer.apply(logPathP, parameters=parameter)
+  logM = xes_importer.apply(logPathM, parameters=parameter)
+  
+  print("Run: " + miner + " on: " + logPName + " and " + logMName + " with noise: " + str(noiseThreshold) + " and dependency: " + str(dependency_threshold) + " and support: " + str(support) + " and ratio: " + str(ratio) + " and use_gnn: " + str(use_gnn))
+  
+  if miner == "IMF":
+    parameters = {pm4py_imf.IMFParameters.NOISE_THRESHOLD : noiseThreshold}
+    pt = pm4py_algorithm.apply(logP,variant=ind_Variants.IMf, parameters=parameters)
+    net, im, fm = convert_to_petri_net(pt)
+    df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name=miner,logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  elif miner == "IMbi_freq":
+    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE,use_gnn=use_gnn)
+    df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name=miner,logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  elif miner == "IMbi_rel":
+    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE,use_gnn=use_gnn)
+    df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name=miner,logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+  elif miner == "IMbi_aprox":
+    net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=support, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE,use_gnn=use_gnn)
+    df = add_Model_To_Database(df=df,log=logP, logM=logM,net=net,im=im,fm=fm,name=miner,logPName=logPName, logMName=logMName,im_bi_sup=support,im_bi_ratio=ratio, use_gnn = use_gnn)
+    
+    
+  return df
+
+
 def applyMinerToLogForGNN(df, logPathP, logPathM,logPName, logMName = "", noiseThreshold = 0.0, dependency_threshold=0.0, support = 0, ratio = 0, use_gnn = False):
   parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
   logP = xes_importer.apply(logPathP, parameters=parameter)
@@ -1111,8 +1137,7 @@ def run_comparison(ratio_list, sup_list, result_path, parallel = True):
               ali_better_runs += res_tuples[0]
               mar_better_runs += res_tuples[1]
               aprox_better_runs += res_tuples[2]
-            
-            
+                
     else:
       print("Running in single process mode")
       warnings.filterwarnings("ignore")
@@ -1125,6 +1150,31 @@ def run_comparison(ratio_list, sup_list, result_path, parallel = True):
         df = pd.concat([df, df_temp])
     txt_file.write("Time: " + str(time.time() - start_time) + "\n")
     return df
+  
+def run_comparison_fixed_supports(ratio_list, sup_dict, result_path):
+  df = create_df()
+  lpPaths, lmPaths = get_data_paths(result_path)
+  
+  print("Running in single process mode")
+  warnings.filterwarnings("ignore")
+  
+  runs = len(lpPaths) * len(sup_dict) * len(ratio_list) * len(sup_dict)
+  iterator = 1
+  for data_it in range(0,len(lpPaths)):
+    lp_path = lpPaths[data_it][1]
+    lm_path = lmPaths[data_it][1]
+    for miner, dict in sup_dict.items():
+      for ratio in ratio_list:
+        logName = lpPaths[data_it][0].replace(".xes","")
+        sup = dict[logName]
+        print("Run " + str(iterator) + " of " + str(runs))
+        if miner == "IMF":
+          df = applySingleMinerToLog(df, miner, result_path, lp_path, lm_path, lpPaths[data_it][0], lmPaths[data_it][0], sup, 0.0, sup, ratio)
+        else:
+          df = applySingleMinerToLog(df, miner, result_path, lp_path, lm_path, lpPaths[data_it][0], lmPaths[data_it][0], 0.2, 0.0, sup, ratio)
+        iterator += 1
+  return df
+  
   
 def save_petri_nets(df, result_path):
   folder = "petri_nets"
@@ -1388,7 +1438,7 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
 
   
 def get_comparison_df(result_path):
-  get_sup_parameter = True
+  get_sup_parameter = False
   
   if get_sup_parameter:
     csv_filename = "comparison.csv"
@@ -1414,8 +1464,22 @@ def get_comparison_df(result_path):
     df_combined = pd.concat([df, df2])
     
     plot_line_chart(df_combined, get_sup_parameter, saveFig=True, file_path=result_path)
+  else:
+    csv_filename = "comparison_ratio.csv"
+    ratio_list = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    miner_sup_dic = {}
+    miner_sup_dic["IMbi_freq"] = {"BPIC12-A-LP": 0.1, "BPIC17-A-LP": 0.4, "RTFM-LP": 0.2}
+    miner_sup_dic["IMbi_rel"] = {"BPIC12-A-LP": 0.6, "BPIC17-A-LP": 0.1, "RTFM-LP": 0.2}
+    miner_sup_dic["IMbi_aprox"] = {"BPIC12-A-LP": 0.1, "BPIC17-A-LP": 0.1, "RTFM-LP": 0.9}
+    miner_sup_dic["IMF"] = {"BPIC12-A-LP": 0.1, "BPIC17-A-LP": 0.1, "RTFM-LP": 0.2}
+  
+    if not os.path.exists(os.path.join(result_path,csv_filename)):
+      df = run_comparison_fixed_supports(ratio_list, miner_sup_dic, result_path)
+      save_df(df, os.path.join(result_path,csv_filename))
+    else:
+      df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
 
-    return
+    # plot_line_chart(df_combined, get_sup_parameter, saveFig=True, file_path=result_path)
   
   
   if False:
