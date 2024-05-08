@@ -37,8 +37,8 @@ import upperBoundCalculation.upperBoundCalculation as ubc
 from matplotlib.lines import Line2D
 import shutil
 
-def get_original_log_paths(subString):
-  pathP, pathM = get_data_paths()
+def get_original_log_paths(subString, file_path):
+  pathP, pathM = get_data_paths(file_path)
   for p in pathP:
     if subString in p[1]:
       return p[1]
@@ -475,8 +475,8 @@ def displayDoubleLogSplit(df, saveFig = False, file_path = ""):
     cur_Row = 0
     cur_Col = 0
     
-    logP_name_org = get_original_log_paths(logP_name)
-    logM_name_org = get_original_log_paths(logM_name)
+    logP_name_org = get_original_log_paths(logP_name, file_path)
+    logM_name_org = get_original_log_paths(logM_name, file_path)
     ubs_align = None
     ub_trace = None
     
@@ -588,8 +588,8 @@ def displayDoubleLogSplitSingleBest(df, saveFig = False, file_path = ""):
       logP_name = group_df['logP_Name'].iloc[0]
       logM_name = group_df['logM_Name'].iloc[0]
 
-      logP_name_org = get_original_log_paths(logP_name)
-      logM_name_org = get_original_log_paths(logM_name)
+      logP_name_org = get_original_log_paths(logP_name, file_path)
+      logM_name_org = get_original_log_paths(logM_name, file_path)
       ubs_align = None
       ub_trace = None
       
@@ -694,8 +694,8 @@ def displayDoubleLogSplitSingleBest_TrueSplit(df, saveFig = False, file_path = "
       logP_name = group_df['logP_Name'].iloc[0]
       logM_name = group_df['logM_Name'].iloc[0]
 
-      logP_name_org = get_original_log_paths(logP_name)
-      logM_name_org = get_original_log_paths(logM_name)
+      logP_name_org = get_original_log_paths(logP_name, file_path)
+      logM_name_org = get_original_log_paths(logM_name, file_path)
       ubs_align = None
       ub_trace = None
       
@@ -854,8 +854,8 @@ def displayDoubleLogSplitBoxplot_TrueSplit(df, saveFig = False, file_path = ""):
       logP_name = group_df['logP_Name'].iloc[0]
       logM_name = group_df['logM_Name'].iloc[0]
 
-      logP_name_org = get_original_log_paths(logP_name)
-      logM_name_org = get_original_log_paths(logM_name)
+      logP_name_org = get_original_log_paths(logP_name, file_path)
+      logM_name_org = get_original_log_paths(logM_name, file_path)
       ubs_align = None
       ub_trace = None
       
@@ -1157,8 +1157,8 @@ def save_petri_nets(df, result_path):
     elif df_Variant == "IMbi_aprox":
       cost_Variant = custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE
     
-    full_name_logP = get_original_log_paths(logPName)
-    full_name_logM = get_original_log_paths(logMName)
+    full_name_logP = get_original_log_paths(logPName, file_path)
+    full_name_logM = get_original_log_paths(logMName, file_path)
     parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
     logP = xes_importer.apply(full_name_logP, parameters = parameter)
     logM = xes_importer.apply(full_name_logM, parameters = parameter)
@@ -1189,7 +1189,7 @@ def getBaseLineInductiveMinerDfStar(logs_name, logpath):
   print(str(os.getpid()) + " Done")
   return df
   
-def getBaseLineInductiveMinerDf(df, logs_name, file_path):
+def getBaseLineInductiveMinerDf(df, logs_name, file_path, noise_list):
   # logs_path_root =  "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
   data_folder = "comparison-data"
   logs_path_root = os.path.join(file_path,data_folder)
@@ -1221,47 +1221,50 @@ def getBaseLineInductiveMinerDf(df, logs_name, file_path):
     
   else:
     for i in range(0,len(logs_name)):
-      logpath = os.path.join(logs_path_root,logs_name[i])
-      print("Running log: " + logs_name[i])
-      parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
-      
-      log = xes_importer.apply(logpath, parameters=parameter)
+      for noise in noise_list:
+        logpath = os.path.join(logs_path_root,logs_name[i])
+        print("Running log: " + logs_name[i])
+        parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
+        
+        log = xes_importer.apply(logpath, parameters=parameter)
 
-      print("Running IM")
-      pt = pm4py_algorithm.apply(log,variant=ind_Variants.IM)
-      net, im, fm = convert_to_petri_net(pt)
+        noiseThreshold = noise
+        #imf 
+        print("Running IMF")
+        parameters = {pm4py_imf.IMFParameters.NOISE_THRESHOLD : noiseThreshold}
+        pt = pm4py_algorithm.apply(log,variant=ind_Variants.IMf, parameters=parameters)
+        net, im, fm = convert_to_petri_net(pt)
+        print("Eval IMF")
+        
+        df = runSingleLogEvaluation(df, log, None, "IMF", net, im, fm, logs_name[i], logs_name[i], noiseThreshold, 0, 0, 0, False) 
       
-      print("Eval IM")
-      df = runSingleLogEvaluation(df, log, None, "IM", net, im, fm, logs_name[i], logs_name[i], 0, 0, 0, 0, False) 
-      
-      noiseThreshold = 0.2
-      #imf 
-      print("Running IMF")
-      parameters = {pm4py_imf.IMFParameters.NOISE_THRESHOLD : noiseThreshold}
-      pt = pm4py_algorithm.apply(log,variant=ind_Variants.IMf, parameters=parameters)
-      net, im, fm = convert_to_petri_net(pt)
-      print("Eval IMF")
-      
-      df = runSingleLogEvaluation(df, log, None, "IMF", net, im, fm, logs_name[i], logs_name[i], noiseThreshold, 0, 0, 0, False) 
-    
   return df
 
-def plot_line_chart(df, highlight_support, saveFig = False, file_path = ""):
+def plot_line_chart(df, highlight_support, saveFig, file_path):
   import matplotlib.font_manager as fm
   custom_font = fm.FontProperties(family='Arial', size=24)
   
   df.reset_index(drop=True, inplace=True)
-  df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
+  
+  if highlight_support == True:
+    df = df.drop(["logM_Name"], axis=1)
+    df_group = df.groupby(by=["logP_Name"], group_keys=True)
+  else:
+    df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
+  
   
   use_upper_bound = False
   output_file_name = "plot_linechart"
 
   for group_keys, group_df in df_group:
     logP_name = group_df['logP_Name'].iloc[0]
-    logM_name = group_df['logM_Name'].iloc[0]
-
-    logP_name_org = get_original_log_paths(logP_name)
-    logM_name_org = get_original_log_paths(logM_name)
+    logP_name = logP_name.replace(".xes", "")
+    logP_name_org = get_original_log_paths(logP_name, file_path)
+    logM_name_org = None
+    if highlight_support == False:
+      logM_name = group_df['logM_Name'].iloc[0]
+      logM_name = logM_name.replace(".xes", "")
+      logM_name_org = get_original_log_paths(logM_name, file_path)
     ubs_align = None
     ub_trace = None
       
@@ -1271,32 +1274,72 @@ def plot_line_chart(df, highlight_support, saveFig = False, file_path = ""):
       
     df_group_on_miners = group_df.groupby(by=["miner"], group_keys=True)
     for group_keys, group_df_miner in df_group_on_miners:
-      fig, axs = plt.subplots(figsize=(14 , 12))
+      miner = ""
+      if group_keys == "IMbi_freq":
+        miner = "Cost-Func"
+      elif group_keys == "IMbi_rel":
+        miner = "Reward-Func"
+      elif group_keys == "IMbi_aprox":
+        miner = "Approx-Func"
+      else:
+        miner = "IMF"
+      
+      
+      fig, ax = plt.subplots(figsize=(14 , 12))
       # fig.tight_layout(pad=18.0)
+      # print(group_df_miner)
+      if highlight_support == False:
+        ax.set_title(r"$L^+$: " + logP_name + r"\n$L^-$: " + logM_name, fontproperties=custom_font)
+        ax.set_xlabel('Ratio Values', fontproperties=custom_font)
+      else:
+        if miner == "IMF":
+          ax.set_title(r"$L^+$: " + logP_name + "\nMiner : " + miner, fontproperties=custom_font)
+        else:
+          ax.set_title(r"$L^+$: " + logP_name + "\nCut-Evaluation function: " + miner, fontproperties=custom_font)
+        ax.set_xlabel('Support Values', fontproperties=custom_font)
         
-      axs.set_title("LogP: " + logP_name + "\nLogM: " + logM_name, fontproperties=custom_font)
-      axs.set_xlabel("Miners: " + group_keys, fontproperties=custom_font)
       boxplot_width = 0.3
       boxplot_distance = 0.4
 
-      support_values = group_df_miner['im_bi_sup'].tolist()
+      if miner == "IMF":
+        support_values = group_df_miner['imf_noise_thr'].tolist()
+      else:
+        support_values = group_df_miner['im_bi_sup'].tolist()
       precision_values = group_df_miner['precP'].tolist()
       fitness_values = group_df_miner['fitP-Align'].tolist()
 
       from scipy.stats import hmean
       harmonic_means = [hmean([precision_values[i], fitness_values[i]]) for i in range(len(precision_values))]
+      max_index = harmonic_means.index(max(harmonic_means))
+      print("Miner: " + miner + " | LogP: " + logP_name + " BEST Support: " + str(support_values[max_index]))
       
+      ax.plot(support_values, precision_values, 'r-', label='Precision')
+      ax.plot(support_values, precision_values, 'rx')
+      ax.plot(support_values, fitness_values, 'b-', label='Fitness')
+      ax.plot(support_values, fitness_values, 'bx')
+      ax.plot(support_values, harmonic_means, 'g-', label='Harmonic Means')
+      ax.plot(support_values, harmonic_means, 'gx')
+      ax.grid(True)
       
-      # Plot precision values (red)
-      axs.plot(support_values, precision_values, label='Precision', color='red')
-
-      # Plot fitness values (blue)
-      axs.plot(support_values, fitness_values, label='Fitness', color='blue')
-
-      # Plot harmonic means (green)
-      axs.plot(support_values, harmonic_means, label='Harmonic Means', color='green')
+      # Adding legend
+      legend_elements = [
+        Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$"),
+        Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$"),
+        Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{harmonic{-}mean}$")
+      ]
       
-      return 3
+      ax.legend(handles=legend_elements, prop={'size': 20})
+      ax.set_ylabel('Values', fontproperties=custom_font)
+      
+      ax.set_ylim(0.0, 1.05)
+      ax.set_xlim(0.0, 1.05)
+      # Set y-axis ticks with increments of 0.1
+      ax.set_yticks([i/10 for i in range(11)])
+      ax.set_yticklabels([i/10 for i in range(11)], fontsize=20)
+      
+      ax.set_xticks(support_values)
+      ax.set_xticklabels(support_values,fontsize=20)
+   
       if ubs_align != None and ub_trace != None:
         # ubs trace
         # Add a horizontal dotted line above the specific bar
@@ -1326,55 +1369,19 @@ def plot_line_chart(df, highlight_support, saveFig = False, file_path = ""):
 
           # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
           
-      # xTickLabel.append(miner + "\nGNN: " + str(use_gnn))
-      miner_text = ""
-      if group_keys == "IMbi_freq":
-        miner_text = "Cost-Func"
-      elif group_keys == "IMbi_rel":
-        miner_text = "Reward-Func"
-      elif group_keys == "IMbi_aprox":
-        miner_text = "Approx-Func"
-        
-      if group_keys == best_miner:
-        miner_text = "$\\bf{" + miner_text + "}$"
-      xTickLabel.append(miner_text)
-        
-      idx.append(j + 2.5*boxplot_distance)
-      j += 6*boxplot_distance
+          
+      file_path_folder = os.path.join(file_path, output_file_name)
+      if not os.path.exists(file_path_folder):
+        os.mkdir(file_path_folder)
       
-    
-    axs.set_yticks(setupYTickList(minValue, 0.25))
-    axs.set_xticks(idx)
-    axs.set_xticklabels(xTickLabel, rotation=0, fontsize=24)
-    axs.tick_params(axis='x', labelsize=24)
-    axs.tick_params(axis='y', labelsize=24)
-    
-    
-    legend_elements = [
-      Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec}$"),
-      Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{align{-}acc}$"),
-      Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{trace{-}acc}$"),
-      Line2D([0], [0], color='m', lw=4, label=r"$\operatorname{align{-}F1{-}score}$"),
-      Line2D([0], [0], color='c', lw=4, label=r"$\operatorname{trace{-}F1{-}score}$"),
-      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'A $\operatorname{est{-}ub{-}acc_{\operatorname{trace}}}$', markerfacecolor='white'),
-      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'B $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_1)$', markerfacecolor='white'),
-      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'C $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_2)$', markerfacecolor='white'),
-      # Line2D([0], [0], color='white', marker='', linestyle='', markersize=0, label=r'D $\operatorname{ub{-}acc_{\operatorname{align}}}(\beta_3)$', markerfacecolor='white'),
-    ]
-    scatter1 = axs.scatter(pointA_X, pointA_Y, marker=r'$\operatorname{A}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_1)$')
-    scatter2 = axs.scatter(pointB_X, pointB_Y, marker=r'$\operatorname{B}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_2)$')
-    scatter3 = axs.scatter(pointC_X, pointC_Y, marker=r'$\operatorname{C}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{align{-}acc}}(\beta_3)$')
-    scatter4 = axs.scatter(pointD_X, pointD_Y, marker=r'$\operatorname{D}$', color='white', s=200, edgecolors='black', label=r'$\overline{\operatorname{trace{-}acc}}$')
-
-
-    # Add the legend to the subplot
-    lgd = axs.legend(handles=legend_elements + [scatter1, scatter2, scatter3, scatter4], loc='center left', bbox_to_anchor=(1.00, 0.5),prop={'size': 24})
-
-    
-    if saveFig:
-      fig.savefig(os.path.join(file_path, output_file_name + "-" + logP_name +".pdf"), bbox_extra_artists=(lgd,), bbox_inches='tight')
-    else:
-      plt.show()
+      if not os.path.exists(os.path.join(file_path_folder, logP_name)):
+        os.mkdir(os.path.join(file_path_folder, logP_name))
+        
+          
+      if saveFig:
+        fig.savefig(os.path.join(file_path_folder, logP_name,  miner +".pdf"))
+      else:
+        plt.show()
 
 
 
@@ -1382,7 +1389,6 @@ def plot_line_chart(df, highlight_support, saveFig = False, file_path = ""):
   
 def get_comparison_df(result_path):
   get_sup_parameter = True
-  
   
   if get_sup_parameter:
     csv_filename = "comparison.csv"
@@ -1394,18 +1400,21 @@ def get_comparison_df(result_path):
       save_df(df, os.path.join(result_path,csv_filename))
     else:
       df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
-      
+
     csv_filename2 = "comparison2.csv"
     if not os.path.exists(os.path.join(result_path,csv_filename2)):
       df2 = create_df()
       logs_name = ["BPIC12-A-LP.xes", "BPIC17-A-LP.xes", "RTFM-LP.xes"]
-      df2 = getBaseLineInductiveMinerDf(df2, logs_name, result_path)
-      save_df(df, os.path.join(result_path,csv_filename2))
+      noise_list = sup_list
+      df2 = getBaseLineInductiveMinerDf(df2, logs_name, result_path, noise_list)
+      save_df(df2, os.path.join(result_path,csv_filename2))
     else:
-      df = pd.read_csv(os.path.join(result_path,csv_filename2),index_col=0)
+      df2 = pd.read_csv(os.path.join(result_path,csv_filename2),index_col=0)
 
-    df = pd.concat([df, df2])
-    print(df)
+    df_combined = pd.concat([df, df2])
+    
+    plot_line_chart(df_combined, get_sup_parameter, saveFig=True, file_path=result_path)
+
     return
   
   
@@ -1420,9 +1429,7 @@ def get_comparison_df(result_path):
     else:
       displayDoubleLogSplitBoxplot_TrueSplit(df, saveFig=True, file_path=result_path)
     
-  
-  plot_line_chart(df, get_sup_parameter, saveFig=True, file_path=result_path)
-  
+
     
   return df
    
