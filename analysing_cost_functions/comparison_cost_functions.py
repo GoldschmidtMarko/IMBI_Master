@@ -56,8 +56,8 @@ def get_data_paths(file_path):
   logs_path_root = os.path.join(file_path,data_folder)
   
   # rootPath = os.path.join(root_path,"analysing_cost_functions","new-data")
-  lpNames = ["RTFM-LP.xes", "BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes"]
-  lMNames = ["RTFM-LM.xes", "BPIC12-A-O-LM.xes", "BPIC17-A-O-LM.xes"]
+  lpNames = ["RTFM-LP.xes", "BPIC12-A-LP.xes", "BPIC17-A-LP.xes"]
+  lMNames = ["RTFM-LM.xes", "BPIC12-A-LM.xes", "BPIC17-A-LM.xes"]
   
   
   lpPaths = []
@@ -361,18 +361,17 @@ def applyMinerToLog(df, result_path, logPathP, logPathM,logPName, logMName = "",
     logM = xes_importer.apply(logPathM, parameters=parameter)
     
   # imbi_ali
-  # print("Running IMbi_cost: ", logPName)
+  print("Running IMbi_cost: ", logPName)
   
   imbi_cuts_path = os.path.join(root_path,"imbi_cuts")
-  
   df = run_imbi_miner(custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, "IMbi_freq",logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn,imbi_cuts_path)
 
   # imbi_mar  
-  # print("Running IMbi_rel: ", logPName)
+  print("Running IMbi_rel: ", logPName)
   df = run_imbi_miner(custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE, "IMbi_rel",logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn, imbi_cuts_path)
   
   # imbi_mar  
-  # print("Running IMbi_aprox: ", logPName)
+  print("Running IMbi_aprox: ", logPName)
   df = run_imbi_miner(custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE, "IMbi_aprox",logP, logM, logPName, logMName, support, ratio, df, result_path, use_gnn, imbi_cuts_path)
          
   result = 0
@@ -1399,7 +1398,7 @@ def get_comparison_df(result_path):
     csv_filename2 = "comparison2.csv"
     if not os.path.exists(os.path.join(result_path,csv_filename2)):
       df2 = create_df()
-      logs_name = ["BPIC12-A-O-LP.xes", "BPIC17-A-O-LP.xes", "RTFM-LP.xes"]
+      logs_name = ["BPIC12-A-LP.xes", "BPIC17-A-LP.xes", "RTFM-LP.xes"]
       df2 = getBaseLineInductiveMinerDf(df2, logs_name, result_path)
       save_df(df, os.path.join(result_path,csv_filename2))
     else:
