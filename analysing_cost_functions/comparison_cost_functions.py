@@ -1305,6 +1305,8 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
   
   use_upper_bound = False
   output_file_name = "plot_linechart"
+  if highlight_support == False:
+    output_file_name += "_ratio"
 
   for group_keys, group_df in df_group:
     logP_name = group_df['logP_Name'].iloc[0]
@@ -1333,62 +1335,104 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
         miner = "Approx-Func"
       else:
         miner = "IMF"
-      
-      
+
       fig, ax = plt.subplots(figsize=(14 , 12))
       # fig.tight_layout(pad=18.0)
       # print(group_df_miner)
       if highlight_support == False:
-        ax.set_title(r"$L^+$: " + logP_name + r"\n$L^-$: " + logM_name, fontproperties=custom_font)
-        ax.set_xlabel('Ratio Values', fontproperties=custom_font)
+        ax.set_title(r"$L^+$: " + logP_name + " | " + r"$L^-$: " + logM_name + "\nMiner: " + miner, fontproperties=custom_font)
+        ax.set_xlabel('ratio', fontproperties=custom_font)
       else:
         if miner == "IMF":
           ax.set_title(r"$L^+$: " + logP_name + "\nMiner : " + miner, fontproperties=custom_font)
         else:
           ax.set_title(r"$L^+$: " + logP_name + "\nCut-Evaluation function: " + miner, fontproperties=custom_font)
-        ax.set_xlabel('Support Values', fontproperties=custom_font)
+        ax.set_xlabel('support', fontproperties=custom_font)
         
       boxplot_width = 0.3
       boxplot_distance = 0.4
-
-      if miner == "IMF":
-        support_values = group_df_miner['imf_noise_thr'].tolist()
-      else:
-        support_values = group_df_miner['im_bi_sup'].tolist()
-      precision_values = group_df_miner['precP'].tolist()
-      fitness_values = group_df_miner['fitP-Align'].tolist()
-
-      from scipy.stats import hmean
-      harmonic_means = [hmean([precision_values[i], fitness_values[i]]) for i in range(len(precision_values))]
-      max_index = harmonic_means.index(max(harmonic_means))
-      print("Miner: " + miner + " | LogP: " + logP_name + " BEST Support: " + str(support_values[max_index]))
       
-      ax.plot(support_values, precision_values, 'r-', label='Precision')
-      ax.plot(support_values, precision_values, 'rx')
-      ax.plot(support_values, fitness_values, 'b-', label='Fitness')
-      ax.plot(support_values, fitness_values, 'bx')
-      ax.plot(support_values, harmonic_means, 'g-', label='Harmonic Means')
-      ax.plot(support_values, harmonic_means, 'gx')
+      if highlight_support:
+        if miner == "IMF":
+          support_values = group_df_miner['imf_noise_thr'].tolist()
+        else:
+          support_values = group_df_miner['im_bi_sup'].tolist()
+      else:
+        support_values = group_df_miner['im_bi_ratio'].tolist()
+      precision_values = group_df_miner['precP'].tolist()
+      fitnessP_values = group_df_miner['fitP-Align'].tolist()
+      align_accuracy_values = group_df_miner['acc_align'].tolist()
+      trace_accuracy_values = group_df_miner['acc_trace'].tolist()
+      f1_align_values = group_df_miner['f1_align'].tolist()
+      f1_trace_values = group_df_miner['f1_trace'].tolist()
+
+
+      ax.plot(support_values, precision_values, 'r-', linewidth=4, label='Precision')
+
+      ax.plot(support_values, fitnessP_values, 'b-', linewidth=4, label='Fitness')
+
+        
+      if highlight_support:
+        from scipy.stats import hmean
+        harmonic_means = [hmean([precision_values[i], fitnessP_values[i]]) for i in range(len(precision_values))]
+        max_index = harmonic_means.index(max(harmonic_means))
+        print("Miner: " + miner + " | LogP: " + logP_name + " BEST Support: " + str(support_values[max_index]))
+        ax.plot(support_values, harmonic_means, 'g-', linewidth=4, label='Harmonic Means')
+        ax.plot(support_values, harmonic_means, 'gx', markersize=18)
+        ax.plot(support_values, precision_values, 'rx', markersize=18)
+        ax.plot(support_values, fitnessP_values, 'bx', markersize=18)
+      else:
+        ax.plot(support_values, align_accuracy_values, 'orange', linewidth=4, label='Align Accuracy')
+        ax.plot(support_values, trace_accuracy_values, 'violet', linewidth=4, label='Trace Accuracy')
+        ax.plot(support_values, f1_align_values, 'green', linewidth=4, label='F1 Align')
+        ax.plot(support_values, f1_trace_values, 'saddlebrown', linewidth=4, label='F1 Trace')
+
+        # Plotting markers with the same color as lines
+        ax.plot(support_values, align_accuracy_values, color='orange', markersize=18, linestyle='', marker='x', label='Align Accuracy')
+        ax.plot(support_values, trace_accuracy_values, color='violet', markersize=18, linestyle='', marker='x', label='Trace Accuracy')
+        ax.plot(support_values, f1_align_values, color='green', markersize=18, linestyle='', marker='x', label='F1 Align')
+        ax.plot(support_values, f1_trace_values, color='saddlebrown', markersize=18, linestyle='', marker='x', label='F1 Trace')
+        ax.plot(support_values, precision_values, color='r', markersize=18, linestyle='', marker='x', label='')
+        ax.plot(support_values, fitnessP_values, color='b', markersize=18, linestyle='', marker='x', label='')
+
+        
+        
       ax.grid(True)
       
       # Adding legend
-      legend_elements = [
-        Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$"),
-        Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$"),
-        Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{harmonic{-}mean}$")
-      ]
+      if highlight_support:
+        legend_elements = [
+          Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$", markersize=16, marker='x'),
+          Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$", markersize=16, marker='x'),
+          Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{harmonic{-}mean}$", markersize=16, marker='x')
+        ]
+        
+        ax.legend(handles=legend_elements, prop={'size': 20})
+        ax.set_ylim(-0.05, 1.05)
+      else:
+        legend_elements = [
+            Line2D([0], [0], color='orange', lw=4, label=r"$\operatorname{align{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
+            Line2D([0], [0], color='violet', lw=4, label=r"$\operatorname{trace{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
+            Line2D([0], [0], color='green', lw=4, label=r"$\operatorname{align{-}F1{-}score(L^+,L^-, M)}$", markersize=14, marker='x'),
+            Line2D([0], [0], color='saddlebrown', lw=4, label=r"$\operatorname{trace{-}F1{-}score(L^+,L^-, M)}$", markersize=14, marker='x'),
+            Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$", markersize=14, marker='x'),
+            Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$", markersize=14, marker='x')
+        ]
+        ax.legend(handles=legend_elements,loc='upper center', ncol=3, prop={'size': 16})
+        ax.set_ylim(-0.05, 1.15)
+
+        
+        
+        
+      ax.set_ylabel('evaluation metrics', fontproperties=custom_font)
       
-      ax.legend(handles=legend_elements, prop={'size': 20})
-      ax.set_ylabel('Values', fontproperties=custom_font)
-      
-      ax.set_ylim(0.0, 1.05)
-      ax.set_xlim(0.0, 1.05)
+      ax.set_xlim(0, 1.0)
       # Set y-axis ticks with increments of 0.1
       ax.set_yticks([i/10 for i in range(11)])
-      ax.set_yticklabels([i/10 for i in range(11)], fontsize=20)
+      ax.set_yticklabels([i/10 for i in range(11)], fontsize=24)
       
       ax.set_xticks(support_values)
-      ax.set_xticklabels(support_values,fontsize=20)
+      ax.set_xticklabels(support_values,fontsize=24)
    
       if ubs_align != None and ub_trace != None:
         # ubs trace
@@ -1478,8 +1522,8 @@ def get_comparison_df(result_path):
       save_df(df, os.path.join(result_path,csv_filename))
     else:
       df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
-
-    # plot_line_chart(df_combined, get_sup_parameter, saveFig=True, file_path=result_path)
+      
+    plot_line_chart(df, get_sup_parameter, saveFig=True, file_path=result_path)
   
   
   if False:

@@ -221,12 +221,12 @@ def get_partitions_from_gnn(root_file_path, gnn_file_path, logP, logP_art, sup, 
         model_number = int(data_setting["model_number"])
         
         if data["Number_nodes"] > int(model_args["input_dim"]):
-            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
+            print("Warning: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
             return None
         
         data = pad_data(data, int(model_args["input_dim"]))
         if data["Number_nodes"] != int(model_args["input_dim"]):
-            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
+            print("Warning: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_args["input_dim"]))
             return None
         
         cur_model_path = ""

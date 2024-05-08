@@ -1117,12 +1117,12 @@ def get_partitions_from_gnn_data_object(root_file_path, gnn_file_path, data, per
     
     for model_number, cur_model, cut_type, model_max_input_dim in loaded_gnn_models:
         if data["Number_nodes"] > model_max_input_dim:
-            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            print("Warning: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
             return None
         
         data = pad_data(data, model_max_input_dim)
         if data["Number_nodes"] != model_max_input_dim:
-            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            print("Warning: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
             return None
         
         
@@ -1173,12 +1173,12 @@ def get_partitions_from_gnn_models_and_data_object(loaded_gnn_models : (int, obj
     possible_partitions = []
     for model_number, cur_model, cut_type, model_max_input_dim in loaded_gnn_models:
         if data["Number_nodes"] > model_max_input_dim:
-            print("Error: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            print("Warning: the number of nodes in the generated dataset is bigger then the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
             return None
         
         data = pad_data(data, model_max_input_dim)
         if data["Number_nodes"] != model_max_input_dim:
-            print("Error: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
+            print("Warning: the number of nodes in the generated dataset is not equal to the number of nodes in the model. Dataset: " + str(data["Number_nodes"]) + ", model: " + str(model_max_input_dim))
             return None
         
         binary_prediction = get_prediction_from_model(model_number, cur_model, data)

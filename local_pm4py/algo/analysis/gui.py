@@ -3,12 +3,16 @@ import PySimpleGUI as sg
 def input():
     sg.theme("LightBlue2")
     layout = [  [sg.Text('Settings', font='Any 20')],
-                    [sg.Text('support ', justification='center', font='Any 14'), sg.Slider(range=(0,1), resolution=0.1, orientation='h', border_width =2, s=(100,20), key='-sup-')],
-                    [sg.Text('ratio      ', font='Any 14') , sg.Slider(range=(0,1), resolution=0.1, orientation='h', border_width =2,s=(100,20), key='-r-')],
-                    [sg.Text('Cut-evalution function', justification='center', font='Any 14'),
-                     sg.Radio("Cost", "faculty", key='-frequency-', font='Any 14', enable_events=True,default=True),
-                     sg.Radio("Reward", "faculty", key='-relation-', font='Any 14', enable_events=True),
-                     sg.Radio("Approximate", "faculty", key='-aproximate-', font='Any 14', enable_events=True)
+                    [sg.Text('support ', justification='center', font='Any 12'), sg.Slider(range=(0,1), resolution=0.1, orientation='h', border_width =2, s=(100,20), key='-sup-')],
+                    [sg.Text('ratio      ', font='Any 12') , sg.Slider(range=(0,1), resolution=0.1, orientation='h', border_width =2,s=(100,20), key='-r-')],
+                    [sg.Text('Cut-evalution function', justification='center', font='Any 12'),
+                     sg.Radio("Cost", "faculty", key='-frequency-', font='Any 12', enable_events=True,default=True),
+                     sg.Radio("Reward", "faculty", key='-relation-', font='Any 12', enable_events=True),
+                     sg.Radio("Approximate", "faculty", key='-aproximate-', font='Any 12', enable_events=True)
+                     ],
+                    [sg.Text('Cut-candidate exploration', justification='center', font='Any 12'),
+                     sg.Radio("Reachability", "faculty2", key='-reachability-', font='Any 12', enable_events=True,default=True),
+                     sg.Radio("Graph Neural Network", "faculty2", key='-gnn-', font='Any 12', enable_events=True)
                      ],
                     [sg.Text('Desirable Log(.xes)   ', font='Any 12'), sg.FileBrowse(key="-Desirable Log-")],
                     [sg.Text('Undesirable Log(.xes)', font='Any 12'), sg.FileBrowse(key="-Undesirable Log-")],
@@ -23,7 +27,7 @@ def input():
 
     window.close()
     
-    return float(values["-sup-"]), float(values["-r-"]), values["-Desirable Log-"], values["-Undesirable Log-"], values["-frequency-"], values["-relation-"], values["-aproximate-"]
+    return float(values["-sup-"]), float(values["-r-"]), values["-Desirable Log-"], values["-Undesirable Log-"], values["-frequency-"], values["-relation-"], values["-aproximate-"], values["-gnn-"]
 
 
 def output(acc,F1,acc_s,F1_s,fitp,prc,time):
