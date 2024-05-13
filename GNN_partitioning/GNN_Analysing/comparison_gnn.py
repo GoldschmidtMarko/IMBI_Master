@@ -143,8 +143,8 @@ def runDoubleLogEvaluation(df,cut_Type, log,logM, name,net, im, fm, logPName = "
     "use_gnn" : use_gnn,
     "acc_align": mes['acc'],
     "acc_trace": mes['acc_perf'],
-    # "fitP" : mes['fitP'],
-    # "fitM" : mes['fitM'],
+    "fitP" : mes['fitP'],
+    "fitM" : mes['fitM'],
     # "f1_fit_logs": mes['F1'],
     "precP" : mes['precision'],
     "net": net,
@@ -714,6 +714,8 @@ def run_evaluation_delta_real(df, dataPath, sup_list, ratio_list, using_gnn, con
     iterator = 0
     for data in enriched_pathFiles:
       iterator += 1
+      print("Running: " + str(iterator) + " of " + str(len(enriched_pathFiles)))
+      print("Data: " + str(data))
       df = run_evaluation_category(df, iterator, [data],using_gnn,consider_ratio)
 
   return df
@@ -858,10 +860,14 @@ def get_measurement_delta(df, columnList, column_feature):
                 group.loc[group['use_gnn'] == True, 'acc_align'].mean()
     acc_trace_diff = group.loc[group['use_gnn'] == False, 'acc_trace'].mean() - \
                 group.loc[group['use_gnn'] == True, 'acc_trace'].mean()
+    fitP_diff = group.loc[group['use_gnn'] == False, 'fitP'].mean() - \
+                group.loc[group['use_gnn'] == True, 'fitP'].mean()
+    fitM_diff = group.loc[group['use_gnn'] == False, 'fitM'].mean() - \
+                group.loc[group['use_gnn'] == True, 'fitM'].mean()
     im_bi_sup = group['im_bi_sup'].iloc[0]
     im_bi_ratio = group['im_bi_ratio'].iloc[0]
 
-    return pd.Series({'precP': precision_diff, 'acc_align': acc_align_diff, 'acc_trace': acc_trace_diff, 'im_bi_sup': im_bi_sup, 'im_bi_ratio': im_bi_ratio})
+    return pd.Series({'precP': precision_diff, 'acc_align': acc_align_diff, 'acc_trace': acc_trace_diff, 'im_bi_sup': im_bi_sup, 'im_bi_ratio': im_bi_ratio, 'fitP': fitP_diff, 'fitM': fitM_diff})
 
   # Apply the custom aggregation function and reset the index
   df_measurement = df.groupby(columnList).apply(custom_agg).reset_index()
@@ -1039,7 +1045,7 @@ def get_dataframe_delta(data_path_csv, synthetic_path = None, real_path = None):
       consider_ratio = False
       if len(ratio_list) > 1:
         consider_ratio = True
-      df = run_evaluation_delta_real(df, real_path, sup_list, ratio_list, using_gnn,consider_ratio=consider_ratio, parallel = True)
+      df = run_evaluation_delta_real(df, real_path, sup_list, ratio_list, using_gnn,consider_ratio=consider_ratio, parallel = False)
       # Save the DataFrame to a CSV file
       df.to_csv(csv_filename, index=False)
       
@@ -1092,7 +1098,7 @@ def run_comparison():
   quasi_identifiers = ["logP_Name",	"logM_Name", "cut_type"]
     
   # data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/analysing/"
-  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/new-data/"
+  data_path_real = "C:/Users/Marko/Desktop/IMbi_Data/state-art-data/"
   data_path_synthetic = os.path.join(root_path, "GNN_partitioning", "GNN_Data")
   data_path_csv = os.path.join(root_path, "GNN_partitioning", "GNN_Analysing", "Results")
   
@@ -1102,7 +1108,7 @@ def run_comparison():
   delta_measurement = True
   if delta_measurement:
     use_synthetic = False
-    column_feature = ["precP","acc_align", "acc_trace","im_bi_sup", "im_bi_ratio"]
+    column_feature = ["precP","acc_align", "acc_trace","im_bi_sup", "im_bi_ratio", "fitP", "fitM"]
     plot_column_feature = ["precP","acc_align", "acc_trace"]
     column_feature_plot_name = ['$\operatorname{prec}$','$\operatorname{align{-}acc}$','$\operatorname{trace{-}acc}$']
     
@@ -1118,7 +1124,7 @@ def run_comparison():
     else:
       df = get_dataframe_delta(data_path_csv, real_path=data_path_real) 
       df_measurement = get_measurement_delta(df, quasi_identifiers, column_feature)
-      save_petri_net_biggest_prec(df_measurement, use_synthetic, data_path_csv)
+      # save_petri_net_biggest_prec(df_measurement, use_synthetic, data_path_csv)
       
       output_path = os.path.join(data_path_csv, "df_delta_measurement_real")
       visualize_measurement(df_measurement, plot_column_feature, use_synthetic, title, column_prefix, column_feature_plot_name, output_path)

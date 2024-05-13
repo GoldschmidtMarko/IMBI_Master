@@ -1290,9 +1290,21 @@ def getBaseLineInductiveMinerDf(df, logs_name, file_path, noise_list):
       
   return df
 
-def plot_line_chart(df, highlight_support, saveFig, file_path):
+def getLogNameFromDic(log_name):
+  dic_names = {"BPIC12-A-LP": r'$L^+_{12}$', 
+               "BPIC12-A-LM": r'$L^-_{12}$',
+                "BPIC17-A-LP": r'$L^+_{17}$',
+                "BPIC17-A-LM": r'$L^-_{17}$',
+                "RTFM-LP": r'$L^+_{RTFM}$',
+                "RTFM-LM": r'$L^-_{RTFM}$',
+              }
+  return dic_names[log_name]
+
+def plot_line_chart(df, highlight_support, saveFig, file_path, use_upper_bound = False):
   import matplotlib.font_manager as fm
-  custom_font = fm.FontProperties(family='Arial', size=24)
+  custom_font = fm.FontProperties(family='Arial', size=36)
+  font_size_used = 34
+  font_size_used_legend = 25
   
   df.reset_index(drop=True, inplace=True)
   
@@ -1303,10 +1315,12 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
     df_group = df.groupby(by=["logP_Name",	"logM_Name"], group_keys=True)
   
   
-  use_upper_bound = False
+
   output_file_name = "plot_linechart"
   if highlight_support == False:
     output_file_name += "_ratio"
+  if use_upper_bound:
+    output_file_name += "_ub"
 
   for group_keys, group_df in df_group:
     logP_name = group_df['logP_Name'].iloc[0]
@@ -1323,6 +1337,9 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
     if use_upper_bound and logP_name_org != None and logM_name_org != None:
       ubs_align = ubc.run_upper_bound_align_on_logs_upper_bound_trace_distance(logP_name_org, logM_name_org)
       ub_trace = ubc.run_upper_bound_traces_on_logs(logP_name_org, logM_name_org)
+      print("Event log: " + logP_name + " | " + logM_name)
+      print("Upper Bound Trace: " + str(ub_trace))
+      print("Upper Bound Align: " + str(ubs_align))
       
     df_group_on_miners = group_df.groupby(by=["miner"], group_keys=True)
     for group_keys, group_df_miner in df_group_on_miners:
@@ -1337,17 +1354,18 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
         miner = "IMF"
 
       fig, ax = plt.subplots(figsize=(14 , 12))
-      # fig.tight_layout(pad=18.0)
-      # print(group_df_miner)
+      
+      
+      
       if highlight_support == False:
-        ax.set_title(r"$L^+$: " + logP_name + " | " + r"$L^-$: " + logM_name + "\nMiner: " + miner, fontproperties=custom_font)
+        ax.set_title(getLogNameFromDic(logP_name) + " | " + getLogNameFromDic(logM_name) + "\nMiner: " + miner, fontproperties=custom_font)
         ax.set_xlabel('ratio', fontproperties=custom_font)
       else:
+        ax.set_title(getLogNameFromDic(logP_name) + "\nMiner : " + miner, fontproperties=custom_font)
         if miner == "IMF":
-          ax.set_title(r"$L^+$: " + logP_name + "\nMiner : " + miner, fontproperties=custom_font)
+          ax.set_xlabel('f', fontproperties=custom_font)
         else:
-          ax.set_title(r"$L^+$: " + logP_name + "\nCut-Evaluation function: " + miner, fontproperties=custom_font)
-        ax.set_xlabel('support', fontproperties=custom_font)
+          ax.set_xlabel('sup', fontproperties=custom_font)
         
       boxplot_width = 0.3
       boxplot_distance = 0.4
@@ -1366,60 +1384,97 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
       f1_align_values = group_df_miner['f1_align'].tolist()
       f1_trace_values = group_df_miner['f1_trace'].tolist()
 
+      if use_upper_bound == False:
+        ax.plot(support_values, precision_values, 'r-', linewidth=4, label='Precision')
+        ax.plot(support_values, fitnessP_values, 'b-', linewidth=4, label='Fitness')
 
-      ax.plot(support_values, precision_values, 'r-', linewidth=4, label='Precision')
+      if use_upper_bound == False:
+        if highlight_support:
+          from scipy.stats import hmean
+          harmonic_means = [hmean([precision_values[i], fitnessP_values[i]]) for i in range(len(precision_values))]
+          max_index = harmonic_means.index(max(harmonic_means))
+          print("Miner: " + miner + " | LogP: " + logP_name + " BEST Support: " + str(support_values[max_index]))
+          ax.plot(support_values, harmonic_means, 'g-', linewidth=4, label='Harmonic Means')
+          ax.plot(support_values, harmonic_means, 'gx', markersize=18)
+          ax.plot(support_values, precision_values, 'rx', markersize=18)
+          ax.plot(support_values, fitnessP_values, 'bx', markersize=18)
+        else:
+          ax.plot(support_values, align_accuracy_values, 'orange', linewidth=4, label='Align Accuracy')
+          ax.plot(support_values, trace_accuracy_values, 'violet', linewidth=4, label='Trace Accuracy')
+          ax.plot(support_values, f1_align_values, 'green', linewidth=4, label='F1 Align')
+          ax.plot(support_values, f1_trace_values, 'saddlebrown', linewidth=4, label='F1 Trace')
 
-      ax.plot(support_values, fitnessP_values, 'b-', linewidth=4, label='Fitness')
-
-        
-      if highlight_support:
-        from scipy.stats import hmean
-        harmonic_means = [hmean([precision_values[i], fitnessP_values[i]]) for i in range(len(precision_values))]
-        max_index = harmonic_means.index(max(harmonic_means))
-        print("Miner: " + miner + " | LogP: " + logP_name + " BEST Support: " + str(support_values[max_index]))
-        ax.plot(support_values, harmonic_means, 'g-', linewidth=4, label='Harmonic Means')
-        ax.plot(support_values, harmonic_means, 'gx', markersize=18)
-        ax.plot(support_values, precision_values, 'rx', markersize=18)
-        ax.plot(support_values, fitnessP_values, 'bx', markersize=18)
+          # Plotting markers with the same color as lines
+          ax.plot(support_values, align_accuracy_values, color='orange', markersize=18, linestyle='', marker='x', label='Align Accuracy')
+          ax.plot(support_values, trace_accuracy_values, color='violet', markersize=18, linestyle='', marker='x', label='Trace Accuracy')
+          ax.plot(support_values, f1_align_values, color='green', markersize=18, linestyle='', marker='x', label='F1 Align')
+          ax.plot(support_values, f1_trace_values, color='saddlebrown', markersize=18, linestyle='', marker='x', label='F1 Trace')
+          ax.plot(support_values, precision_values, color='r', markersize=18, linestyle='', marker='x', label='')
+          ax.plot(support_values, fitnessP_values, color='b', markersize=18, linestyle='', marker='x', label='')
       else:
-        ax.plot(support_values, align_accuracy_values, 'orange', linewidth=4, label='Align Accuracy')
-        ax.plot(support_values, trace_accuracy_values, 'violet', linewidth=4, label='Trace Accuracy')
-        ax.plot(support_values, f1_align_values, 'green', linewidth=4, label='F1 Align')
-        ax.plot(support_values, f1_trace_values, 'saddlebrown', linewidth=4, label='F1 Trace')
-
-        # Plotting markers with the same color as lines
-        ax.plot(support_values, align_accuracy_values, color='orange', markersize=18, linestyle='', marker='x', label='Align Accuracy')
-        ax.plot(support_values, trace_accuracy_values, color='violet', markersize=18, linestyle='', marker='x', label='Trace Accuracy')
-        ax.plot(support_values, f1_align_values, color='green', markersize=18, linestyle='', marker='x', label='F1 Align')
-        ax.plot(support_values, f1_trace_values, color='saddlebrown', markersize=18, linestyle='', marker='x', label='F1 Trace')
-        ax.plot(support_values, precision_values, color='r', markersize=18, linestyle='', marker='x', label='')
-        ax.plot(support_values, fitnessP_values, color='b', markersize=18, linestyle='', marker='x', label='')
-
+          ax.plot(support_values, align_accuracy_values, 'orange', linewidth=4, label='Align Accuracy')
+          ax.plot(support_values, trace_accuracy_values, 'violet', linewidth=4, label='Trace Accuracy')
+          ax.plot(support_values, align_accuracy_values, color='orange', markersize=18, linestyle='', marker='x', label='Align Accuracy')
+          ax.plot(support_values, trace_accuracy_values, color='violet', markersize=18, linestyle='', marker='x', label='Trace Accuracy')
+          
+          ub_trace_list = [ub_trace for i in range(len(support_values))]
+          ax.plot(support_values, ub_trace_list, "violet" , linestyle='dotted', linewidth=4, label='Upper Bound Trace')
+          for enum, ub_align in ubs_align.items():
+            ub_align_list = [ub_align for i in range(len(support_values))]
+            if enum == ubc.ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:
+              ax.plot(support_values, ub_align_list, 'orange', linestyle='dotted', linewidth=4, label='Upper Bound Align')
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
+              ax.plot(support_values, ub_align_list, 'orange', linestyle='dashdot', markersize=16, linewidth=4, label='Upper Bound Align')
+              offset = 0.05  # Adjust as needed
+              for x, y in zip(support_values, ub_align_list):
+                plt.scatter(x + offset, y, marker='^', s=200, color='orange')
+          
+              
+            if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
+              ax.plot(support_values, ub_align_list, 'orange', linestyle='dashed',marker='s', markersize=16, linewidth=4, label='Upper Bound Align')
+          
         
         
       ax.grid(True)
       
       # Adding legend
-      if highlight_support:
-        legend_elements = [
-          Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$", markersize=16, marker='x'),
-          Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$", markersize=16, marker='x'),
-          Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{harmonic{-}mean}$", markersize=16, marker='x')
-        ]
-        
-        ax.legend(handles=legend_elements, prop={'size': 20})
-        ax.set_ylim(-0.05, 1.05)
+      if use_upper_bound == False:
+        if highlight_support:
+          legend_elements = [
+            Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$", markersize=16, marker='x'),
+            Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$", markersize=16, marker='x'),
+            Line2D([0], [0], color='g', lw=4, label=r"$\operatorname{harmonic{-}mean(L^+, M)}$", markersize=16, marker='x')
+          ]
+          
+          ax.legend(handles=legend_elements, prop={'size': font_size_used_legend})
+          ax.set_ylim(-0.05, 1.1)
+        else:
+          legend_elements = [
+              Line2D([0], [0], color='orange', lw=4, label=r"$\operatorname{align{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='violet', lw=4, label=r"$\operatorname{trace{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='green', lw=4, label=r"$\operatorname{align{-}F1{-}score(L^+,L^-, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='saddlebrown', lw=4, label=r"$\operatorname{trace{-}F1{-}score(L^+,L^-, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$", markersize=14, marker='x')
+          ]
+          ax.legend(handles=legend_elements,loc='upper center', ncol=2, prop={'size': font_size_used_legend})
+          ax.set_ylim(-0.05, 1.25)
       else:
         legend_elements = [
-            Line2D([0], [0], color='orange', lw=4, label=r"$\operatorname{align{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
-            Line2D([0], [0], color='violet', lw=4, label=r"$\operatorname{trace{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
-            Line2D([0], [0], color='green', lw=4, label=r"$\operatorname{align{-}F1{-}score(L^+,L^-, M)}$", markersize=14, marker='x'),
-            Line2D([0], [0], color='saddlebrown', lw=4, label=r"$\operatorname{trace{-}F1{-}score(L^+,L^-, M)}$", markersize=14, marker='x'),
-            Line2D([0], [0], color='r', lw=4, label=r"$\operatorname{prec(L^+, M)}$", markersize=14, marker='x'),
-            Line2D([0], [0], color='b', lw=4, label=r"$\operatorname{align{-}fit(L^+, M)}$", markersize=14, marker='x')
-        ]
-        ax.legend(handles=legend_elements,loc='upper center', ncol=3, prop={'size': 16})
-        ax.set_ylim(-0.05, 1.15)
+              Line2D([0], [0], color='orange', lw=4, label=r"$\operatorname{align{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='violet', lw=4, label=r"$\operatorname{trace{-}acc(L^+,L^-, M)}$", markersize=14, marker='x'),
+              Line2D([0], [0], color='violet', linestyle="dotted", lw=4, label=r"$\overline{\operatorname{trace{-}acc}}(L^+,L^-)$", markersize=14),
+              # ub = Worst_CASE_ALLOW_EMPTY_TRACE
+              Line2D([0], [0], color='orange', linestyle="dotted", lw=4, label=r"$\overline{\operatorname{align{-}acc}}(L^+,L^-,\beta_1)$", markersize=14),
+              # ub = ALLOW_LONGEST_SEQUENCE_PART
+              Line2D([0], [0], color='orange', linestyle="dashed",marker='^', lw=4, label=r"$\overline{\operatorname{align{-}acc}}(L^+,L^-,\beta_2)$", markersize=14),
+              # ub = ALLOW_MIN_TRACE_LENGTH
+              Line2D([0], [0], color='orange', linestyle="dashed",marker='s', lw=4, label=r"$\overline{\operatorname{align{-}acc}}(L^+,L^-,\beta_3)$", markersize=14)
+          ]
+        ax.legend(handles=legend_elements,loc='upper center', ncol=2, prop={'size': font_size_used_legend})
+        ax.set_ylim(-0.05, 1.35)
+        
+        
 
         
         
@@ -1429,41 +1484,11 @@ def plot_line_chart(df, highlight_support, saveFig, file_path):
       ax.set_xlim(0, 1.0)
       # Set y-axis ticks with increments of 0.1
       ax.set_yticks([i/10 for i in range(11)])
-      ax.set_yticklabels([i/10 for i in range(11)], fontsize=24)
+      ax.set_yticklabels([i/10 for i in range(11)], fontsize=font_size_used)
       
       ax.set_xticks(support_values)
-      ax.set_xticklabels(support_values,fontsize=24)
+      ax.set_xticklabels(support_values,fontsize=font_size_used)
    
-      if ubs_align != None and ub_trace != None:
-        # ubs trace
-        # Add a horizontal dotted line above the specific bar
-        axs.hlines(ub_trace, xmin=j+2*boxplot_distance - boxplot_width/2, xmax=j+2*boxplot_distance + boxplot_width/2, colors='k', linestyles='dotted', linewidth=4)
-        text_x = j + 2*boxplot_distance   # Adjust x-coordinate as needed
-        text_y = ub_trace + 0.02  # Adjust y-coordinate as needed
-        pointD_X.append(text_x)
-        pointD_Y.append(text_y)
-        # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
-
-        
-        for enum, ub_align in ubs_align.items():
-          # ubs align
-          # Add a horizontal dotted line above the specific bar
-          axs.hlines(ub_align, xmin=j+ boxplot_distance - boxplot_width/2, xmax=j+boxplot_distance + boxplot_width/2, colors='k', linestyles='dotted', linewidth=4)
-          text_x = j + boxplot_distance  # Adjust x-coordinate as needed
-          text_y = ub_align + 0.02  # Adjust y-coordinate as needed
-          if enum == ubc.ShorestModelPathEstimation.Worst_CASE_ALLOW_EMPTY_TRACE:
-            pointA_X.append(text_x)
-            pointA_Y.append(text_y)
-          if enum == ubc.ShorestModelPathEstimation.ALLOW_LONGEST_SEQUENCE_PART:
-            pointB_X.append(text_x)
-            pointB_Y.append(text_y)
-          if enum == ubc.ShorestModelPathEstimation.ALLOW_MIN_TRACE_LENGTH:
-            pointC_X.append(text_x)
-            pointC_Y.append(text_y)
-
-          # axs.text(text_x, text_y, text, ha='center', va='bottom', fontsize=26, color='black')
-          
-          
       file_path_folder = os.path.join(file_path, output_file_name)
       if not os.path.exists(file_path_folder):
         os.mkdir(file_path_folder)
@@ -1524,6 +1549,7 @@ def get_comparison_df(result_path):
       df = pd.read_csv(os.path.join(result_path,csv_filename),index_col=0)
       
     plot_line_chart(df, get_sup_parameter, saveFig=True, file_path=result_path)
+    plot_line_chart(df, get_sup_parameter, saveFig=True, file_path=result_path, use_upper_bound=True)
   
   
   if False:
@@ -1628,27 +1654,51 @@ def create_petri_net_model(file_name, result_path, logP_path, logM_path, sup, ra
   
   net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=sup, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant)
   
-  from pm4py.algo.evaluation.replay_fitness import algorithm as replay_fitness
-  log_fitness = replay_fitness.evaluate(logP, variant=replay_fitness.Variants.ALIGNMENT_BASED)
-
-  print(log_fitness)
-  
   write_pnml(net, im, fm, os.path.join(result_path,file_name + ".pnml"))
   
-def generate_manual_models(result_path):
-  rootPath = "C:/Users/Marko/Desktop/IMbi_Data/new-data-03-24/"
-  lpNames = ["RTFM-SAMP-LP.xes", "2017_O_lp.xes"]
-  lMNames = ["2012_O_lm.xes", "2017_O_lm.xes"]
   
-  create_petri_net_model("petriNet1",result_path, rootPath + lpNames[0], rootPath + lMNames[0], 0.2, 0.5, custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE)
+def create_petri_net(file_name, result_path, logP_path, logM_path, sup, ratio, cost_Variant):
+  parameter = {xes_importer.iterparse_20.Parameters.SHOW_PROGRESS_BAR: False}
+  logP = xes_importer.apply(logP_path, parameters=parameter)
+  logM = xes_importer.apply(logM_path, parameters=parameter)
+  
+  net, im, fm = inductive_miner.apply_bi(logP,logM, variant=inductive_miner.Variants.IMbi, sup=sup, ratio=ratio, size_par=len(logP)/len(logM), cost_Variant=cost_Variant)
+  
+  save_vis_petri_net(net,im,fm,os.path.join(result_path, file_name))
+  
+def generate_manual_models(result_path):
+  data_folder = "comparison-data"
+  
+  logs_path_root = os.path.join(result_path,data_folder)
+  
+  lpNames = ["RTFM-LP.xes", "BPIC12-A-LP.xes", "BPIC17-A-LP.xes"]
+  lpNames = ["RTFM-LP.xes"]
+  lMNames = ["RTFM-LM.xes", "BPIC12-A-LM.xes", "BPIC17-A-LM.xes"]
+  lMNames = ["RTFM-LM.xes"]
+  
+  support_ratio_dic = {}
+  support_ratio_dic[custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE] = {"sup": 0.2, "ratio": 0.6}
+  support_ratio_dic[custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE] = {"sup": 0.2, "ratio": 0.6}
+  support_ratio_dic[custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE] = {"sup": 0.9, "ratio": 0.5}
+
+  cost_functions = [custom_enum.Cost_Variant.ACTIVITY_FREQUENCY_SCORE, custom_enum.Cost_Variant.ACTIVITY_RELATION_SCORE, custom_enum.Cost_Variant.ACTIVITY_APROXIMATE_SCORE]
+  
+  for i in range(0,len(lpNames)):
+    for cost_function in cost_functions:
+      lpPath = os.path.join(logs_path_root,lpNames[i])
+      lmPath = os.path.join(logs_path_root,lMNames[i])
+      support = support_ratio_dic[cost_function]["sup"]
+      ratio = support_ratio_dic[cost_function]["ratio"]
+      create_petri_net(lpNames[i] + str(cost_function) + ".png", result_path, lpPath, lmPath, support, ratio, cost_function)
+
    
 if __name__ == '__main__':
   data_path = os.path.join(root_path, "analysing_cost_functions")
   result_path = os.path.join(data_path, "results")
   
-  # generate_manual_models(result_path)
+  generate_manual_models(result_path)
   time_cur = time.time()
-  df = get_comparison_df(result_path)
+  # df = get_comparison_df(result_path)
   print("Time: " + str(time.time() - time_cur))
 
 
